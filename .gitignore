@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+dist/
+eggs
+.eggs/
+lib/python*/site-packages/
+lib64/python*/site-packages/
+parts/
+sdists/
+bdist-
+var/lib/*
+var/tmp/*
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+install.log
+
+# Unit test / coverage reports
+htmlcov/
+.tox
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+
+# Virtual environment
+.venv/
+env-
+ENV/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python 3.x pycache folders
+*/__pycache__
+
+# Project specific
+*.db
+*.log
+results/
+config.yaml
+.env

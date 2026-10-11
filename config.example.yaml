@@ -1,0 +1,29 @@
+search:
+  websites:
+    - name: "Alza"
+      url_pattern: "https://www.alza.sk"
+      allowlisted: true
+      blocklisted: false
+    - name: "Bazoš"
+      url_pattern: "https://www.bazos.sk"
+      allowlisted: true
+      blocklisted: false
+    - name: "Aukro"
+      url_pattern: "https://www.aukro.sk"
+      allowlisted: true
+      blocklisted: false
+    - name: "Facebook Marketplace"
+      url_pattern: "https://www.facebook.com/marketplace"
+      allowlisted: false
+      blocklisted: false
+  llm:
+    # Local LLM endpoint (Ollama or LM Studio)
+    local_endpoint: "http://localhost:11434"
+    # API keys for cloud providers (set these in your actual config.yaml)
+    # openrouter: "sk-or-v1-YOUR_KEY_HERE"
+    # gemini: "AIzaSyYOUR_KEY_HERE"
+    # mistral: "YOUR_KEY_HERE"
+    api_key: null
+    model_name: "llama3"
+  output_format: "both"
+  winners_count: 3

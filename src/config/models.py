@@ -8,7 +8,13 @@ class WebsiteConfig(BaseModel):
     blocklisted: bool = False
 
 class LLMConfig(BaseModel):
+    # Local LLM endpoint (Ollama or LM Studio)
     local_endpoint: str = "http://localhost:11434"
+    # Cloud API keys (optional)
+    openrouter: Optional[str] = None
+    gemini: Optional[str] = None
+    mistral: Optional[str] = None
+    # Legacy single api_key field for backward compatibility
     api_key: Optional[str] = None
     model_name: str = "llama3"
 

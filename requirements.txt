@@ -1,0 +1,17 @@
+# Auto Deal Searcher - Requirements File
+# This file ensures consistent versions across all devices
+
+# Core dependencies
+typer==0.9.0
+playwright==1.40.0
+pydantic==2.5.0
+requests==2.31.0
+markdown==3.5.1
+
+# Testing dependencies
+pytest==7.4.0
+pytest-cov==4.1.0
+
+# Development tools
+black==23.7.0
+flake8==6.0.0

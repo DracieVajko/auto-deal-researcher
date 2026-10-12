@@ -1,29 +1,78 @@
 search:
   websites:
-    - name: "Alza"
-      url_pattern: "https://www.alza.sk"
-      allowlisted: true
-      blocklisted: false
-    - name: "Bazoš"
-      url_pattern: "https://www.bazos.sk"
-      allowlisted: true
-      blocklisted: false
-    - name: "Aukro"
-      url_pattern: "https://www.aukro.sk"
-      allowlisted: true
-      blocklisted: false
-    - name: "Facebook Marketplace"
-      url_pattern: "https://www.facebook.com/marketplace"
-      allowlisted: false
-      blocklisted: false
-  llm:
-    # Local LLM endpoint (Ollama or LM Studio)
-    local_endpoint: "http://localhost:11434"
-    # API keys for cloud providers (set these in your actual config.yaml)
-    # openrouter: "sk-or-v1-YOUR_KEY_HERE"
-    # gemini: "AIzaSyYOUR_KEY_HERE"
-    # mistral: "YOUR_KEY_HERE"
-    api_key: null
-    model_name: "llama3"
-  output_format: "both"
+    - name: "alza"
+      base_url: "https://www.alza.sk"
+      enabled: true
+      adapter_class: "alza"
+      categories: ["electronics", "appliances"]
+      conditions: ["new", "open_box"]
+    - name: "bazos"
+      base_url: "https://www.bazos.sk"
+      enabled: true
+      adapter_class: "bazos"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["used"]
+    - name: "backmarket"
+      base_url: "https://www.backmarket.sk"
+      enabled: true
+      adapter_class: "backmarket"
+      categories: ["electronics"]
+      conditions: ["refurbished"]
+    - name: "facebook"
+      base_url: "https://www.facebook.com/marketplace"
+      enabled: false
+      adapter_class: "facebook"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["used", "marketplace"]
+      requires_login: true
+    - name: "ebay"
+      base_url: "https://www.ebay.de"
+      enabled: true
+      adapter_class: "ebay"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["used", "refurbished", "new", "open_box"]
   winners_count: 3
+  max_rounds: 3
+  retry_on_empty: true
+  prune_after_days: 30
+
+llm:
+  local:
+    - type: "lmstudio"
+      endpoint: "http://100.88.219.120:1234"
+      model: "auto"
+    - type: "ollama"
+      endpoint: "http://localhost:11434"
+      model: "llama3.1:8b"
+  api_fallback:
+    - provider: "openrouter"
+      api_key_env: "OPENROUTER_API_KEY"
+      model: "mistralai/mistral-7b-instruct"
+    - provider: "gemini"
+      api_key_env: "GEMINI_API_KEY"
+      model: "gemini-1.5-flash"
+    - provider: "mistral"
+      api_key_env: "MISTRAL_API_KEY"
+      model: "mistral-small-latest"
+  # Legacy fields (for backward compatibility)
+  local_endpoint: "http://100.88.219.120:1234"
+  model_name: "llama3"
+
+output:
+  format: "both"
+  directory: "./results"
+
+schedule:
+  tasks:
+    - name: "daily-drone-search"
+      prompt_file: "prompts/auto.yaml"
+      times: ["08:00", "20:00"]
+      enabled: true
+
+browser:
+  cdp_endpoint: "http://localhost:9222"
+  use_persistent_context: true
+  user_data_dir: "./browser_profile"
+
+storage:
+  db_path: "./data/deals.db"

@@ -1,5 +1,11 @@
-import requests
+"""LLM Client with multi-provider fallback chain."""
+
+import asyncio
+import json
 import logging
+from typing import Optional
+import requests
+from src.searcher.adapters.base import Deal
 
 logger = logging.getLogger(__name__)
 
@@ -7,130 +13,185 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     def __init__(self, config):
         self.config = config
-        self.llm_config = config.search.llm
+        self.llm_config = config.llm
 
+    # === Sync methods (backward compatibility) ===
     def generate_search_query(self, product_description):
-        """Generate search queries using LLM"""
-        prompt = f"Generate an optimized search query for an e-commerce site based on this product description: {product_description}. Return only the search query string, nothing else."
-        
-        # Try local LLM first (LM Studio / Ollama)
-        try:
-            return self._call_local_llm(prompt)
-        except Exception as e:
-            logger.warning(f"Local LLM failed: {e}, trying cloud providers...")
-        
-        # Try cloud providers in order
+        """Generate search queries using LLM (sync version)."""
+        return asyncio.run(self._generate_search_query_async(product_description))
+
+    def judge_results(self, results, query):
+        """Judge and rank search results using LLM (sync version)."""
+        return asyncio.run(self._judge_results_async(results, query))
+
+    # === New async methods ===
+    async def _chat(self, system: str, user: str, max_tokens: int = 100) -> str:
+        """Unified chat method with fallback chain."""
+        # Try local LLMs first
+        for local in self.llm_config.local:
+            try:
+                return await self._call_local_llm_async(local, system, user, max_tokens)
+            except Exception as e:
+                logger.warning(f"Local LLM ({local.type}) failed: {e}")
+
+        # Try cloud APIs
+        for api in self.llm_config.api_fallback:
+            api_key = self._get_api_key(api.api_key_env)
+            if api_key:
+                try:
+                    return await self._call_cloud_llm_async(api.provider, api_key, api.model, system, user, max_tokens)
+                except Exception as e:
+                    logger.warning(f"Cloud API ({api.provider}) failed: {e}")
+
+        # Legacy fallback
         for provider in ["openrouter", "gemini", "mistral"]:
             api_key = getattr(self.llm_config, provider, None)
             if api_key:
                 try:
-                    return self._call_cloud_llm(provider, api_key, prompt)
+                    return await self._call_cloud_llm_async(provider, api_key, self.llm_config.model_name, system, user, max_tokens)
                 except Exception as e:
-                    logger.warning(f"{provider.capitalize()} API failed: {e}")
-        
-        # Final fallback
-        logger.error("All LLM providers failed, using raw prompt")
-        return product_description
+                    logger.warning(f"Legacy {provider} failed: {e}")
 
-    def _call_local_llm(self, prompt):
-        """Call local LLM (Ollama or LM Studio)"""
-        api_url = f"{self.llm_config.local_endpoint}/v1/chat/completions"
+        logger.error("All LLM providers failed")
+        return ""
+
+    async def _generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
+        system = "You are a search query optimizer for e-commerce sites. Output ONLY the search query string."
+        user = f"User wants: {prompt}\nGenerate a concise search query for marketplace sites."
+        if broader:
+            user += " Make it broader to find more results."
+        return await self._chat(system, user, max_tokens=100)
+
+    async def refine_query(self, prompt: str, current_deals: list[Deal], round_num: int) -> str:
+        """Generate query to find DIFFERENT items than already found."""
+        titles = [d.title for d in current_deals[:10]]
+        system = "Generate a search query to find DIFFERENT items than these already found."
+        user = f"Original request: {prompt}\nAlready found: {titles}\nRound: {round_num}\nNew query:"
+        return await self._chat(system, user, max_tokens=100)
+
+    async def judge_results(self, prompt: str, deals: list[Deal]) -> dict:
+        """Classify each deal as keep/discard. Return {'keep': [urls]}."""
+        if not deals:
+            return {"keep": []}
+        
+        keep_urls = []
+        for i in range(0, len(deals), 10):
+            batch = deals[i:i+10]
+            items = "\n".join([f"- {d.title} | {d.price_eur}€ | {d.condition} | {d.site_name}" for d in batch])
+            system = "You are a deal judge. For each item, reply KEEP or DISCARD only."
+            user = f"User wants: {prompt}\nItems:\n{items}\nReply with KEEP/DISCARD per line:"
+            response = await self._chat(system, user, max_tokens=200)
+            for line, deal in zip(response.strip().splitlines(), batch):
+                if "KEEP" in line.upper():
+                    keep_urls.append(deal.url)
+        return {"keep": keep_urls}
+
+    async def rank_results(self, prompt: str, deals: list[Deal], top_n: int) -> list[Deal]:
+        """Rank deals by relevance to prompt, return top N."""
+        if len(deals) <= top_n:
+            return deals
+        
+        items = "\n".join([f"{i}. {d.title} | {d.price_eur}€ | {d.condition} | {d.site_name}" for i, d in enumerate(deals)])
+        system = f"Rank these deals 1-{len(deals)} by relevance to user request. Output ONLY the ranked indices (e.g., '3,1,5,2,4')."
+        user = f"User wants: {prompt}\nDeals:\n{items}"
+        response = await self._chat(system, user, max_tokens=200)
+        try:
+            indices = [int(x.strip()) - 1 for x in response.split(",")]
+            return [deals[i] for i in indices[:top_n] if 0 <= i < len(deals)]
+        except Exception:
+            return deals[:top_n]
+
+    # === Local LLM calls ===
+    async def _call_local_llm_async(self, local_cfg, system: str, user: str, max_tokens: int) -> str:
+        """Call local LLM (LM Studio / Ollama / llama.cpp) via OpenAI-compatible API."""
+        endpoint = local_cfg.endpoint.rstrip("/")
+        api_url = f"{endpoint}/v1/chat/completions"
         headers = {"Content-Type": "application/json"}
         payload = {
-            "model": self.llm_config.model_name,
-            "messages": [{"role": "user", "content": prompt}],
+            "model": local_cfg.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user}
+            ],
             "temperature": 0.3,
-            "max_tokens": 100
+            "max_tokens": max_tokens
         }
-        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+        # Run sync request in thread pool
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=30))
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 
-    def _call_cloud_llm(self, provider, api_key, prompt):
-        """Call cloud LLM API"""
+    # === Cloud API calls ===
+    async def _call_cloud_llm_async(self, provider: str, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
         if provider == "openrouter":
-            return self._call_openrouter(api_key, prompt)
+            return await self._call_openrouter_async(api_key, model, system, user, max_tokens)
         elif provider == "gemini":
-            return self._call_gemini(api_key, prompt)
+            return await self._call_gemini_async(api_key, model, system, user, max_tokens)
         elif provider == "mistral":
-            return self._call_mistral(api_key, prompt)
+            return await self._call_mistral_async(api_key, model, system, user, max_tokens)
         else:
             raise ValueError(f"Unknown provider: {provider}")
 
-    def _call_openrouter(self, api_key, prompt):
+    async def _call_openrouter_async(self, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
         api_url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/DracieVajko/auto-deal-searcher-beta",
+            "HTTP-Referer": "https://github.com/DracieVajko/auto-deal-researcher",
             "X-Title": "Auto Deal Searcher"
         }
         payload = {
-            "model": self.llm_config.model_name,
-            "messages": [{"role": "user", "content": prompt}],
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user}
+            ],
             "temperature": 0.3,
-            "max_tokens": 100
+            "max_tokens": max_tokens
         }
-        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=30))
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 
-    def _call_gemini(self, api_key, prompt):
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
+    async def _call_gemini_async(self, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
+        # Gemini doesn't support system prompt separately, combine them
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "contents": [{"parts": [{"text": f"{system}\n\n{user}"}]}],
             "generationConfig": {
                 "temperature": 0.3,
-                "maxOutputTokens": 100
+                "maxOutputTokens": max_tokens
             }
         }
-        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=30))
         response.raise_for_status()
         return response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
 
-    def _call_mistral(self, api_key, prompt):
+    async def _call_mistral_async(self, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
         api_url = "https://api.mistral.ai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         payload = {
-            "model": self.llm_config.model_name if "mistral" in self.llm_config.model_name.lower() else "mistral-large-latest",
-            "messages": [{"role": "user", "content": prompt}],
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user}
+            ],
             "temperature": 0.3,
-            "max_tokens": 100
+            "max_tokens": max_tokens
         }
-        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=30))
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 
-    def judge_results(self, results, query):
-        """Judge and rank search results using LLM"""
-        if not results:
-            return results
-        
-        # Create a prompt for the LLM to judge results
-        results_text = "\n".join([
-            f"{i+1}. {r.get('title', 'N/A')} - {r.get('price', 'N/A')} - {r.get('link', 'N/A')} - {r.get('website', 'N/A')}"
-            for i, r in enumerate(results)
-        ])
-        
-        prompt = f"""You are a deal evaluator. Given the search query: "{query}"
-        
-Evaluate these search results and rank them from best to worst match:
-{results_text}
-
-Return ONLY a JSON array of indices (0-based) in order from best to worst match. Example: [2, 0, 1]"""
-        
-        try:
-            judgment = self.generate_search_query(prompt)  # Reuse the same LLM call logic
-            import json
-            ranking = json.loads(judgment)
-            
-            # Reorder results based on ranking
-            ranked_results = [results[i] for i in ranking if i < len(results)]
-            return ranked_results
-        except Exception as e:
-            logger.warning(f"LLM judgment failed: {e}, returning original order")
-            return results
+    def _get_api_key(self, env_var: str) -> Optional[str]:
+        """Get API key from environment variable."""
+        import os
+        return os.environ.get(env_var)

@@ -57,3 +57,4 @@ Thumbs.db
 results/
 config.yaml
 .env
+browser_profile/

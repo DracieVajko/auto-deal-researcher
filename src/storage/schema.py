@@ -1,9 +1,8 @@
 """Database schema and migrations using sqlite-utils."""
 
-import sqlite3
 from pathlib import Path
-from sqlite_utils import Database
 
+from sqlite_utils import Database
 
 SCHEMA_VERSION = 2
 

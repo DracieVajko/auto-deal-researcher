@@ -1,9 +1,10 @@
 """Browser manager with CDP and persistent context support."""
 
 import asyncio
-from playwright.async_api import async_playwright, Browser, BrowserContext
 import logging
 from pathlib import Path
+
+from playwright.async_api import Browser, BrowserContext, async_playwright
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,8 @@ class BrowserManager:
                             logger.info(f"Clicked cookie consent: {selector}")
                             await asyncio.sleep(0.5)
                             return True
-                    except:
+                    except Exception as e:
+                        logger.debug(f"Cookie selector {selector} not matched: {e}")
                         continue
             except Exception as e:
                 logger.debug(f"Cookie handling error: {e}")

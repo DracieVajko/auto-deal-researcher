@@ -2,10 +2,10 @@
 
 import asyncio
 import concurrent.futures
-import json
 import logging
-from typing import Optional
+
 import requests
+
 from src.searcher.adapters.base import Deal
 
 logger = logging.getLogger(__name__)
@@ -31,20 +31,6 @@ class LLMClient:
                 return future.result()
         else:
             return asyncio.run(self._generate_search_query_async(product_description))
-
-    def judge_results(self, results, query):
-        """Judge and rank search results using LLM (sync version)."""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-        
-        if loop and loop.is_running():
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, self._judge_results_async(results, query))
-                return future.result()
-        else:
-            return asyncio.run(self._judge_results_async(results, query))
 
     # === New async methods ===
     async def _chat(self, system: str, user: str, max_tokens: int = 100) -> str:
@@ -225,7 +211,7 @@ class LLMClient:
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 
-    def _get_api_key(self, env_var: str) -> Optional[str]:
+    def _get_api_key(self, env_var: str) -> str | None:
         """Get API key from environment variable."""
         import os
         return os.environ.get(env_var)

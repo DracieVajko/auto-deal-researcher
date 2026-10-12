@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import ClassVar
+
 from playwright.async_api import Page
 
 
@@ -23,8 +24,8 @@ class BaseAdapter(ABC):
     name: str = ""           # e.g., "alza"
     base_url: str = ""       # e.g., "https://www.alza.sk"
     requires_login: bool = False
-    supported_conditions: list[str] = ["new", "used", "refurbished", "open_box"]
-    supported_categories: list[str] = ["electronics", "appliances", "auto", "general"]
+    supported_conditions: ClassVar[list[str]] = ["new", "used", "refurbished", "open_box"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
     
     # Selectors for doctor diagnostics
     results_selector: str = ""      # Main results container selector
@@ -36,7 +37,7 @@ class BaseAdapter(ABC):
         ...
 
     @abstractmethod
-    async def extract_deal(self, page: Page, element) -> Optional[Deal]:
+    async def extract_deal(self, page: Page, element) -> Deal | None:
         """Extract Deal from a single result element on search results page."""
         ...
 

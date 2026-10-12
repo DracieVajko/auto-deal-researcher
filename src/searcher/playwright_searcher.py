@@ -1,13 +1,15 @@
 """Smart searcher with adapter integration and multi-round LLM refinement."""
 
 from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass
-from typing import Optional
-from playwright.async_api import Browser, BrowserContext, Page
+
+from playwright.async_api import BrowserContext, Page
+
 from src.config.models import AppConfig, WebsiteConfig
 from src.llm.client import LLMClient
-from src.searcher.adapters import get_adapter, BaseAdapter, Deal
+from src.searcher.adapters import Deal, get_adapter
 from src.storage.manager import StorageManager
 
 
@@ -31,8 +33,8 @@ class PlaywrightSearcher:
         self.llm = llm
         self.storage = storage
         self.browser_manager = browser_manager
-        self.browser: Optional[BrowserContext] = None
-        self.page: Optional[Page] = None
+        self.browser: BrowserContext | None = None
+        self.page: Page | None = None
 
     async def __aenter__(self):
         self.browser = await self.browser_manager.get_browser()

@@ -1,14 +1,16 @@
 import re
-from typing import Optional
+from typing import ClassVar
+
 from playwright.async_api import Page
+
 from .base import BaseAdapter, Deal
 
 
 class AlzaAdapter(BaseAdapter):
     name = "alza"
     base_url = "https://www.alza.sk"
-    supported_conditions = ["new", "open_box"]
-    supported_categories = ["electronics", "appliances"]
+    supported_conditions: ClassVar[list[str]] = ["new", "open_box"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances"]
     results_selector = ".browsinglink"
     item_selector = ".browsinglink"
 
@@ -28,7 +30,7 @@ class AlzaAdapter(BaseAdapter):
                 deals.append(deal)
         return deals
 
-    async def extract_deal(self, page: Page, element) -> Optional[Deal]:
+    async def extract_deal(self, page: Page, element) -> Deal | None:
         try:
             title_el = await element.query_selector(".name")
             price_el = await element.query_selector(".price-box__price")

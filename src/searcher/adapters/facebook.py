@@ -1,6 +1,8 @@
 import re
-from typing import Optional
+from typing import ClassVar
+
 from playwright.async_api import Page
+
 from .base import BaseAdapter, Deal
 
 
@@ -8,8 +10,8 @@ class FacebookAdapter(BaseAdapter):
     name = "facebook"
     base_url = "https://www.facebook.com"
     requires_login = True
-    supported_conditions = ["used", "marketplace"]
-    supported_categories = ["electronics", "appliances", "auto", "general"]
+    supported_conditions: ClassVar[list[str]] = ["used", "marketplace"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
     results_selector = '[role="feed"]'
     item_selector = '[role="feed"] > div > div > div > div > a'
 
@@ -29,7 +31,7 @@ class FacebookAdapter(BaseAdapter):
                 deals.append(deal)
         return deals
 
-    async def extract_deal(self, page: Page, element) -> Optional[Deal]:
+    async def extract_deal(self, page: Page, element) -> Deal | None:
         try:
             # Facebook Marketplace structure is complex and changes frequently
             # This is a best-effort extraction

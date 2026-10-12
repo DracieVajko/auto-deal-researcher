@@ -1,14 +1,16 @@
 import re
-from typing import Optional
+from typing import ClassVar
+
 from playwright.async_api import Page
+
 from .base import BaseAdapter, Deal
 
 
 class BackMarketAdapter(BaseAdapter):
     name = "backmarket"
     base_url = "https://www.backmarket.sk"
-    supported_conditions = ["refurbished"]
-    supported_categories = ["electronics"]
+    supported_conditions: ClassVar[list[str]] = ["refurbished"]
+    supported_categories: ClassVar[list[str]] = ["electronics"]
     results_selector = '[data-testid="product-card"]'
     item_selector = '[data-testid="product-card"]'
 
@@ -28,7 +30,7 @@ class BackMarketAdapter(BaseAdapter):
                 deals.append(deal)
         return deals
 
-    async def extract_deal(self, page: Page, element) -> Optional[Deal]:
+    async def extract_deal(self, page: Page, element) -> Deal | None:
         try:
             title_el = await element.query_selector('[data-testid="product-title"]')
             price_el = await element.query_selector('[data-testid="product-price"]')

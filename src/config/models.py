@@ -1,8 +1,9 @@
 """Configuration models for Auto Deal Searcher."""
 
-from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
 from enum import Enum
+from typing import Literal
+
+from pydantic import BaseModel
 
 
 class Condition(str, Enum):
@@ -27,8 +28,8 @@ class WebsiteConfig(BaseModel):
     base_url: str
     enabled: bool = True
     adapter_class: str  # matches ADAPTER_REGISTRY key
-    categories: List[Category] = [Category.ANY]
-    conditions: List[Condition] = [Condition.ANY]
+    categories: list[Category] = [Category.ANY]
+    conditions: list[Condition] = [Condition.ANY]
     requires_login: bool = False
     extra_params: dict = {}
 
@@ -46,14 +47,14 @@ class LLMAPIConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    local: List[LLMLocalConfig] = []
-    api_fallback: List[LLMAPIConfig] = []
+    local: list[LLMLocalConfig] = []
+    api_fallback: list[LLMAPIConfig] = []
     # Legacy fields for backward compatibility
     local_endpoint: str = "http://localhost:11434"
-    openrouter: Optional[str] = None
-    gemini: Optional[str] = None
-    mistral: Optional[str] = None
-    api_key: Optional[str] = None
+    openrouter: str | None = None
+    gemini: str | None = None
+    mistral: str | None = None
+    api_key: str | None = None
     model_name: str = "llama3"
 
 
@@ -65,12 +66,12 @@ class OutputConfig(BaseModel):
 class ScheduleTaskConfig(BaseModel):
     name: str
     prompt_file: str
-    times: List[str]  # ["08:00", "20:00"]
+    times: list[str]  # ["08:00", "20:00"]
     enabled: bool = True
 
 
 class ScheduleConfig(BaseModel):
-    tasks: List[ScheduleTaskConfig] = []
+    tasks: list[ScheduleTaskConfig] = []
 
 
 class BrowserConfig(BaseModel):
@@ -86,7 +87,7 @@ class StorageConfig(BaseModel):
 
 
 class SearchConfig(BaseModel):
-    websites: List[WebsiteConfig] = []
+    websites: list[WebsiteConfig] = []
     winners_count: int = 3
     max_rounds: int = 3
     retry_on_empty: bool = True

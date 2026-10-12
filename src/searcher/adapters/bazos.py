@@ -1,15 +1,20 @@
-import re
 import asyncio
-from typing import Optional
+import logging
+import re
+from typing import ClassVar
+
 from playwright.async_api import Page
+
 from .base import BaseAdapter, Deal
+
+logger = logging.getLogger(__name__)
 
 
 class BazosAdapter(BaseAdapter):
     name = "bazos"
     base_url = "https://www.bazos.sk"
-    supported_conditions = ["used"]
-    supported_categories = ["electronics", "appliances", "auto", "general"]
+    supported_conditions: ClassVar[list[str]] = ["used"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
     results_selector = ".inzeraty"
     item_selector = ".inzeraty > div"
 
@@ -42,10 +47,7 @@ class BazosAdapter(BaseAdapter):
 
             title_el = elements[i]
             price_el = elements[i + 1]
-            location_el = elements[i + 2]
-            views_el = elements[i + 3]
-            actions_el = elements[i + 4]
-
+                                    
             deal = await self._extract_from_group(page, title_el, price_el)
             if deal:
                 deals.append(deal)
@@ -83,15 +85,16 @@ class BazosAdapter(BaseAdapter):
                     await btn.click()
                     await asyncio.sleep(0.5)
                     return True
-            except:
+            except Exception as e:
+                logger.debug(f"Cookie selector {selector} not matched: {e}")
                 continue
         return False
 
-    async def extract_deal(self, page: Page, element) -> Optional[Deal]:
+    async def extract_deal(self, page: Page, element) -> Deal | None:
         """Abstract method required by BaseAdapter - not used in this adapter."""
         return None
 
-    async def _extract_from_group(self, page: Page, title_container, price_container) -> Optional[Deal]:
+    async def _extract_from_group(self, page: Page, title_container, price_container) -> Deal | None:
         """Extract deal from title container (has link) and price container."""
         try:
             # Get title and link from title container

@@ -1,11 +1,11 @@
 """Price tracking and trend analysis for deals."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional
-from datetime import datetime, timedelta
-from src.storage.manager import StorageManager
+
 from src.searcher.adapters.base import Deal
+from src.storage.manager import StorageManager
 
 
 @dataclass
@@ -14,7 +14,7 @@ class PriceHistoryEntry:
     deal_id: int
     url: str
     price_eur: float
-    original_price_eur: Optional[float]
+    original_price_eur: float | None
     original_currency: str
     condition: str
     availability: str

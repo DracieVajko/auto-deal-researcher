@@ -1,10 +1,10 @@
 """SQLite storage manager for deal deduplication and history."""
 
 import sqlite3
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional
 from datetime import datetime, timedelta
+from pathlib import Path
+
 from src.searcher.adapters.base import Deal
 from src.storage.schema import get_db
 
@@ -34,7 +34,7 @@ class PriceHistoryEntry:
     deal_id: int
     url: str
     price_eur: float
-    original_price_eur: Optional[float]
+    original_price_eur: float | None
     original_currency: str
     condition: str
     availability: str
@@ -52,11 +52,11 @@ class RunRecord:
     condition: str
     category: str
     started_at: str
-    completed_at: Optional[str]
+    completed_at: str | None
     total_deals: int
     new_deals: int
     status: str
-    error_message: Optional[str]
+    error_message: str | None
 
 
 class StorageManager:
@@ -65,14 +65,13 @@ class StorageManager:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.db = get_db(db_path)
 
-    def get_deal(self, url: str) -> Optional[StoredDeal]:
+    def get_deal(self, url: str) -> StoredDeal | None:
         row = self.db["deals"].get(url)
         if row:
             return StoredDeal(**row)
         return None
 
     def save_deal(self, deal: Deal, run_id: str = ""):
-        today = datetime.now().date().isoformat()
         existing = self.get_deal(deal.url)
         
         deal_data = {
@@ -256,7 +255,6 @@ class StorageManager:
 
     def mark_seen_today(self, urls: list[str]):
         """Call after each run for all URLs found in this run."""
-        today = datetime.now().date().isoformat()
         for url in urls:
             self.db["deals"].update(url, {"last_seen": datetime.now().date().isoformat()})
 
@@ -320,7 +318,7 @@ class StorageManager:
             "error_message": error,
         })
 
-    def get_last_completed_run(self) -> Optional[RunRecord]:
+    def get_last_completed_run(self) -> RunRecord | None:
         row = self.db.execute("""
             SELECT * FROM runs 
             WHERE status = 'completed' 
@@ -328,7 +326,7 @@ class StorageManager:
         """).fetchone()
         return RunRecord(**row) if row else None
 
-    def get_run(self, run_id: str) -> Optional[RunRecord]:
+    def get_run(self, run_id: str) -> RunRecord | None:
         row = self.db["runs"].get(run_id)
         return RunRecord(**row) if row else None
 
@@ -352,6 +350,3 @@ class StorageManager:
 
     def mark_alert_sent(self, alert_id: int) -> None:
         self.db["alerts"].update(alert_id, {"sent": 1, "sent_at": datetime.now().isoformat()})
-
-    def is_known(self, url: str) -> bool:
-        return self.get_deal(url) is not None

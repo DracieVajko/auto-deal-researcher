@@ -1,12 +1,11 @@
 """Site adapters registry."""
 
-from .base import BaseAdapter, Deal
 from .alza import AlzaAdapter
-from .bazos import BazosAdapter
 from .backmarket import BackMarketAdapter
-from .facebook import FacebookAdapter
+from .base import BaseAdapter, Deal
+from .bazos import BazosAdapter
 from .ebay import EbayAdapter
-
+from .facebook import FacebookAdapter
 
 ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = {
     "alza": AlzaAdapter,
@@ -25,13 +24,13 @@ def get_adapter(name: str) -> type[BaseAdapter]:
 
 
 __all__ = [
-    "BaseAdapter",
-    "Deal",
     "ADAPTER_REGISTRY",
-    "get_adapter",
     "AlzaAdapter",
-    "BazosAdapter",
     "BackMarketAdapter",
-    "FacebookAdapter",
+    "BaseAdapter",
+    "BazosAdapter",
+    "Deal",
     "EbayAdapter",
+    "FacebookAdapter",
+    "get_adapter",
 ]

@@ -2,36 +2,49 @@
 
 import asyncio
 import os
-import typer
-from pathlib import Path
-from typing import Optional
 from datetime import datetime
 
-from src.config import load_config
-from src.llm.client import LLMClient
-from src.storage.manager import StorageManager
+import typer
+
 from src.browser.manager import BrowserManager
-from src.searcher.playwright_searcher import PlaywrightSearcher
-from src.output.processor import ResultProcessor
-from src.diagnostics.doctor import Doctor
-from src.diagnostics.doctor import print_doctor_results
-from src.intelligence.price_tracker import PriceTracker
+from src.config import load_config
+from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.intelligence.change_detector import ChangeDetector
+from src.intelligence.price_tracker import PriceTracker
+from src.llm.client import LLMClient
+from src.output.processor import ResultProcessor
+from src.searcher.playwright_searcher import PlaywrightSearcher
+from src.storage.manager import StorageManager
 
 app = typer.Typer(help="Auto Deal Searcher — find deals across marketplaces")
 
 
 @app.command()
 def run(
-    prompt: Optional[str] = typer.Option(None, "--prompt", "-p", help="Search prompt (single-run mode)"),
-    prompt_file: Optional[str] = typer.Option(None, "--prompt-file", "-f", help="YAML file with prompt (auto mode)"),
+    prompt: str | None = typer.Option(None, "--prompt", "-p", help="Search prompt (single-run mode)"),
+    prompt_file: str | None = typer.Option(None, "--prompt-file", "-f", help="YAML file with prompt (auto mode)"),
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
     category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, any"),
-    winners: Optional[int] = typer.Option(None, "--winners", "-w", help="Override winners_count from config"),
-    output_format: Optional[str] = typer.Option(None, "--format", help="Override output format: json, markdown, both"),
+    winners: int | None = typer.Option(None, "--winners", "-w", help="Override winners_count from config"),
+    output_format: str | None = typer.Option(None, "--format", help="Override output format: json, markdown, both"),
 ):
     """Run a single search cycle."""
     asyncio.run(_run_async(prompt, prompt_file, condition, category, winners, output_format))
+
+
+def _load_prompt_from_file(prompt_file: str) -> str:
+    """Load search prompt from a YAML file (sync helper for use in threads)."""
+    import yaml
+
+    with open(prompt_file, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data.get("prompt", "")
+
+
+def _write_text_file(path: str, text: str) -> None:
+    """Write text to a file (sync helper for use in threads)."""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
 
 
 async def _run_async(prompt, prompt_file, condition, category, winners, output_format):
@@ -39,10 +52,7 @@ async def _run_async(prompt, prompt_file, condition, category, winners, output_f
 
     # Resolve prompt
     if prompt_file:
-        import yaml
-        with open(prompt_file) as f:
-            data = yaml.safe_load(f)
-            prompt = data.get("prompt", "")
+        prompt = await asyncio.to_thread(_load_prompt_from_file, prompt_file)
     if not prompt:
         typer.echo("Error: Provide --prompt or --prompt-file", err=True)
         raise typer.Exit(1)
@@ -102,14 +112,14 @@ def config_check():
 
 @app.command()
 def doctor(
-    site: Optional[str] = typer.Option(None, "--site", "-s", help="Check specific site only"),
+    site: str | None = typer.Option(None, "--site", "-s", help="Check specific site only"),
     offline: bool = typer.Option(False, "--offline", help="Check config only, no network"),
 ):
     """Run site health diagnostics."""
     asyncio.run(_doctor_async(site, offline))
 
 
-async def _doctor_async(site: Optional[str], offline: bool):
+async def _doctor_async(site: str | None, offline: bool):
     config = load_config()
     doctor = Doctor(config)
     
@@ -123,7 +133,7 @@ async def _doctor_async(site: Optional[str], offline: bool):
 
 @app.command()
 def monitor(
-    prompt_file: Optional[str] = typer.Option(None, "--prompt-file", "-f", help="YAML file with prompt (auto mode)"),
+    prompt_file: str | None = typer.Option(None, "--prompt-file", "-f", help="YAML file with prompt (auto mode)"),
     interval_hours: int = typer.Option(12, "--interval", "-i", help="Interval between runs in hours"),
     max_runs: int = typer.Option(0, "--max-runs", "-m", help="Maximum runs (0 = infinite)"),
     output_dir: str = typer.Option("results/monitoring", "--output-dir", help="Output directory for reports"),
@@ -133,18 +143,14 @@ def monitor(
     asyncio.run(_monitor_async(prompt_file, interval_hours, max_runs, output_dir, price_drop_threshold))
 
 
-async def _monitor_async(prompt_file: Optional[str], interval_hours: int, max_runs: int, output_dir: str, price_drop_threshold: float):
-    import os
+async def _monitor_async(prompt_file: str | None, interval_hours: int, max_runs: int, output_dir: str, price_drop_threshold: float):
     os.makedirs(output_dir, exist_ok=True)
     
     config = load_config()
 
     # Resolve prompt
     if prompt_file:
-        import yaml
-        with open(prompt_file) as f:
-            data = yaml.safe_load(f)
-            prompt = data.get("prompt", "")
+        prompt = await asyncio.to_thread(_load_prompt_from_file, prompt_file)
     else:
         typer.echo("Error: Provide --prompt-file for monitoring mode", err=True)
         raise typer.Exit(1)
@@ -152,7 +158,6 @@ async def _monitor_async(prompt_file: Optional[str], interval_hours: int, max_ru
     llm = LLMClient(config)
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
-    processor = ResultProcessor(config)
     price_tracker = PriceTracker(storage)
     change_detector = ChangeDetector(storage)
 
@@ -169,18 +174,18 @@ async def _monitor_async(prompt_file: Optional[str], interval_hours: int, max_ru
             typer.echo(f"{'='*60}")
 
             # Create run record
-            storage.create_run(run_id, "monitoring", "any", "any")
+            storage.create_run(run_id, prompt, "any", "any")
 
             async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
-                deals = await searcher.search("", "any", "any")
+                deals = await searcher.search(prompt, "any", "any")
 
             # Record price sightings
             for deal in deals:
                 price_tracker.record_sighting(deal, run_id)
 
             # Generate change report
-            report = change_detector.generate_run_report(run_id, "", deals, previous_run_id)
-            
+            report = change_detector.generate_run_report(run_id, prompt, deals, previous_run_id)
+
             # Update run record
             storage.complete_run(run_id, len(deals), report.new_count, "completed")
 
@@ -189,8 +194,7 @@ async def _monitor_async(prompt_file: Optional[str], interval_hours: int, max_ru
 
             # Save report to file
             report_path = os.path.join(output_dir, f"{run_id}.md")
-            with open(report_path, "w") as f:
-                f.write(report.to_markdown())
+            await asyncio.to_thread(_write_text_file, report_path, report.to_markdown())
             typer.echo(f"Report saved to: {report_path}")
 
             # Save new deals
@@ -198,7 +202,6 @@ async def _monitor_async(prompt_file: Optional[str], interval_hours: int, max_ru
                 storage.save_deal(deal, run_id)
 
             previous_run_id = run_id
-            run_count += 1
 
             if max_runs > 0 and run_count >= max_runs:
                 break
@@ -211,15 +214,6 @@ async def _monitor_async(prompt_file: Optional[str], interval_hours: int, max_ru
     except Exception as e:
         typer.echo(f"Error: {e}", err=True)
         raise
-
-@app.command()
-def config_check():
-    """Validate config.yaml against schema."""
-    config = load_config()
-    typer.echo("✅ Config valid")
-    typer.echo(f"  Sites enabled: {[s.name for s in config.search.websites if s.enabled]}")
-    typer.echo(f"  LLM local: {config.llm.local[0].type if config.llm.local else 'none'}")
-    typer.echo(f"  Winners: {config.search.winners_count}")
 
 
 if __name__ == "__main__":

@@ -1,14 +1,16 @@
 import re
-from typing import Optional
+from typing import ClassVar
+
 from playwright.async_api import Page
+
 from .base import BaseAdapter, Deal
 
 
 class EbayAdapter(BaseAdapter):
     name = "ebay"
     base_url = "https://www.ebay.de"
-    supported_conditions = ["used", "refurbished", "new", "open_box"]
-    supported_categories = ["electronics", "appliances", "auto", "general"]
+    supported_conditions: ClassVar[list[str]] = ["used", "refurbished", "new", "open_box"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
     results_selector = ".s-item"
     item_selector = ".s-item"
 
@@ -28,7 +30,7 @@ class EbayAdapter(BaseAdapter):
                 deals.append(deal)
         return deals
 
-    async def extract_deal(self, page: Page, element) -> Optional[Deal]:
+    async def extract_deal(self, page: Page, element) -> Deal | None:
         try:
             title_el = await element.query_selector(".s-item__title")
             price_el = await element.query_selector(".s-item__price")

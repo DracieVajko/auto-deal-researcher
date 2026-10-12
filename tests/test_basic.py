@@ -1,6 +1,8 @@
 import pytest
-from src.config.models import AppConfig
+
 from src.config import load_config
+from src.config.models import AppConfig
+
 
 def test_config_loading():
     """Test that configuration loads correctly"""

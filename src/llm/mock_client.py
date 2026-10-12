@@ -1,8 +1,8 @@
 """Mock LLM Client for testing without API keys."""
 
 import asyncio
-import concurrent.futures
 import logging
+
 from src.searcher.adapters.base import Deal
 
 logger = logging.getLogger(__name__)

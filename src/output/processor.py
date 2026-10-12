@@ -1,18 +1,18 @@
 """Result processor for JSON and Markdown output."""
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
-from src.searcher.adapters.base import Deal
+
 from src.config.models import OutputConfig
+from src.searcher.adapters.base import Deal
 
 
 class ResultProcessor:
     def __init__(self, config):
         self.config: OutputConfig = config.output
 
-    def save_results(self, deals: list[Deal], output_dir: str = None):
+    def save_results(self, deals: list[Deal], output_dir: str | None = None):
         """Save results in both JSON and Markdown formats."""
         if output_dir is None:
             output_dir = self.config.directory

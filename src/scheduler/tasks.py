@@ -3,6 +3,7 @@
 import subprocess
 import sys
 from pathlib import Path
+
 from src.config.models import AppConfig
 
 
@@ -24,7 +25,7 @@ def uninstall_schedule():
 
 def _install_windows_tasks(config: AppConfig):
     python_exe = sys.executable
-    script_path = Path(__file__).parent.parent.parent / "scripts" / "run_once.ps1"
+    _ = Path(__file__).parent.parent.parent / "scripts" / "run_once.ps1"
 
     for task in config.schedule.tasks:
         if not task.enabled:
@@ -66,7 +67,7 @@ def _install_unix_cron(config: AppConfig):
 
     # Add to crontab
     try:
-        current = subprocess.run(["crontab", "-l"], capture_output=True, text=True).stdout
+        current = subprocess.run(["crontab", "-l"], capture_output=True, text=True, check=True).stdout
     except subprocess.CalledProcessError:
         current = ""
 
@@ -77,7 +78,7 @@ def _install_unix_cron(config: AppConfig):
 
 def _uninstall_unix_cron():
     try:
-        current = subprocess.run(["crontab", "-l"], capture_output=True, text=True).stdout
+        current = subprocess.run(["crontab", "-l"], capture_output=True, text=True, check=True).stdout
     except subprocess.CalledProcessError:
         current = ""
 

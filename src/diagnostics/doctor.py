@@ -1,25 +1,23 @@
 """Doctor - Site health diagnostics."""
 
-import asyncio
 import time
 from dataclasses import dataclass
-from typing import Optional
-from playwright.async_api import BrowserContext, Page
-from src.config import load_config
+
 from src.browser.manager import BrowserManager
-from src.searcher.adapters import get_adapter, BaseAdapter, Deal
+from src.config import load_config
+from src.searcher.adapters import get_adapter
 
 
 @dataclass
 class DoctorResult:
     site_name: str
     adapter_class: str
-    http_status: Optional[int]
+    http_status: int | None
     selector_found: bool
     items_found: int
     first_items: list[dict]
     duration_ms: int
-    error: Optional[str]
+    error: str | None
     timestamp: str
 
 
@@ -80,7 +78,7 @@ class Doctor:
             )
         
         # Use browser manager's get_page() which has cookie handling
-        print(f"[DEBUG] Getting page from browser manager...")
+        print("[DEBUG] Getting page from browser manager...")
         page = await self.browser_manager.get_page()
         print(f"[DEBUG] Got page: {page}")
         page.set_default_timeout(30000)
@@ -91,11 +89,9 @@ class Doctor:
             adapter = adapter_cls()
             print(f"[DEBUG] Adapter: {adapter.name}, results_selector: {adapter.results_selector}")
             
-            # Build search URL (use a generic test query)
-            test_query = "test"
-            print(f"[DEBUG] Using adapter's search method for navigation...")
-            
             # Use adapter's search method which handles navigation and extraction
+            print("[DEBUG] Using adapter's search method for navigation...")
+
             deals = await adapter.search(page, "test", max_results=3)
             print(f"[DEBUG] Search returned {len(deals)} deals")
             items_found = len(deals)

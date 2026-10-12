@@ -1,11 +1,11 @@
 """Change detection between search runs."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Optional
 from datetime import datetime
+
 from src.storage.manager import StorageManager
-from src.searcher.adapters.base import Deal
 
 
 @dataclass
@@ -13,20 +13,20 @@ class DealChange:
     url: str
     title: str
     site_name: str
-    old_price: Optional[float] = None
-    new_price: Optional[float] = None
-    change_pct: Optional[float] = None
-    old_condition: Optional[str] = None
-    new_condition: Optional[str] = None
-    old_availability: Optional[str] = None
-    new_availability: Optional[str] = None
+    old_price: float | None = None
+    new_price: float | None = None
+    change_pct: float | None = None
+    old_condition: str | None = None
+    new_condition: str | None = None
+    old_availability: str | None = None
+    new_availability: str | None = None
     change_type: str = ""  # new, removed, price_change, condition_change, availability_change
 
 
 @dataclass
 class RunChangeReport:
     current_run_id: str
-    previous_run_id: Optional[str]
+    previous_run_id: str | None
     prompt: str
     generated_at: str
 
@@ -55,7 +55,7 @@ class RunChangeReport:
     def to_markdown(self) -> str:
         """Generate markdown report."""
         lines = [
-            f"# Monitoring Report",
+            "# Monitoring Report",
             f"**Run ID:** {self.current_run_id}",
             f"**Previous Run:** {self.previous_run_id or 'N/A (first run)'}",
             f"**Prompt:** {self.prompt}",
@@ -145,8 +145,8 @@ class ChangeDetector:
         current_run_id: str,
         prompt: str,
         current_deals: list,
-        previous_run_id: Optional[str] = None,
-    ) -> "RunChangeReport":
+        previous_run_id: str | None = None,
+    ) -> RunChangeReport:
         """Compare current run vs previous run and generate report."""
         report = RunChangeReport(
             current_run_id=current_run_id,
@@ -203,7 +203,7 @@ class ChangeDetector:
 
             # Price change
             if abs(current.price_eur - previous["price_eur"]) > 0.01:
-                change_pct = ((current.price_eur - previous["price_eur"]) / previous["price_eur"]) * 100
+                _ = ((current.price_eur - previous["price_eur"]) / previous["price_eur"]) * 100
                 price_change = {
                     "url": url,
                     "title": current.title,
@@ -269,8 +269,8 @@ class ChangeDetector:
         current_run_id: str,
         prompt: str,
         current_deals: list,
-        previous_deals: list = None,
-    ) -> "RunChangeReport":
+        previous_deals: list | None = None,
+    ) -> RunChangeReport:
         """Generate report from two lists of deals (for testing or manual comparison)."""
         report = RunChangeReport(
             current_run_id=current_run_id,
@@ -313,7 +313,7 @@ class ChangeDetector:
             previous = previous_by_url[url]
 
             if abs(current.price_eur - previous.price_eur) > 0.01:
-                change_pct = ((current.price_eur - previous.price_eur) / previous.price_eur) * 100
+                _ = ((current.price_eur - previous.price_eur) / previous.price_eur) * 100
                 report.price_changes.append({
                     "url": url,
                     "title": current.title,

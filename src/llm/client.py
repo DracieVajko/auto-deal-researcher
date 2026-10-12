@@ -30,25 +30,36 @@ class LLMClient:
         # Try local LLMs first
         for local in self.llm_config.local:
             try:
+                logger.info(f"Trying local LLM: {local.type} at {local.endpoint}")
                 return await self._call_local_llm_async(local, system, user, max_tokens)
             except Exception as e:
                 logger.warning(f"Local LLM ({local.type}) failed: {e}")
 
-        # Try cloud APIs
+        # Try cloud APIs from new config
         for api in self.llm_config.api_fallback:
             api_key = self._get_api_key(api.api_key_env)
             if api_key:
                 try:
+                    logger.info(f"Trying cloud API: {api.provider} with model {api.model}")
                     return await self._call_cloud_llm_async(api.provider, api_key, api.model, system, user, max_tokens)
                 except Exception as e:
                     logger.warning(f"Cloud API ({api.provider}) failed: {e}")
+            else:
+                logger.warning(f"Cloud API ({api.provider}) skipped: no API key in env {api.api_key_env}")
 
-        # Legacy fallback
+        # Legacy fallback with correct models per provider
+        legacy_models = {
+            "openrouter": "mistralai/mistral-7b-instruct",
+            "gemini": "gemini-1.5-flash",
+            "mistral": "mistral-small-latest",
+        }
         for provider in ["openrouter", "gemini", "mistral"]:
             api_key = getattr(self.llm_config, provider, None)
             if api_key:
+                model = legacy_models.get(provider, "mistralai/mistral-7b-instruct")
                 try:
-                    return await self._call_cloud_llm_async(provider, api_key, self.llm_config.model_name, system, user, max_tokens)
+                    logger.info(f"Trying legacy {provider} with model {model}")
+                    return await self._call_cloud_llm_async(provider, api_key, model, system, user, max_tokens)
                 except Exception as e:
                     logger.warning(f"Legacy {provider} failed: {e}")
 

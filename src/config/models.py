@@ -77,6 +77,8 @@ class BrowserConfig(BaseModel):
     cdp_endpoint: str = "http://localhost:9222"
     use_persistent_context: bool = True
     user_data_dir: str = "./browser_profile"
+    headless: bool = True  # Run headless by default (no admin prompts)
+    slow_mo: int = 0  # Slow down operations by N ms (useful for debugging)
 
 
 class StorageConfig(BaseModel):

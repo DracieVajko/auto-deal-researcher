@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from typing import Optional
-from playwright.async_api import async_playwright, Browser, Page
+from playwright.async_api import Browser, BrowserContext, Page
 from src.config.models import AppConfig, WebsiteConfig
 from src.llm.client import LLMClient
 from src.searcher.adapters import get_adapter, BaseAdapter, Deal
@@ -31,17 +31,15 @@ class PlaywrightSearcher:
         self.llm = llm
         self.storage = storage
         self.browser_manager = browser_manager
-        self.browser: Optional[Browser] = None
+        self.browser: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
 
     async def __aenter__(self):
         self.browser = await self.browser_manager.get_browser()
-        self.page = await self.browser.new_page()
         return self
 
     async def __aexit__(self, *args):
-        if self.page:
-            await self.page.close()
+        pass  # Browser manager handles cleanup
 
     def _filter_sites(self, user_condition: str, user_category: str) -> list[WebsiteConfig]:
         """Return only enabled sites matching condition + category."""
@@ -106,10 +104,19 @@ class PlaywrightSearcher:
         all_deals = []
 
         for site in sites:
+            page = None
             try:
+                # Create fresh page for each site to avoid state issues
+                page = await self.browser.new_page()
+                # These are synchronous methods, not async
+                page.set_default_timeout(30000)
+                page.set_default_navigation_timeout(30000)
+                
                 adapter_cls = get_adapter(site.adapter_class)
                 adapter = adapter_cls()
-                deals = await adapter.search(self.page, query, max_results=20)
+                print(f"[{site.name}] Adapter search method: {adapter.search}")
+                deals = await adapter.search(page, query, max_results=20)
+                print(f"[{site.name}] Got {len(deals)} deals")
                 # Filter by condition/category if adapter supports it
                 for deal in deals:
                     deal.site_name = site.name
@@ -119,6 +126,10 @@ class PlaywrightSearcher:
                 await asyncio.sleep(1)
             except Exception as e:
                 print(f"[{site.name}] Search error: {e}")
-                continue
+                import traceback
+                traceback.print_exc()
+            finally:
+                if page:
+                    await page.close()
 
         return all_deals

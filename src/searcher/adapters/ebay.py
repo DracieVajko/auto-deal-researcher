@@ -15,8 +15,8 @@ class EbayAdapter(BaseAdapter):
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
         search_url = f"{self.base_url}/sch/i.html?_nkw={query.replace(' ', '+')}&_dcat=0"
         try:
-            await page.goto(search_url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_selector(self.results_selector, timeout=15000)
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
+            await page.wait_for_selector(self.results_selector, timeout=10000)
         except Exception:
             return []
 

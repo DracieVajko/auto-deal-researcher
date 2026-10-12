@@ -107,8 +107,7 @@ class PlaywrightSearcher:
             page = None
             try:
                 # Create fresh page for each site to avoid state issues
-                page = await self.browser.new_page()
-                # These are synchronous methods, not async
+                page = await self.browser_manager.get_page()
                 page.set_default_timeout(30000)
                 page.set_default_navigation_timeout(30000)
                 

@@ -1,9 +1,11 @@
 """Auto Deal Searcher CLI - main entry point."""
 
 import asyncio
+import os
 import typer
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 from src.config import load_config
 from src.llm.client import LLMClient
@@ -13,6 +15,8 @@ from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.output.processor import ResultProcessor
 from src.diagnostics.doctor import Doctor
 from src.diagnostics.doctor import print_doctor_results
+from src.intelligence.price_tracker import PriceTracker
+from src.intelligence.change_detector import ChangeDetector
 
 app = typer.Typer(help="Auto Deal Searcher — find deals across marketplaces")
 
@@ -116,6 +120,97 @@ async def _doctor_async(site: Optional[str], offline: bool):
         results = await doctor.check_all(live=not offline)
         print_doctor_results(results)
 
+
+@app.command()
+def monitor(
+    prompt_file: Optional[str] = typer.Option(None, "--prompt-file", "-f", help="YAML file with prompt (auto mode)"),
+    interval_hours: int = typer.Option(12, "--interval", "-i", help="Interval between runs in hours"),
+    max_runs: int = typer.Option(0, "--max-runs", "-m", help="Maximum runs (0 = infinite)"),
+    output_dir: str = typer.Option("results/monitoring", "--output-dir", help="Output directory for reports"),
+    price_drop_threshold: float = typer.Option(10.0, "--price-drop-threshold", help="Alert threshold for price drops (%)"),
+):
+    """Run continuous monitoring with intelligent change detection."""
+    asyncio.run(_monitor_async(prompt_file, interval_hours, max_runs, output_dir, price_drop_threshold))
+
+
+async def _monitor_async(prompt_file: Optional[str], interval_hours: int, max_runs: int, output_dir: str, price_drop_threshold: float):
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    
+    config = load_config()
+
+    # Resolve prompt
+    if prompt_file:
+        import yaml
+        with open(prompt_file) as f:
+            data = yaml.safe_load(f)
+            prompt = data.get("prompt", "")
+    else:
+        typer.echo("Error: Provide --prompt-file for monitoring mode", err=True)
+        raise typer.Exit(1)
+
+    llm = LLMClient(config)
+    storage = StorageManager(config.storage.db_path)
+    browser_mgr = BrowserManager(config)
+    processor = ResultProcessor(config)
+    price_tracker = PriceTracker(storage)
+    change_detector = ChangeDetector(storage)
+
+    run_count = 0
+    previous_run_id = None
+
+    try:
+        while max_runs == 0 or run_count < max_runs:
+            run_count += 1
+            run_id = f"monitor_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            
+            typer.echo(f"\n{'='*60}")
+            typer.echo(f"Monitor Run #{run_count} — {run_id}")
+            typer.echo(f"{'='*60}")
+
+            # Create run record
+            storage.create_run(run_id, "monitoring", "any", "any")
+
+            async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
+                deals = await searcher.search("", "any", "any")
+
+            # Record price sightings
+            for deal in deals:
+                price_tracker.record_sighting(deal, run_id)
+
+            # Generate change report
+            report = change_detector.generate_run_report(run_id, "", deals, previous_run_id)
+            
+            # Update run record
+            storage.complete_run(run_id, len(deals), report.new_count, "completed")
+
+            # Print report
+            typer.echo(report.to_markdown())
+
+            # Save report to file
+            report_path = os.path.join(output_dir, f"{run_id}.md")
+            with open(report_path, "w") as f:
+                f.write(report.to_markdown())
+            typer.echo(f"Report saved to: {report_path}")
+
+            # Save new deals
+            for deal in deals:
+                storage.save_deal(deal, run_id)
+
+            previous_run_id = run_id
+            run_count += 1
+
+            if max_runs > 0 and run_count >= max_runs:
+                break
+
+            typer.echo(f"Sleeping for {interval_hours} hours...")
+            await asyncio.sleep(interval_hours * 3600)
+
+    except KeyboardInterrupt:
+        typer.echo("\nMonitoring stopped by user")
+    except Exception as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise
 
 @app.command()
 def config_check():

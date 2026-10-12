@@ -1,4 +1,5 @@
 import re
+import asyncio
 from typing import Optional
 from playwright.async_api import Page
 from .base import BaseAdapter, Deal
@@ -16,6 +17,10 @@ class BazosAdapter(BaseAdapter):
         search_url = f"{self.base_url}/search.php?hledat={query.replace(' ', '+')}"
         try:
             await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
+            # Wait a bit for cookie consent to appear
+            await asyncio.sleep(2)
+            # Handle cookie consent (TermsFeed used by Bazos)
+            await self._handle_cookie_consent(page)
             await page.wait_for_selector(self.results_selector, timeout=15000)
             await page.wait_for_selector(self.item_selector, timeout=10000)
         except Exception as e:
@@ -26,26 +31,61 @@ class BazosAdapter(BaseAdapter):
         # Items are split across 5 divs per listing in .inzeraty > div
         # Group them: [title/link, price, location, views, actions]
         elements = await page.query_selector_all(self.item_selector)
-        
+
         # Process in groups of 5
         for i in range(0, len(elements), 5):
             if len(deals) >= max_results:
                 break
-            
+
             if i + 4 >= len(elements):
                 break
-                
+
             title_el = elements[i]
             price_el = elements[i + 1]
             location_el = elements[i + 2]
             views_el = elements[i + 3]
             actions_el = elements[i + 4]
-            
+
             deal = await self._extract_from_group(page, title_el, price_el)
             if deal:
                 deals.append(deal)
-        
+
         return deals
+
+    async def _handle_cookie_consent(self, page: Page):
+        """Handle cookie consent dialogs explicitly."""
+        cookie_selectors = [
+            # TermsFeed specific (used by Bazos, etc.)
+            'button.cc-nb-okagree',
+            'button.cc-nb-reject',
+            'button.cc-nb-changep',
+            # Generic
+            'button:has-text("Accept")',
+            'button:has-text("Accept all")',
+            'button:has-text("Prijať")',
+            'button:has-text("Prijať všetko")',
+            'button:has-text("Súhlasím")',
+            'button:has-text("Suhlasim")',
+            'button:has-text("Souhlasím")',
+            'button:has-text("Souhlasím se vším")',
+            # Common patterns
+            'button[id*="accept"]',
+            'button[class*="accept"]',
+            'button[data-testid*="accept"]',
+            '#onetrust-accept-btn-handler',
+            '.cookie-accept',
+            '[aria-label*="accept" i]',
+        ]
+        for selector in cookie_selectors:
+            try:
+                btn = await page.query_selector(selector)
+                if btn and await btn.is_visible():
+                    await btn.click()
+                    await asyncio.sleep(0.5)
+                    return True
+            except:
+                continue
+        return False
 
     async def extract_deal(self, page: Page, element) -> Optional[Deal]:
         """Abstract method required by BaseAdapter - not used in this adapter."""

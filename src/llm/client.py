@@ -85,8 +85,9 @@ class LLMClient:
                 except Exception as e:
                     logger.warning(f"Legacy {provider} failed: {e}")
 
-        logger.error("All LLM providers failed")
-        return ""
+        logger.error("All LLM providers failed, falling back to prompt as search query")
+        # Fallback: return the user prompt as search query
+        return user
 
     async def _generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
         system = "You are a search query optimizer for e-commerce sites. Output ONLY the search query string."
@@ -149,9 +150,9 @@ class LLMClient:
             "temperature": 0.3,
             "max_tokens": max_tokens
         }
-        # Run sync request in thread pool
+        # Run sync request in thread pool with reduced timeout
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=30))
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=5))
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 
@@ -184,7 +185,7 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=30))
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=5))
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 
@@ -200,7 +201,7 @@ class LLMClient:
             }
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=30))
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=5))
         response.raise_for_status()
         return response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
 
@@ -220,7 +221,7 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=30))
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=5))
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 

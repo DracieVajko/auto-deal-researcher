@@ -16,7 +16,7 @@ class MockLLMClient:
         self.call_count = 0
 
     # === Async methods (used by searcher) ===
-    async def generate_search_query(self, prompt: str, broader: bool = False) -> str:
+    async def _generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
         """Generate search queries using LLM (async version)."""
         self.call_count += 1
         if broader:
@@ -70,7 +70,7 @@ class MockLLMClient:
 
     # === Sync methods (backward compatibility) ===
     def generate_search_query_sync(self, product_description):
-        return asyncio.run(self.generate_search_query(product_description))
+        return asyncio.run(self._generate_search_query_async(product_description))
 
     def judge_results_sync(self, results, query):
         return asyncio.run(self._judge_results_async(results, query))

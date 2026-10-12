@@ -63,7 +63,7 @@ class PlaywrightSearcher:
         rounds: list[SearchRound] = []
 
         # Round 1: LLM generates initial query
-        query = await self.llm.generate_search_query(prompt)
+        query = await self.llm._generate_search_query_async(prompt)
 
         max_rounds = getattr(self.config.search, 'max_rounds', 3)
         retry_on_empty = getattr(self.config.search, 'retry_on_empty', True)
@@ -75,7 +75,7 @@ class PlaywrightSearcher:
             if not round_deals:
                 if round_num == 1 and retry_on_empty:
                     # Retry once with broader query
-                    query = await self.llm.generate_search_query(prompt, broader=True)
+                    query = await self.llm._generate_search_query_async(prompt, broader=True)
                     continue
                 break  # no results, stop
 

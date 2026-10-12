@@ -10,18 +10,19 @@ class FacebookAdapter(BaseAdapter):
     requires_login = True
     supported_conditions = ["used", "marketplace"]
     supported_categories = ["electronics", "appliances", "auto", "general"]
+    results_selector = '[role="feed"]'
+    item_selector = '[role="feed"] > div > div > div > div > a'
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
         search_url = f"{self.base_url}/marketplace/search/?query={query.replace(' ', '%20')}"
         try:
             await page.goto(search_url, wait_until="networkidle", timeout=45000)
-            # Wait for marketplace items to load
-            await page.wait_for_selector('[role="feed"]', timeout=20000)
+            await page.wait_for_selector(self.results_selector, timeout=20000)
         except Exception:
             return []
 
         deals = []
-        elements = await page.query_selector_all('[role="feed"] > div > div > div > div > a')
+        elements = await page.query_selector_all(self.item_selector)
         for el in elements[:max_results]:
             deal = await self.extract_deal(page, el)
             if deal:

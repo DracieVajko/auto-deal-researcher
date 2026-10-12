@@ -9,17 +9,19 @@ class EbayAdapter(BaseAdapter):
     base_url = "https://www.ebay.de"
     supported_conditions = ["used", "refurbished", "new", "open_box"]
     supported_categories = ["electronics", "appliances", "auto", "general"]
+    results_selector = ".s-item"
+    item_selector = ".s-item"
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
         search_url = f"{self.base_url}/sch/i.html?_nkw={query.replace(' ', '+')}&_dcat=0"
         try:
             await page.goto(search_url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_selector(".s-item", timeout=15000)
+            await page.wait_for_selector(self.results_selector, timeout=15000)
         except Exception:
             return []
 
         deals = []
-        elements = await page.query_selector_all(".s-item")
+        elements = await page.query_selector_all(self.item_selector)
         for el in elements[:max_results]:
             deal = await self.extract_deal(page, el)
             if deal:

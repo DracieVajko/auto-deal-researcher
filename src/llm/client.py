@@ -1,6 +1,7 @@
 """LLM Client with multi-provider fallback chain."""
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 from typing import Optional
@@ -18,11 +19,32 @@ class LLMClient:
     # === Sync methods (backward compatibility) ===
     def generate_search_query(self, product_description):
         """Generate search queries using LLM (sync version)."""
-        return asyncio.run(self._generate_search_query_async(product_description))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        
+        if loop and loop.is_running():
+            # We're in an async context, run in thread pool
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, self._generate_search_query_async(product_description))
+                return future.result()
+        else:
+            return asyncio.run(self._generate_search_query_async(product_description))
 
     def judge_results(self, results, query):
         """Judge and rank search results using LLM (sync version)."""
-        return asyncio.run(self._judge_results_async(results, query))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, self._judge_results_async(results, query))
+                return future.result()
+        else:
+            return asyncio.run(self._judge_results_async(results, query))
 
     # === New async methods ===
     async def _chat(self, system: str, user: str, max_tokens: int = 100) -> str:

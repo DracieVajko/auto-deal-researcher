@@ -11,6 +11,8 @@ from src.storage.manager import StorageManager
 from src.browser.manager import BrowserManager
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.output.processor import ResultProcessor
+from src.diagnostics.doctor import Doctor
+from src.diagnostics.doctor import print_doctor_results
 
 app = typer.Typer(help="Auto Deal Searcher — find deals across marketplaces")
 
@@ -82,6 +84,37 @@ def schedule_uninstall():
     from src.scheduler.tasks import uninstall_schedule
     uninstall_schedule()
     typer.echo("Scheduled tasks removed.")
+
+
+@app.command()
+def config_check():
+    """Validate config.yaml against schema."""
+    config = load_config()
+    typer.echo("✅ Config valid")
+    typer.echo(f"  Sites enabled: {[s.name for s in config.search.websites if s.enabled]}")
+    typer.echo(f"  LLM local: {config.llm.local[0].type if config.llm.local else 'none'}")
+    typer.echo(f"  Winners: {config.search.winners_count}")
+
+
+@app.command()
+def doctor(
+    site: Optional[str] = typer.Option(None, "--site", "-s", help="Check specific site only"),
+    offline: bool = typer.Option(False, "--offline", help="Check config only, no network"),
+):
+    """Run site health diagnostics."""
+    asyncio.run(_doctor_async(site, offline))
+
+
+async def _doctor_async(site: Optional[str], offline: bool):
+    config = load_config()
+    doctor = Doctor(config)
+    
+    if site:
+        result = await doctor.check_site(site, live=not offline)
+        print_doctor_results([result])
+    else:
+        results = await doctor.check_all(live=not offline)
+        print_doctor_results(results)
 
 
 @app.command()

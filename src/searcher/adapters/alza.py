@@ -9,17 +9,19 @@ class AlzaAdapter(BaseAdapter):
     base_url = "https://www.alza.sk"
     supported_conditions = ["new", "open_box"]
     supported_categories = ["electronics", "appliances"]
+    results_selector = ".browsinglink"
+    item_selector = ".browsinglink"
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
         search_url = f"{self.base_url}/?q={query.replace(' ', '+')}"
         try:
             await page.goto(search_url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_selector(".browsinglink", timeout=15000)
+            await page.wait_for_selector(self.results_selector, timeout=15000)
         except Exception:
             return []
 
         deals = []
-        elements = await page.query_selector_all(".browsinglink")
+        elements = await page.query_selector_all(self.item_selector)
         for el in elements[:max_results]:
             deal = await self.extract_deal(page, el)
             if deal:

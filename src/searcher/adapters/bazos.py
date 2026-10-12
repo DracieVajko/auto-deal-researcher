@@ -9,13 +9,15 @@ class BazosAdapter(BaseAdapter):
     base_url = "https://www.bazos.sk"
     supported_conditions = ["used"]
     supported_categories = ["electronics", "appliances", "auto", "general"]
+    results_selector = ".inzeraty"
+    item_selector = ".inzeraty > div"
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
         search_url = f"{self.base_url}/search.php?hledat={query.replace(' ', '+')}"
         try:
             await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_selector(".inzeraty", timeout=15000)
-            await page.wait_for_selector(".inzeraty > div", timeout=10000)
+            await page.wait_for_selector(self.results_selector, timeout=15000)
+            await page.wait_for_selector(self.item_selector, timeout=10000)
         except Exception as e:
             print(f"[{self.name}] Navigation error: {e}")
             return []
@@ -23,7 +25,7 @@ class BazosAdapter(BaseAdapter):
         deals = []
         # Items are split across 5 divs per listing in .inzeraty > div
         # Group them: [title/link, price, location, views, actions]
-        elements = await page.query_selector_all(".inzeraty > div")
+        elements = await page.query_selector_all(self.item_selector)
         
         # Process in groups of 5
         for i in range(0, len(elements), 5):

@@ -25,6 +25,10 @@ class BaseAdapter(ABC):
     requires_login: bool = False
     supported_conditions: list[str] = ["new", "used", "refurbished", "open_box"]
     supported_categories: list[str] = ["electronics", "appliances", "auto", "general"]
+    
+    # Selectors for doctor diagnostics
+    results_selector: str = ""      # Main results container selector
+    item_selector: str = ""         # Individual item selector
 
     @abstractmethod
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:

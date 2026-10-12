@@ -9,17 +9,19 @@ class BackMarketAdapter(BaseAdapter):
     base_url = "https://www.backmarket.sk"
     supported_conditions = ["refurbished"]
     supported_categories = ["electronics"]
+    results_selector = '[data-testid="product-card"]'
+    item_selector = '[data-testid="product-card"]'
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
         search_url = f"{self.base_url}/search?q={query.replace(' ', '+')}"
         try:
             await page.goto(search_url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_selector('[data-testid="product-card"]', timeout=15000)
+            await page.wait_for_selector(self.results_selector, timeout=15000)
         except Exception:
             return []
 
         deals = []
-        elements = await page.query_selector_all('[data-testid="product-card"]')
+        elements = await page.query_selector_all(self.item_selector)
         for el in elements[:max_results]:
             deal = await self.extract_deal(page, el)
             if deal:

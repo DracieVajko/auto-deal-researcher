@@ -82,6 +82,6 @@ def _uninstall_unix_cron():
     except subprocess.CalledProcessError:
         current = ""
 
-    lines = [l for l in current.splitlines() if "src.cli run" not in l]
+    lines = [line for line in current.splitlines() if "src.cli run" not in line]
     subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n", text=True, check=True)
     print("Removed cron jobs")

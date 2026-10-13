@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-from datetime import datetime
 
 import typer
 
@@ -15,6 +14,7 @@ from src.llm.client import LLMClient
 from src.output.processor import ResultProcessor
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
+from src.utils.time import utcnow_stamp
 
 app = typer.Typer(help="Auto Deal Searcher — find deals across marketplaces")
 
@@ -167,7 +167,7 @@ async def _monitor_async(prompt_file: str | None, interval_hours: int, max_runs:
     try:
         while max_runs == 0 or run_count < max_runs:
             run_count += 1
-            run_id = f"monitor_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            run_id = f"monitor_{utcnow_stamp()}"
             
             typer.echo(f"\n{'='*60}")
             typer.echo(f"Monitor Run #{run_count} — {run_id}")

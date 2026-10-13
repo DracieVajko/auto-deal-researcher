@@ -33,7 +33,7 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         # Return default configuration
         return AppConfig()
 
-    with open(config_path, 'r') as f:
+    with open(config_path) as f:
         config_data = yaml.safe_load(f)
 
     return AppConfig(**config_data)

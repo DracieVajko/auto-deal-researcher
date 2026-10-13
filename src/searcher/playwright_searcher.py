@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 
 from playwright.async_api import BrowserContext, Page
@@ -11,6 +12,8 @@ from src.config.models import AppConfig, WebsiteConfig
 from src.llm.client import LLMClient
 from src.searcher.adapters import Deal, get_adapter
 from src.storage.manager import StorageManager
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -125,10 +128,8 @@ class PlaywrightSearcher:
                         all_deals.append(deal)
                 # Rate limiting
                 await asyncio.sleep(1)
-            except Exception as e:
-                print(f"[{site.name}] Search error: {e}")
-                import traceback
-                traceback.print_exc()
+            except Exception:
+                logger.exception(f"[{site.name}] Search error")
             finally:
                 if page:
                     await page.close()

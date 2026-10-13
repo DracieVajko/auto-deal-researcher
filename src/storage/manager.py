@@ -2,11 +2,12 @@
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 from src.searcher.adapters.base import Deal
 from src.storage.schema import get_db
+from src.utils.time import today_iso, utcnow, utcnow_iso, utcnow_stamp
 
 
 @dataclass
@@ -92,13 +93,13 @@ class StorageManager:
 
         if existing:
             # Update existing deal
-            deal_data["last_seen"] = datetime.now().date().isoformat()
+            deal_data["last_seen"] = today_iso()
             deal_data["times_seen"] = self.db["deals"].get(deal.url).get("times_seen", 1) + 1
             self.db["deals"].upsert(deal_data, pk="url")
         else:
             # Insert new deal
-            deal_data["first_seen"] = datetime.now().date().isoformat()
-            deal_data["last_seen"] = datetime.now().date().isoformat()
+            deal_data["first_seen"] = today_iso()
+            deal_data["last_seen"] = today_iso()
             deal_data["times_seen"] = 1
             self.db["deals"].insert(deal_data, pk="url")
 
@@ -119,15 +120,15 @@ class StorageManager:
             "seller_name": getattr(deal, "seller_name", ""),
             "seller_rating": getattr(deal, "seller_rating", 0.0),
             "shipping_cost_eur": getattr(deal, "shipping_cost_eur", 0.0),
-            "run_id": f"manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}" if not run_id else run_id,
-            "timestamp": datetime.now().isoformat(),
+            "run_id": f"manual_{utcnow_stamp()}" if not run_id else run_id,
+            "timestamp": utcnow_iso(),
         }
         result = self.db["price_history"].insert(sighting)
         return result.last_pk if result else None
 
     def get_price_history(self, url: str, days: int = 30) -> list[dict]:
         """Get price history for a specific product URL."""
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         rows = self.db.execute("""
             SELECT * FROM price_history 
             WHERE url = ? AND timestamp >= ?
@@ -145,7 +146,7 @@ class StorageManager:
 
     def detect_price_drops(self, threshold_pct: float = 5.0, days: int = 7) -> list[dict]:
         """Find products with price drops >= threshold% in last N days."""
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         rows = self.db.execute("""
             SELECT ph.*, d.title, d.site_name
             FROM price_history ph
@@ -185,7 +186,7 @@ class StorageManager:
 
     def detect_new_lows(self, days: int = 30) -> list[dict]:
         """Find products at their lowest price in N days."""
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         rows = self.db.execute("""
             SELECT ph.*, d.title, d.site_name,
                    MIN(ph.price_eur) OVER (PARTITION BY ph.url) as min_price
@@ -215,7 +216,7 @@ class StorageManager:
 
     def get_price_trend(self, url: str, days: int = 30) -> dict:
         """Compute trend: dropping, rising, stable, volatile."""
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         rows = self.db.execute("""
             SELECT price_eur, timestamp FROM price_history 
             WHERE url = ? AND timestamp >= ?
@@ -256,7 +257,7 @@ class StorageManager:
     def mark_seen_today(self, urls: list[str]):
         """Call after each run for all URLs found in this run."""
         for url in urls:
-            self.db["deals"].update(url, {"last_seen": datetime.now().date().isoformat()})
+            self.db["deals"].update(url, {"last_seen": today_iso()})
 
     def prune_missing(self, max_age_days: int = 30, grace_period_days: int = 7) -> dict:
         """
@@ -264,8 +265,8 @@ class StorageManager:
         Hard delete if missing for max_age_days.
         Preserve price history even when deal is pruned.
         """
-        cutoff = (datetime.now().date() - timedelta(days=max_age_days)).isoformat()
-        grace_cutoff = (datetime.now().date() - timedelta(days=grace_period_days)).isoformat()
+        cutoff = (utcnow().date() - timedelta(days=max_age_days)).isoformat()
+        grace_cutoff = (utcnow().date() - timedelta(days=grace_period_days)).isoformat()
 
         with sqlite3.connect(self.db_path) as conn:
             # Count deals to be pruned
@@ -302,7 +303,7 @@ class StorageManager:
             "prompt": prompt,
             "condition": condition,
             "category": category,
-            "started_at": datetime.now().isoformat(),
+            "started_at": utcnow_iso(),
             "completed_at": None,
             "total_deals": 0,
             "new_deals": 0,
@@ -311,7 +312,7 @@ class StorageManager:
 
     def complete_run(self, run_id: str, total_deals: int, new_deals: int, status: str = "completed", error: str = "") -> None:
         self.db["runs"].update(run_id, {
-            "completed_at": datetime.now().isoformat(),
+            "completed_at": utcnow_iso(),
             "total_deals": total_deals,
             "new_deals": new_deals,
             "status": status,
@@ -349,4 +350,4 @@ class StorageManager:
         return list(self.db["alerts"].rows_where("sent = 0", order_by="created_at"))
 
     def mark_alert_sent(self, alert_id: int) -> None:
-        self.db["alerts"].update(alert_id, {"sent": 1, "sent_at": datetime.now().isoformat()})
+        self.db["alerts"].update(alert_id, {"sent": 1, "sent_at": utcnow_iso()})

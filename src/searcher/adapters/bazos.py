@@ -3,6 +3,7 @@ import logging
 import re
 from typing import ClassVar
 
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
 from .base import BaseAdapter, Deal
@@ -28,8 +29,8 @@ class BazosAdapter(BaseAdapter):
             await self._handle_cookie_consent(page)
             await page.wait_for_selector(self.results_selector, timeout=15000)
             await page.wait_for_selector(self.item_selector, timeout=10000)
-        except Exception as e:
-            print(f"[{self.name}] Navigation error: {e}")
+        except PlaywrightError as e:
+            logger.debug(f"[{self.name}] Navigation error: {e}")
             return []
 
         deals = []
@@ -85,7 +86,7 @@ class BazosAdapter(BaseAdapter):
                     await btn.click()
                     await asyncio.sleep(0.5)
                     return True
-            except Exception as e:
+            except PlaywrightError as e:
                 logger.debug(f"Cookie selector {selector} not matched: {e}")
                 continue
         return False
@@ -135,6 +136,6 @@ class BazosAdapter(BaseAdapter):
                 site_name=self.name,
                 metadata={"source": "bazos"}
             )
-        except Exception as e:
-            print(f"[{self.name}] Extract error: {e}")
+        except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
+            logger.debug(f"[{self.name}] Extract error: {e}")
             return None

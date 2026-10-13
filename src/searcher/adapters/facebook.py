@@ -1,9 +1,13 @@
+import logging
 import re
 from typing import ClassVar
 
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
 from .base import BaseAdapter, Deal
+
+logger = logging.getLogger(__name__)
 
 
 class FacebookAdapter(BaseAdapter):
@@ -20,7 +24,8 @@ class FacebookAdapter(BaseAdapter):
         try:
             await page.goto(search_url, wait_until="networkidle", timeout=45000)
             await page.wait_for_selector(self.results_selector, timeout=20000)
-        except Exception:
+        except PlaywrightError as e:
+            logger.debug(f"[{self.name}] Navigation error: {e}")
             return []
 
         deals = []
@@ -65,5 +70,6 @@ class FacebookAdapter(BaseAdapter):
                 site_name=self.name,
                 metadata={"source": "facebook"}
             )
-        except Exception:
+        except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
+            logger.debug(f"[{self.name}] Extract error: {e}")
             return None

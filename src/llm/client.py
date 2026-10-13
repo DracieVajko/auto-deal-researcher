@@ -40,7 +40,7 @@ class LLMClient:
             try:
                 logger.info(f"Trying local LLM: {local.type} at {local.endpoint}")
                 return await self._call_local_llm_async(local, system, user, max_tokens)
-            except Exception as e:
+            except (requests.RequestException, ValueError, KeyError, IndexError) as e:
                 logger.warning(f"Local LLM ({local.type}) failed: {e}")
 
         # Try cloud APIs from new config
@@ -50,7 +50,7 @@ class LLMClient:
                 try:
                     logger.info(f"Trying cloud API: {api.provider} with model {api.model}")
                     return await self._call_cloud_llm_async(api.provider, api_key, api.model, system, user, max_tokens)
-                except Exception as e:
+                except (requests.RequestException, ValueError, KeyError, IndexError) as e:
                     logger.warning(f"Cloud API ({api.provider}) failed: {e}")
             else:
                 logger.warning(f"Cloud API ({api.provider}) skipped: no API key in env {api.api_key_env}")
@@ -68,7 +68,7 @@ class LLMClient:
                 try:
                     logger.info(f"Trying legacy {provider} with model {model}")
                     return await self._call_cloud_llm_async(provider, api_key, model, system, user, max_tokens)
-                except Exception as e:
+                except (requests.RequestException, ValueError, KeyError, IndexError) as e:
                     logger.warning(f"Legacy {provider} failed: {e}")
 
         logger.error("All LLM providers failed, falling back to prompt as search query")
@@ -101,7 +101,7 @@ class LLMClient:
             system = "You are a deal judge. For each item, reply KEEP or DISCARD only."
             user = f"User wants: {prompt}\nItems:\n{items}\nReply with KEEP/DISCARD per line:"
             response = await self._chat(system, user, max_tokens=200)
-            for line, deal in zip(response.strip().splitlines(), batch):
+            for line, deal in zip(response.strip().splitlines(), batch, strict=False):
                 if "KEEP" in line.upper():
                     keep_urls.append(deal.url)
         return {"keep": keep_urls}
@@ -118,7 +118,8 @@ class LLMClient:
         try:
             indices = [int(x.strip()) - 1 for x in response.split(",")]
             return [deals[i] for i in indices[:top_n] if 0 <= i < len(deals)]
-        except Exception:
+        except (ValueError, IndexError) as e:
+            logger.debug(f"Failed to parse LLM ranking, using input order: {e}")
             return deals[:top_n]
 
     # === Local LLM calls ===
@@ -151,7 +152,8 @@ class LLMClient:
         elif provider == "mistral":
             return await self._call_mistral_async(api_key, model, system, user, max_tokens)
         else:
-            raise ValueError(f"Unknown provider: {provider}")
+            msg = f"Unknown provider: {provider}"
+            raise ValueError(msg)
 
     async def _call_openrouter_async(self, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
         api_url = "https://openrouter.ai/api/v1/chat/completions"

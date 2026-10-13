@@ -1,11 +1,11 @@
 """Result processor for JSON and Markdown output."""
 
 import json
-from datetime import datetime
 from pathlib import Path
 
 from src.config.models import OutputConfig
 from src.searcher.adapters.base import Deal
+from src.utils.time import utcnow_stamp
 
 
 class ResultProcessor:
@@ -17,7 +17,7 @@ class ResultProcessor:
         if output_dir is None:
             output_dir = self.config.directory
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = utcnow_stamp()
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         # Save as JSON

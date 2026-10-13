@@ -1,9 +1,13 @@
+import logging
 import re
 from typing import ClassVar
 
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
 from .base import BaseAdapter, Deal
+
+logger = logging.getLogger(__name__)
 
 
 class BackMarketAdapter(BaseAdapter):
@@ -19,7 +23,8 @@ class BackMarketAdapter(BaseAdapter):
         try:
             await page.goto(search_url, wait_until="networkidle", timeout=30000)
             await page.wait_for_selector(self.results_selector, timeout=15000)
-        except Exception:
+        except PlaywrightError as e:
+            logger.debug(f"[{self.name}] Navigation error: {e}")
             return []
 
         deals = []
@@ -65,5 +70,6 @@ class BackMarketAdapter(BaseAdapter):
                 site_name=self.name,
                 metadata={"source": "backmarket"}
             )
-        except Exception:
+        except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
+            logger.debug(f"[{self.name}] Extract error: {e}")
             return None

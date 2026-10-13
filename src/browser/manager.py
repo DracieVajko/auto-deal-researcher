@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from playwright.async_api import Browser, BrowserContext, async_playwright
+from playwright.async_api import Error as PlaywrightError
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +39,15 @@ class BrowserManager:
                 ignore_https_errors=True,
             )
             await self._setup_context(self._context)
-            return self._context
-        except Exception as e:
+        except PlaywrightError as e:
             logger.info(f"CDP connection failed: {e}")
+        else:
+            return self._context
         
         # Fallback to persistent context (headless by default)
         if browser_config.use_persistent_context:
             user_data_dir = Path(browser_config.user_data_dir)
-            user_data_dir.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(user_data_dir.mkdir, parents=True, exist_ok=True)
             logger.info(f"Launching persistent context (headless={browser_config.headless}): {user_data_dir}")
             context = await self._playwright.chromium.launch_persistent_context(
                 user_data_dir=str(user_data_dir),
@@ -140,10 +142,10 @@ class BrowserManager:
                             logger.info(f"Clicked cookie consent: {selector}")
                             await asyncio.sleep(0.5)
                             return True
-                    except Exception as e:
+                    except PlaywrightError as e:
                         logger.debug(f"Cookie selector {selector} not matched: {e}")
                         continue
-            except Exception as e:
+            except PlaywrightError as e:
                 logger.debug(f"Cookie handling error: {e}")
             return False
 

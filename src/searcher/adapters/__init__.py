@@ -19,7 +19,8 @@ ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = {
 def get_adapter(name: str) -> type[BaseAdapter]:
     """Get adapter class by name."""
     if name not in ADAPTER_REGISTRY:
-        raise ValueError(f"No adapter for site: {name}. Available: {list(ADAPTER_REGISTRY.keys())}")
+        msg = f"No adapter for site: {name}. Available: {list(ADAPTER_REGISTRY.keys())}"
+        raise ValueError(msg)
     return ADAPTER_REGISTRY[name]
 
 

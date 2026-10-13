@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 
 from src.storage.manager import StorageManager
+from src.utils.time import utcnow_iso
 
 
 @dataclass
@@ -152,7 +152,7 @@ class ChangeDetector:
             current_run_id=current_run_id,
             previous_run_id=previous_run_id,
             prompt=prompt,
-            generated_at=datetime.now().isoformat(),
+            generated_at=utcnow_iso(),
         )
 
         # Get current deals as dict keyed by URL
@@ -276,7 +276,7 @@ class ChangeDetector:
             current_run_id=current_run_id,
             previous_run_id=None,
             prompt=prompt,
-            generated_at=datetime.now().isoformat(),
+            generated_at=utcnow_iso(),
         )
 
         current_by_url = {deal.url: deal for deal in current_deals}

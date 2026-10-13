@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from src.browser.manager import BrowserManager
 from src.config import load_config
 from src.searcher.adapters import get_adapter
+from src.utils.time import utcnow, utcnow_iso
 
 
 @dataclass
@@ -28,7 +29,6 @@ class Doctor:
 
     async def check_site(self, site_name: str, live: bool = True) -> DoctorResult:
         """Check a single site's health."""
-        from datetime import datetime
         start = time.perf_counter()
         
         # Find site config
@@ -48,7 +48,7 @@ class Doctor:
                 first_items=[],
                 duration_ms=0,
                 error=f"Site '{site_name}' not found in config",
-                timestamp=datetime.now().isoformat()
+                timestamp=utcnow_iso()
             )
         
         if not site_config.enabled:
@@ -61,7 +61,7 @@ class Doctor:
                 first_items=[],
                 duration_ms=0,
                 error="Site disabled in config",
-                timestamp=datetime.now().isoformat()
+                timestamp=utcnow_iso()
             )
         
         if not live:
@@ -74,7 +74,7 @@ class Doctor:
                 first_items=[],
                 duration_ms=0,
                 error="Offline mode - no network check",
-                timestamp=datetime.now().isoformat()
+                timestamp=utcnow_iso()
             )
         
         # Use browser manager's get_page() which has cookie handling
@@ -119,7 +119,7 @@ class Doctor:
                 first_items=first_items,
                 duration_ms=duration_ms,
                 error=None,
-                timestamp=datetime.now().isoformat()
+                timestamp=utcnow_iso()
             )
             
         except Exception as e:
@@ -133,7 +133,7 @@ class Doctor:
                 first_items=[],
                 duration_ms=duration_ms,
                 error=str(e),
-                timestamp=datetime.now().isoformat()
+                timestamp=utcnow_iso()
             )
         finally:
             await page.close()
@@ -150,10 +150,8 @@ class Doctor:
 
 def print_doctor_results(results: list[DoctorResult]) -> None:
     """Print doctor results in a nice table."""
-    from datetime import datetime
-    
     print("\n" + "=" * 80)
-    print(f"DOCTOR REPORT - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"DOCTOR REPORT - {utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
     print("=" * 80)
     
     for r in results:

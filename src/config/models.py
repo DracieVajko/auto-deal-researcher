@@ -1,12 +1,12 @@
 """Configuration models for Auto Deal Searcher."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel
 
 
-class Condition(str, Enum):
+class Condition(StrEnum):
     NEW = "new"
     USED = "used"
     REFURBISHED = "refurbished"
@@ -15,7 +15,7 @@ class Condition(str, Enum):
     ANY = "any"
 
 
-class Category(str, Enum):
+class Category(StrEnum):
     ELECTRONICS = "electronics"
     APPLIANCES = "appliances"
     AUTO = "auto"

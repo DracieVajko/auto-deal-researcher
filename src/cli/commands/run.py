@@ -13,7 +13,8 @@ def run(
 ):
     """Run a single search cycle (importable function for tests)."""
     import asyncio
-    from src.cli import _run_async
+
+    from src.cli.app import _run_async
 
     return asyncio.run(_run_async(prompt, prompt_file, condition, category, winners, output_format))
 

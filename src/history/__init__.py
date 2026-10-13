@@ -1,0 +1,1 @@
+"""History and trends package - price tracking, trend analysis, watchlist."""

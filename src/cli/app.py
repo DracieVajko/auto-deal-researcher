@@ -1,22 +1,22 @@
-"""Auto Deal Searcher CLI - main entry point."""
+"""Auto Deal Searcher - Typer app factory."""
 
 import asyncio
-import os
 
 import typer
 
 from src.browser.manager import BrowserManager
+from src.cli.commands.history import history_app
+from src.cli.commands.monitor import monitor as monitor_fn
 from src.config import load_config
 from src.diagnostics.doctor import Doctor, print_doctor_results
-from src.intelligence.change_detector import ChangeDetector
-from src.intelligence.price_tracker import PriceTracker
 from src.llm.client import LLMClient
 from src.output.processor import ResultProcessor
+from src.scheduler.tasks import install_schedule, uninstall_schedule
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
-from src.utils.time import utcnow_stamp
 
 app = typer.Typer(help="Auto Deal Searcher — find deals across marketplaces")
+app.add_typer(history_app, name="history")
 
 
 @app.command()
@@ -32,27 +32,15 @@ def run(
     asyncio.run(_run_async(prompt, prompt_file, condition, category, winners, output_format))
 
 
-def _load_prompt_from_file(prompt_file: str) -> str:
-    """Load search prompt from a YAML file (sync helper for use in threads)."""
-    import yaml
-
-    with open(prompt_file, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return data.get("prompt", "")
-
-
-def _write_text_file(path: str, text: str) -> None:
-    """Write text to a file (sync helper for use in threads)."""
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
-
-
 async def _run_async(prompt, prompt_file, condition, category, winners, output_format):
     config = load_config()
 
     # Resolve prompt
     if prompt_file:
-        prompt = await asyncio.to_thread(_load_prompt_from_file, prompt_file)
+        import yaml
+        with open(prompt_file) as f:
+            data = yaml.safe_load(f)
+            prompt = data.get("prompt", "")
     if not prompt:
         typer.echo("Error: Provide --prompt or --prompt-file", err=True)
         raise typer.Exit(1)
@@ -87,7 +75,6 @@ async def _run_async(prompt, prompt_file, condition, category, winners, output_f
 def schedule_install():
     """Install automated scheduled tasks (Windows Task Scheduler / cron)."""
     config = load_config()
-    from src.scheduler.tasks import install_schedule
     install_schedule(config)
     typer.echo("Scheduled tasks installed.")
 
@@ -95,7 +82,6 @@ def schedule_install():
 @app.command()
 def schedule_uninstall():
     """Remove automated scheduled tasks."""
-    from src.scheduler.tasks import uninstall_schedule
     uninstall_schedule()
     typer.echo("Scheduled tasks removed.")
 
@@ -140,80 +126,7 @@ def monitor(
     price_drop_threshold: float = typer.Option(10.0, "--price-drop-threshold", help="Alert threshold for price drops (%)"),
 ):
     """Run continuous monitoring with intelligent change detection."""
-    asyncio.run(_monitor_async(prompt_file, interval_hours, max_runs, output_dir, price_drop_threshold))
-
-
-async def _monitor_async(prompt_file: str | None, interval_hours: int, max_runs: int, output_dir: str, price_drop_threshold: float):
-    os.makedirs(output_dir, exist_ok=True)
-    
-    config = load_config()
-
-    # Resolve prompt
-    if prompt_file:
-        prompt = await asyncio.to_thread(_load_prompt_from_file, prompt_file)
-    else:
-        typer.echo("Error: Provide --prompt-file for monitoring mode", err=True)
-        raise typer.Exit(1)
-
-    llm = LLMClient(config)
-    storage = StorageManager(config.storage.db_path)
-    browser_mgr = BrowserManager(config)
-    price_tracker = PriceTracker(storage)
-    change_detector = ChangeDetector(storage)
-
-    run_count = 0
-    previous_run_id = None
-
-    try:
-        while max_runs == 0 or run_count < max_runs:
-            run_count += 1
-            run_id = f"monitor_{utcnow_stamp()}"
-            
-            typer.echo(f"\n{'='*60}")
-            typer.echo(f"Monitor Run #{run_count} — {run_id}")
-            typer.echo(f"{'='*60}")
-
-            # Create run record
-            storage.create_run(run_id, prompt, "any", "any")
-
-            async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
-                deals = await searcher.search(prompt, "any", "any")
-
-            # Record price sightings
-            for deal in deals:
-                price_tracker.record_sighting(deal, run_id)
-
-            # Generate change report
-            report = change_detector.generate_run_report(run_id, prompt, deals, previous_run_id)
-
-            # Update run record
-            storage.complete_run(run_id, len(deals), report.new_count, "completed")
-
-            # Print report
-            typer.echo(report.to_markdown())
-
-            # Save report to file
-            report_path = os.path.join(output_dir, f"{run_id}.md")
-            await asyncio.to_thread(_write_text_file, report_path, report.to_markdown())
-            typer.echo(f"Report saved to: {report_path}")
-
-            # Save new deals
-            for deal in deals:
-                storage.save_deal(deal, run_id)
-
-            previous_run_id = run_id
-
-            if max_runs > 0 and run_count >= max_runs:
-                break
-
-            typer.echo(f"Sleeping for {interval_hours} hours...")
-            await asyncio.sleep(interval_hours * 3600)
-
-    except KeyboardInterrupt:
-        typer.echo("\nMonitoring stopped by user")
-    except Exception as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise
+    monitor_fn(prompt_file, interval_hours, max_runs, output_dir, price_drop_threshold)
 
 
 if __name__ == "__main__":

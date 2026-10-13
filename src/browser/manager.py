@@ -7,6 +7,8 @@ from pathlib import Path
 from playwright.async_api import Browser, BrowserContext, async_playwright
 from playwright.async_api import Error as PlaywrightError
 
+from src.browser.fingerprint import FingerprintRotator, apply_fingerprint
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,6 +18,7 @@ class BrowserManager:
         self._playwright = None
         self._browser: Browser | BrowserContext | None = None
         self._context = None
+        self._fingerprint_rotator = FingerprintRotator()
 
     async def get_browser(self) -> Browser | BrowserContext:
         """Get or create browser instance (for async context manager)."""
@@ -107,12 +110,23 @@ class BrowserManager:
         context.set_default_timeout(30000)
         context.set_default_navigation_timeout(30000)
 
-    async def get_page(self):
-        """Get a new page with cookie consent handling."""
+    async def get_page(self, session_id: str | None = None, browser_type: str = "chromium"):
+        """Get a new page with fingerprint rotation and cookie consent handling."""
         browser = await self.get_browser()
         page = await browser.new_page()
         await self._setup_page(page)
+        
+        # Apply fingerprint if not using CDP (CDP browser already has its own fingerprint)
+        if not self._is_cdp_connected():
+            fingerprint = self._fingerprint_rotator.get_fingerprint(browser_type, session_id)
+            await apply_fingerprint(page, fingerprint)
+        
         return page
+    
+    def _is_cdp_connected(self) -> bool:
+        """Check if we're connected via CDP to an existing browser."""
+        # If we have a context from CDP connection, we can't easily apply fingerprints
+        return self._context is not None and hasattr(self._context, 'browser') and self._context.browser.is_connected()
 
     async def _setup_page(self, page):
         """Setup page with cookie consent handling."""

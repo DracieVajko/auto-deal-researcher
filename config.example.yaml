@@ -35,6 +35,15 @@ search:
   max_rounds: 3
   retry_on_empty: true
   prune_after_days: 30
+  diamond_search:
+    enabled: true
+    max_rounds: 3
+    research_parallel: true
+    expertise_parallel: true
+    price_sequential: true
+    confidence_threshold: 0.7
+    llm_call_budget: 50
+    llm_token_budget: 100000
 
 llm:
   local:
@@ -78,3 +87,12 @@ browser:
 
 storage:
   db_path: "./data/deals.db"
+
+notifications:
+  default_cooldown_seconds: 3600
+  channels:
+    - name: "console"
+      type: "console"
+      cooldown_seconds: 60
+      rate_limit: 10
+      settings: {}

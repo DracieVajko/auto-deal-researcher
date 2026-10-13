@@ -58,6 +58,19 @@ class LLMConfig(BaseModel):
     model_name: str = "llama3"
 
 
+class NotificationChannelConfig(BaseModel):
+    name: str = "console"
+    type: Literal["console", "webhook", "discord", "email"] = "console"
+    cooldown_seconds: int = 3600
+    rate_limit: int = 10
+    settings: dict = {}
+
+
+class NotificationConfig(BaseModel):
+    channels: list[NotificationChannelConfig] = []
+    default_cooldown_seconds: int = 3600
+
+
 class OutputConfig(BaseModel):
     format: Literal["json", "markdown", "both"] = "both"
     directory: str = "./results"
@@ -86,12 +99,26 @@ class StorageConfig(BaseModel):
     db_path: str = "./data/deals.db"
 
 
+class DiamondSearchConfig(BaseModel):
+    """Configuration for Diamond Search 7-agent pipeline."""
+    enabled: bool = True
+    max_rounds: int = 3
+    research_parallel: bool = True
+    expertise_parallel: bool = True
+    price_sequential: bool = True
+    llm_model_override: str | None = None
+    confidence_threshold: float = 0.7
+    llm_call_budget: int = 50
+    llm_token_budget: int = 100000
+
+
 class SearchConfig(BaseModel):
     websites: list[WebsiteConfig] = []
     winners_count: int = 3
     max_rounds: int = 3
     retry_on_empty: bool = True
     prune_after_days: int = 30
+    diamond_search: DiamondSearchConfig = DiamondSearchConfig()
 
 
 class AppConfig(BaseModel):
@@ -101,3 +128,4 @@ class AppConfig(BaseModel):
     schedule: ScheduleConfig = ScheduleConfig()
     browser: BrowserConfig = BrowserConfig()
     storage: StorageConfig = StorageConfig()
+    notifications: NotificationConfig = NotificationConfig()

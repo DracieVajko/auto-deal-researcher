@@ -1,5 +1,6 @@
 """Cross-platform task scheduler for automated runs."""
 
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -31,16 +32,18 @@ def _install_windows_tasks(config: AppConfig):
         if not task.enabled:
             continue
         for time_str in task.times:
-            task_name = f"AutoDealSearcher-{task.name}-{time_str.replace(':', '')}"
+            safe_name = "".join(c for c in f"AutoDealSearcher-{task.name}-{time_str.replace(':', '')}" if c.isalnum() or c in "-_")
+            quoted_exe = f"'{python_exe}'"
+            quoted_prompt = f"'{task.prompt_file}'"
             # PowerShell command to create scheduled task
             ps_cmd = f'''
-$action = New-ScheduledTaskAction -Execute '{python_exe}' -Argument '-m src.cli run --prompt-file {task.prompt_file}'
+$action = New-ScheduledTaskAction -Execute {quoted_exe} -Argument '-m src.cli run --prompt-file {quoted_prompt}'
 $trigger = New-ScheduledTaskTrigger -Daily -At {time_str}
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd
-Register-ScheduledTask -TaskName '{task_name}' -Action $action -Trigger $trigger -Settings $settings -Force
+Register-ScheduledTask -TaskName '{safe_name}' -Action $action -Trigger $trigger -Settings $settings -Force
 '''
             subprocess.run(["powershell", "-Command", ps_cmd], check=True)
-            print(f"Installed Windows task: {task_name}")
+            print(f"Installed Windows task: {safe_name}")
 
 
 def _uninstall_windows_tasks():
@@ -61,8 +64,11 @@ def _install_unix_cron(config: AppConfig):
             continue
         for time_str in task.times:
             hour, minute = time_str.split(":")
+            quoted_root = shlex.quote(str(repo_root))
+            quoted_exe = shlex.quote(python_exe)
+            quoted_prompt = shlex.quote(task.prompt_file)
             cron_lines.append(
-                f"{minute} {hour} * * * cd {repo_root} && {python_exe} -m src.cli run --prompt-file {task.prompt_file}"
+                f"{minute} {hour} * * * cd {quoted_root} && {quoted_exe} -m src.cli run --prompt-file {quoted_prompt}"
             )
 
     # Add to crontab

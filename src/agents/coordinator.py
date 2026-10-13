@@ -85,6 +85,10 @@ class CoordinatorAgent(AgentBase[dict, dict]):
 
     async def _run_research_layer(self, prompt: str, run_id: str) -> dict:
         """Run research agents in parallel."""
+        if not self._check_budget(estimated_calls=3, estimated_tokens=3000):
+            logger.warning(f"[run_id={run_id}] Budget exceeded, skipping research layer")
+            return {"error": "Budget exceeded, research skipped"}
+
         agents = [
             self.agents["query_expansion"],
             self.agents["site_selection"],
@@ -93,6 +97,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
 
         tasks = [agent.run({"prompt": prompt, "run_id": run_id}) for agent in agents if agent]
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        self._record_llm_usage(calls=3, tokens=3000)
 
         def extract_result(result):
             if isinstance(result, AgentResult):
@@ -112,11 +117,16 @@ class CoordinatorAgent(AgentBase[dict, dict]):
 
     async def _run_expertise_layer(self, prompt: str, research_results: dict, run_id: str) -> dict:
         """Run domain expert and latest tech agents."""
+        if not self._check_budget(estimated_calls=2, estimated_tokens=4000):
+            logger.warning(f"[run_id={run_id}] Budget exceeded, skipping expertise layer")
+            return {"domain_expert": "Budget exceeded, skipped", "latest_tech": "Budget exceeded, skipped"}
+
         tasks = [
             self.agents["domain_expert"].run({"prompt": "", "research": research_results, "run_id": run_id}),
             self.agents["latest_tech"].run({"prompt": "", "research": research_results, "run_id": run_id}),
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        self._record_llm_usage(calls=2, tokens=4000)
 
         def extract_result(result):
             if isinstance(result, AgentResult):

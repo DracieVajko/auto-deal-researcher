@@ -13,6 +13,17 @@ from src.llm.client import LLMClient
 from src.searcher.adapters import Deal, get_adapter
 from src.storage.manager import StorageManager
 
+# Diamond Search agents (optional import)
+try:
+    from src.agents import (
+        CoordinatorAgent, QueryExpansionAgent, SiteSelectionAgent, 
+        MarketIntelAgent, DomainExpertAgent, LatestTechTrackerAgent,
+        PriceHunterAgent, RecommendationAgent
+    )
+    DIAMOND_SEARCH_AVAILABLE = True
+except ImportError:
+    DIAMOND_SEARCH_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,6 +49,32 @@ class PlaywrightSearcher:
         self.browser_manager = browser_manager
         self.browser: BrowserContext | None = None
         self.page: Page | None = None
+        
+        # Diamond Search setup
+        self.diamond_search_enabled = (
+            DIAMOND_SEARCH_AVAILABLE and 
+            getattr(config.search, 'diamond_search', None) and 
+            config.search.diamond_search.enabled
+        )
+        self._diamond_coordinator = None
+        if self.diamond_search_enabled:
+            self._init_diamond_agents()
+    
+    def _init_diamond_agents(self):
+        """Initialize the 7-agent Diamond Search pipeline."""
+        agents = [
+            QueryExpansionAgent(),
+            SiteSelectionAgent(),  # Need to create this
+            MarketIntelAgent(),
+            DomainExpertAgent(),
+            LatestTechTrackerAgent(),
+            PriceHunterAgent(),
+            RecommendationAgent(),
+        ]
+        # Filter out None agents
+        agents = [a for a in agents if a is not None]
+        diamond_config = self.config.search.diamond_search.model_dump() if hasattr(self.config.search.diamond_search, 'model_dump') else {}
+        self._diamond_coordinator = CoordinatorAgent(agents, diamond_config)
 
     async def __aenter__(self):
         self.browser = await self.browser_manager.get_browser()
@@ -111,8 +148,8 @@ class PlaywrightSearcher:
         for site in sites:
             page = None
             try:
-                # Create fresh page for each site to avoid state issues
-                page = await self.browser_manager.get_page()
+                # Per-site stable fingerprint session; fresh page per site, closed after
+                page = await self.browser_manager.get_page(session_id=f"search-{site.name}")
                 page.set_default_timeout(30000)
                 page.set_default_navigation_timeout(30000)
                 
@@ -135,3 +172,59 @@ class PlaywrightSearcher:
                     await page.close()
 
         return all_deals
+
+    async def search_with_diamond(self, prompt: str, condition: str = "any", category: str = "any") -> list[Deal]:
+        """
+        Execute search using the Diamond Search 7-agent pipeline.
+        
+        This runs the full agent pipeline:
+        1. Research Layer (parallel): Query Expansion, Site Selection, Market Intel
+        2. Expertise Layer (parallel): Domain Expert, Latest Tech Tracker
+        3. Price Layer (sequential): Price Hunter
+        4. Synthesis: Recommendation Agent
+        """
+        if not self.diamond_search_enabled or not self._diamond_coordinator:
+            logger.warning("Diamond Search not available, falling back to standard search")
+            return await self.search(prompt, condition, category)
+        
+        logger.info("Starting Diamond Search pipeline...")
+        
+        # Execute the diamond search pipeline
+        input_data = {
+            "prompt": prompt,
+            "condition": condition,
+            "category": category,
+        }
+        
+        result = await self._diamond_coordinator.run(input_data)
+        
+        if not result.success:
+            logger.error(f"Diamond Search failed: {result.error}")
+            return await self.search(prompt, condition, category)
+        
+        # The coordinator returns the final recommendation
+        # We need to also run the actual searches to get real deals
+        # The agent pipeline provides intelligence, but we still need to fetch deals
+        
+        # For now, run standard search but with enhanced queries from the pipeline
+        # The recommendation agent's output can guide which results to prioritize
+        recommendation = result.payload.get("final_recommendation", {})
+        
+        # Run standard search
+        deals = await self.search(prompt, condition, category)
+        
+        # Apply expert scoring if available
+        expertise = result.payload.get("expertise", {})
+        expert_analysis = expertise.get("domain_expert", {})
+        evaluated_deals = expert_analysis.get("evaluated_deals", [])
+        
+        if evaluated_deals:
+            # Merge expert scores with deals
+            expert_by_url = {d.get("url"): d for d in evaluated_deals if d.get("url")}
+            for deal in deals:
+                if deal.url in expert_by_url:
+                    deal.expert_score = expert_by_url[deal.url].get("expert_score", 0)
+                    deal.expert_analysis = expert_by_url[deal.url].get("expert_analysis", "")
+        
+        logger.info(f"Diamond Search completed with {len(deals)} deals")
+        return deals

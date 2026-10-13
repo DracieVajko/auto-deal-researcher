@@ -150,7 +150,7 @@ class StorageManager:
         rows = self.db.execute("""
             SELECT ph.*, d.title, d.site_name
             FROM price_history ph
-            JOIN deals d ON ph.deal_id = d.id
+            JOIN deals d ON ph.url = d.url
             WHERE ph.timestamp >= ?
             ORDER BY ph.timestamp DESC
         """, (cutoff,)).fetchall()
@@ -191,7 +191,7 @@ class StorageManager:
             SELECT ph.*, d.title, d.site_name,
                    MIN(ph.price_eur) OVER (PARTITION BY ph.url) as min_price
             FROM price_history ph
-            JOIN deals d ON ph.deal_id = d.id
+            JOIN deals d ON ph.url = d.url
             WHERE ph.timestamp >= ?
         """, (cutoff,)).fetchall()
 

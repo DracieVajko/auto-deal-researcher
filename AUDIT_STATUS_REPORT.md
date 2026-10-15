@@ -43,6 +43,26 @@ P0-1/2/3 explain why `history trends` reported *"insufficient data"* despite run
 
 **Verification:** `pytest` 20 → **38 passed** (18 new regression tests). End-to-end search → save → trends now persists 3/3 deals and writes 3 price-history rows.
 
+### 1.2 Addendum: adapter remediation (live DOM probing)
+
+Every selector was re-derived from the **live** site, not guessed. Findings:
+
+| Site | Root cause of 0 results | Action | Verified |
+|---|---|---|---|
+| **Alza** | Two bugs: search URL was `/?q=` (Alza ignores it and serves the homepage) and `/search` is a **404**. Real endpoint is `/search.htm?exps=`. Item class is `.browsingitem`, not `.browsinglink`. | Adapter rewritten | ✅ **10 deals**, correct prices (339/249/422 €), conditions, URLs |
+| **eBay** | Class renamed `.s-item` → **`.s-card`** (title `.s-card__title`, price `.s-card__price`). Direct `/sch/i.html` is rate-limited/intermittent. | Selectors updated, search-box warmup + 3 attempts, sponsored/decoy filter | ⚠️ **unreliable** — see below |
+| **BackMarket** | Not a selector bug: Cloudflare interstitial (403 → `/testchallengepage`) that never clears (verified 60 s). Locale path is `/sk-sk/search`, not `/search`. | Correct URL, fails fast with reason (**43 s → 0.8 s**) | ❌ not scrapable |
+| **Bazos** | Working | unchanged | ✅ 3 deals |
+
+**eBay serves decoy results to scrapers.** Offline verification against a saved "successful" page found 93 `.s-card` nodes that were all placeholders (`ebay.com/itm/123456`, "Shop on eBay", `$20.00`). The adapter now rejects them, but reliable access requires the official Browse API or an affiliate feed. **No anti-bot evasion was implemented** — that is deliberate, both on correctness and on the site's terms.
+
+**Also in this round:**
+- `BaseAdapter.parse_price_eur()` — shared parser replacing three divergent inline regexes. Handles NBSP/thin spaces, `1.299,50` vs `1,299.50`, and `EUR 249,00`. (First implementation wrongly returned `1.2995` for `1,299.50`; caught by tests and corrected to "rightmost separator is decimal only when followed by 1–2 digits".)
+- `BaseAdapter.detect_block()` + `SiteBlockedError` — adapters now raise a typed error on an interstitial instead of waiting out selector timeouts.
+- `PlaywrightSearcher` now feeds `SelectorHealthTracker`, so `history selector` reports real per-site data instead of zeros. `[DEBUG] print(...)` statements removed from `doctor.py`.
+
+**Configuration:** `backmarket` and `ebay` are now `enabled: false` in `config.yaml` with the reason inline. `doctor` reports **2/2 enabled sites healthy**.
+
 <!-- SECTION:STRUCT -->
 ## 2. Repository Structure
 

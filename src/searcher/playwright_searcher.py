@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 
 from playwright.async_api import BrowserContext, Page
 
 from src.config.models import AppConfig, WebsiteConfig
+from src.diagnostics.selector_health import SelectorHealthTracker
 from src.llm.client import LLMClient
 from src.searcher.adapters import Deal, get_adapter
+from src.searcher.adapters.base import SiteBlockedError
 from src.storage.manager import StorageManager
 
 # Diamond Search agents (optional import)
@@ -56,6 +59,7 @@ class PlaywrightSearcher:
             getattr(config.search, 'diamond_search', None) and 
             config.search.diamond_search.enabled
         )
+        self.health = SelectorHealthTracker()
         self._diamond_coordinator = None
         if self.diamond_search_enabled:
             self._init_diamond_agents()
@@ -147,6 +151,8 @@ class PlaywrightSearcher:
 
         for site in sites:
             page = None
+            started = time.perf_counter()
+            self.health.record_search_start(site.name, site.adapter_class)
             try:
                 # Per-site stable fingerprint session; fresh page per site, closed after
                 page = await self.browser_manager.get_page(session_id=f"search-{site.name}")
@@ -155,9 +161,11 @@ class PlaywrightSearcher:
                 
                 adapter_cls = get_adapter(site.adapter_class)
                 adapter = adapter_cls()
-                print(f"[{site.name}] Adapter search method: {adapter.search}")
                 deals = await adapter.search(page, query, max_results=20)
-                print(f"[{site.name}] Got {len(deals)} deals")
+                latency = (time.perf_counter() - started) * 1000
+                self.health.record_search_result(
+                    site.name, bool(deals), len(deals), latency
+                )
                 # Filter by condition/category if adapter supports it
                 for deal in deals:
                     deal.site_name = site.name
@@ -165,8 +173,17 @@ class PlaywrightSearcher:
                         all_deals.append(deal)
                 # Rate limiting
                 await asyncio.sleep(1)
+            except SiteBlockedError as e:
+                # Anti-bot interstitial: expected for some sites, not a bug.
+                logger.warning(f"[{site.name}] Blocked: {e}")
+                self.health.record_search_result(
+                    site.name, False, 0, (time.perf_counter() - started) * 1000
+                )
             except Exception:
                 logger.exception(f"[{site.name}] Search error")
+                self.health.record_search_result(
+                    site.name, False, 0, (time.perf_counter() - started) * 1000
+                )
             finally:
                 if page:
                     await page.close()

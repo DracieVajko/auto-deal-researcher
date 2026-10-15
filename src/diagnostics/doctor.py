@@ -78,22 +78,16 @@ class Doctor:
             )
         
         # Use browser manager's get_page() which has cookie handling
-        print("[DEBUG] Getting page from browser manager...")
         page = await self.browser_manager.get_page()
-        print(f"[DEBUG] Got page: {page}")
         page.set_default_timeout(30000)
         page.set_default_navigation_timeout(30000)
-        
+
         try:
             adapter_cls = get_adapter(site_config.adapter_class)
             adapter = adapter_cls()
-            print(f"[DEBUG] Adapter: {adapter.name}, results_selector: {adapter.results_selector}")
-            
-            # Use adapter's search method which handles navigation and extraction
-            print("[DEBUG] Using adapter's search method for navigation...")
 
+            # Use adapter's search method which handles navigation and extraction
             deals = await adapter.search(page, "test", max_results=3)
-            print(f"[DEBUG] Search returned {len(deals)} deals")
             items_found = len(deals)
             selector_found = items_found > 0
             http_status = 200  # adapter.search navigates internally

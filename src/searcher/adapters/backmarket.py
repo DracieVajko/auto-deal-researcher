@@ -1,11 +1,11 @@
 import logging
-import re
 from typing import ClassVar
+from urllib.parse import quote_plus
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
-from .base import BaseAdapter, Deal
+from .base import BaseAdapter, Deal, SiteBlockedError
 
 logger = logging.getLogger(__name__)
 
@@ -13,23 +13,35 @@ logger = logging.getLogger(__name__)
 class BackMarketAdapter(BaseAdapter):
     name = "backmarket"
     base_url = "https://www.backmarket.sk"
-    supported_conditions: ClassVar[list[str]] = ["refurbished"]
-    supported_categories: ClassVar[list[str]] = ["electronics"]
+    # The locale-aware path is /sk-sk/search (not /search).
     results_selector = '[data-testid="product-card"]'
     item_selector = '[data-testid="product-card"]'
+    supported_conditions: ClassVar[list[str]] = ["refurbished"]
+    supported_categories: ClassVar[list[str]] = ["electronics"]
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
-        search_url = f"{self.base_url}/search?q={query.replace(' ', '+')}"
+        search_url = f"{self.base_url}/sk-sk/search?q={quote_plus(query)}"
         try:
-            await page.goto(search_url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_selector(self.results_selector, timeout=15000)
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
         except PlaywrightError as e:
             logger.debug(f"[{self.name}] Navigation error: {e}")
             return []
 
+        # BackMarket sits behind a Cloudflare interstitial that does not clear
+        # for automated sessions. Fail fast with the reason instead of burning
+        # the full selector timeout on every run.
+        blocked = await self.detect_block(page)
+        if blocked:
+            raise SiteBlockedError(f"{self.name}: {blocked} (session cannot be scraped)")
+
+        try:
+            await page.wait_for_selector(self.item_selector, timeout=20000)
+        except PlaywrightError as e:
+            logger.debug(f"[{self.name}] results not found: {e}")
+            return []
+
         deals = []
-        elements = await page.query_selector_all(self.item_selector)
-        for el in elements[:max_results]:
+        for el in (await page.query_selector_all(self.item_selector))[:max_results]:
             deal = await self.extract_deal(page, el)
             if deal:
                 deals.append(deal)
@@ -37,38 +49,38 @@ class BackMarketAdapter(BaseAdapter):
 
     async def extract_deal(self, page: Page, element) -> Deal | None:
         try:
-            title_el = await element.query_selector('[data-testid="product-title"]')
-            price_el = await element.query_selector('[data-testid="product-price"]')
-            link_el = await element.query_selector('a')
+            title_el = (
+                await element.query_selector('[data-testid="product-title"]')
+                or await element.query_selector("h2, h3")
+            )
+            price_el = (
+                await element.query_selector('[data-testid="product-price"]')
+                or await element.query_selector('[data-qa="product-price"]')
+            )
+            link_el = await element.query_selector('a[href*="/p/"]') or await element.query_selector("a")
 
-            if not all([title_el, price_el, link_el]):
+            if not title_el or not price_el or not link_el:
                 return None
 
-            title = await title_el.inner_text()
-            price_text = await price_el.inner_text()
+            title = " ".join((await title_el.inner_text()).split())
+            price_eur = self.parse_price_eur(await price_el.inner_text())
+            if not title or price_eur is None:
+                return None
+
             url = await link_el.get_attribute("href")
-
-            # Parse price
-            price_clean = price_text.replace(" ", "").replace(",", ".")
-            price_match = re.search(r"([\d.]+)\s*€", price_clean)
-            if not price_match:
+            if not url:
                 return None
-            price_eur = float(price_match.group(1))
-
-            condition = "refurbished"
-
-            # Ensure full URL
-            if url and not url.startswith("http"):
+            if not url.startswith("http"):
                 url = f"{self.base_url}{url}"
 
             return Deal(
-                url=url,
-                title=title.strip(),
+                url=url.split("?")[0],
+                title=title,
                 price_eur=price_eur,
-                condition=condition,
+                condition="refurbished",
                 category="electronics",
                 site_name=self.name,
-                metadata={"source": "backmarket"}
+                metadata={"source": "backmarket"},
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
             logger.debug(f"[{self.name}] Extract error: {e}")

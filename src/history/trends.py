@@ -69,9 +69,9 @@ class TrendsAnalyzer:
             change_pct = ((last_price - first_price) / first_price) * 100
             
             # Calculate volatility
-            prices = [p["price"] for p in prices_sorted]
-            mean_price = sum(prices) / len(prices)
-            volatility = statistics.stdev(prices) / mean_price if mean_price > 0 and len(prices) > 1 else 0
+            series = [p["price"] for p in prices_sorted]
+            mean_price = sum(series) / len(series)
+            volatility = statistics.stdev(series) / mean_price if mean_price > 0 and len(series) > 1 else 0
             
             trends.append({
                 "url": url,
@@ -79,7 +79,7 @@ class TrendsAnalyzer:
                 "last_price": last_price,
                 "change_pct": round(change_pct, 2),
                 "volatility": round(volatility, 3),
-                "data_points": len(prices),
+                "data_points": len(series),
             })
         
         if not trends:
@@ -101,8 +101,8 @@ class TrendsAnalyzer:
         return {
             "category": category,
             "trend": trend,
-            "avg_change_pct": round(sum(t["change_pct"] for t in trends) / len(trends), 2),
-            "avg_volatility": round(sum(t["volatility"] for t in trends) / len(trends), 3),
+            "avg_change_pct": round(avg_change, 2),
+            "avg_volatility": round(avg_volatility, 3),
             "products_tracked": len(trends),
             "dropping_count": sum(1 for t in trends if t["change_pct"] < -5),
             "rising_count": sum(1 for t in trends if t["change_pct"] > 5),

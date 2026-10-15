@@ -1,11 +1,11 @@
 import logging
-import re
 from typing import ClassVar
+from urllib.parse import quote_plus
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
-from .base import BaseAdapter, Deal
+from .base import BaseAdapter, Deal, SiteBlockedError
 
 logger = logging.getLogger(__name__)
 
@@ -13,23 +13,34 @@ logger = logging.getLogger(__name__)
 class AlzaAdapter(BaseAdapter):
     name = "alza"
     base_url = "https://www.alza.sk"
+    # Verified against the live DOM: alza.sk/search.htm?exps=... returns
+    # div.browsingitem containers; the old .browsinglink selector matched 0.
+    results_selector = ".browsingitemcontainer"
+    item_selector = ".browsingitem"
     supported_conditions: ClassVar[list[str]] = ["new", "open_box"]
     supported_categories: ClassVar[list[str]] = ["electronics", "appliances"]
-    results_selector = ".browsinglink"
-    item_selector = ".browsinglink"
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
-        search_url = f"{self.base_url}/?q={query.replace(' ', '+')}"
+        # /search is a 404 on alza.sk; the real endpoint is /search.htm?exps=
+        search_url = f"{self.base_url}/search.htm?exps={quote_plus(query)}"
         try:
-            await page.goto(search_url, wait_until="networkidle", timeout=30000)
-            await page.wait_for_selector(self.results_selector, timeout=15000)
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
         except PlaywrightError as e:
             logger.debug(f"[{self.name}] Navigation error: {e}")
             return []
 
+        blocked = await self.detect_block(page)
+        if blocked:
+            raise SiteBlockedError(f"{self.name}: {blocked}")
+
+        try:
+            await page.wait_for_selector(self.item_selector, timeout=20000)
+        except PlaywrightError as e:
+            logger.debug(f"[{self.name}] results not found: {e}")
+            return []
+
         deals = []
-        elements = await page.query_selector_all(self.item_selector)
-        for el in elements[:max_results]:
+        for el in (await page.query_selector_all(self.item_selector))[:max_results]:
             deal = await self.extract_deal(page, el)
             if deal:
                 deals.append(deal)
@@ -37,39 +48,37 @@ class AlzaAdapter(BaseAdapter):
 
     async def extract_deal(self, page: Page, element) -> Deal | None:
         try:
-            title_el = await element.query_selector(".name")
-            price_el = await element.query_selector(".price-box__price")
-            link_el = await element.query_selector("a")
+            name_el = await element.query_selector(".name")
+            price_el = await element.query_selector(".price")
+            link_el = await element.query_selector(".browsinglink") or await element.query_selector("a")
 
-            if not all([title_el, price_el, link_el]):
+            if not name_el or not price_el or not link_el:
                 return None
 
-            title = await title_el.inner_text()
-            price_text = await price_el.inner_text()
+            title = " ".join((await name_el.inner_text()).split())
+            price_eur = self.parse_price_eur(await price_el.inner_text())
+            if not title or price_eur is None:
+                return None
+
             url = await link_el.get_attribute("href")
-
-            # Parse price: "1 299 €" → 1299.0
-            price_clean = price_text.replace(" ", "").replace(",", ".")
-            price_match = re.search(r"([\d.]+)\s*€", price_clean)
-            if not price_match:
+            if not url:
                 return None
-            price_eur = float(price_match.group(1))
-
-            # Detect open-box: look for "Rozbalené" badge
-            condition = "open_box" if await element.query_selector(".badge--opened, .label--opened") else "new"
-
-            # Ensure full URL
-            if url and not url.startswith("http"):
+            if not url.startswith("http"):
                 url = f"{self.base_url}{url}"
 
+            # Alza flags open-box with an "almost new" data attribute.
+            almost_new = (await element.get_attribute("data-almostnew") or "").lower()
+            text = (await element.inner_text()).lower()
+            condition = "open_box" if almost_new == "true" or "rozbalen" in text else "new"
+
             return Deal(
-                url=url,
-                title=title.strip(),
+                url=url.split("?")[0],
+                title=title,
                 price_eur=price_eur,
                 condition=condition,
                 category="electronics",
                 site_name=self.name,
-                metadata={"source": "alza"}
+                metadata={"source": "alza", "code": await element.get_attribute("data-code") or ""},
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
             logger.debug(f"[{self.name}] Extract error: {e}")

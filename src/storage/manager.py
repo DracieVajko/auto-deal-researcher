@@ -1,5 +1,6 @@
 """SQLite storage manager for deal deduplication and history."""
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import timedelta
@@ -60,6 +61,33 @@ class RunRecord:
     error_message: str | None
 
 
+def _row_to_stored_deal(row) -> StoredDeal:
+    """Map a deals row to StoredDeal, tolerating extra/missing columns.
+
+    The deals table has an autoincrement ``id`` primary key while ``url`` is
+    only UNIQUE, so rows must be selected by url explicitly and the extra
+    columns (id, currency) dropped.
+    """
+    data = dict(row)
+    return StoredDeal(
+        url=data["url"],
+        title=data["title"],
+        price_eur=data["price_eur"],
+        condition=data.get("condition") or "unknown",
+        category=data.get("category") or "general",
+        site_name=data.get("site_name") or "",
+        first_seen=data.get("first_seen") or "",
+        last_seen=data.get("last_seen") or "",
+        times_seen=data.get("times_seen") or 1,
+        availability=data.get("availability") or "unknown",
+        seller_name=data.get("seller_name") or "",
+        seller_rating=data.get("seller_rating") or 0.0,
+        shipping_cost_eur=data.get("shipping_cost_eur") or 0.0,
+        original_currency=data.get("original_currency") or "EUR",
+        metadata=data.get("metadata") or "{}",
+    )
+
+
 class StorageManager:
     def __init__(self, db_path: str):
         self.db_path = Path(db_path)
@@ -67,14 +95,17 @@ class StorageManager:
         self.db = get_db(db_path)
 
     def get_deal(self, url: str) -> StoredDeal | None:
-        row = self.db["deals"].get(url)
-        if row:
-            return StoredDeal(**row)
-        return None
+        row = self.db.execute("SELECT * FROM deals WHERE url = ?", (url,)).fetchone()
+        return _row_to_stored_deal(row) if row else None
+
+    def get_deal_by_id(self, deal_id: int) -> StoredDeal | None:
+        row = self.db.execute("SELECT * FROM deals WHERE id = ?", (deal_id,)).fetchone()
+        return _row_to_stored_deal(row) if row else None
 
     def save_deal(self, deal: Deal, run_id: str = ""):
         existing = self.get_deal(deal.url)
-        
+        today = today_iso()
+
         deal_data = {
             "url": deal.url,
             "title": deal.title,
@@ -88,20 +119,48 @@ class StorageManager:
             "seller_rating": getattr(deal, "seller_rating", 0.0),
             "shipping_cost_eur": getattr(deal, "shipping_cost_eur", 0.0),
             "original_currency": getattr(deal, "original_currency", "EUR"),
-            "metadata": str(getattr(deal, "metadata", {})),
+            "metadata": json.dumps(getattr(deal, "metadata", {}) or {}, ensure_ascii=False),
         }
 
         if existing:
-            # Update existing deal
-            deal_data["last_seen"] = today_iso()
-            deal_data["times_seen"] = self.db["deals"].get(deal.url).get("times_seen", 1) + 1
-            self.db["deals"].upsert(deal_data, pk="url")
+            # Update existing deal (row is addressed by its UNIQUE url)
+            self.db.execute(
+                """
+                UPDATE deals SET
+                    title = ?, price_eur = ?, currency = ?, condition = ?,
+                    category = ?, site_name = ?, last_seen = ?, times_seen = ?,
+                    availability = ?, seller_name = ?, seller_rating = ?,
+                    shipping_cost_eur = ?, original_currency = ?, metadata = ?
+                WHERE url = ?
+                """,
+                (
+                    deal_data["title"], deal_data["price_eur"], deal_data["currency"],
+                    deal_data["condition"], deal_data["category"], deal_data["site_name"],
+                    today, existing.times_seen + 1, deal_data["availability"],
+                    deal_data["seller_name"], deal_data["seller_rating"],
+                    deal_data["shipping_cost_eur"], deal_data["original_currency"],
+                    deal_data["metadata"], deal.url,
+                ),
+            )
         else:
             # Insert new deal
-            deal_data["first_seen"] = today_iso()
-            deal_data["last_seen"] = today_iso()
-            deal_data["times_seen"] = 1
-            self.db["deals"].insert(deal_data, pk="url")
+            self.db.execute(
+                """
+                INSERT INTO deals (
+                    url, title, price_eur, currency, condition, category, site_name,
+                    first_seen, last_seen, times_seen, availability, seller_name,
+                    seller_rating, shipping_cost_eur, original_currency, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    deal_data["url"], deal_data["title"], deal_data["price_eur"],
+                    deal_data["currency"], deal_data["condition"], deal_data["category"],
+                    deal_data["site_name"], today, today, 1, deal_data["availability"],
+                    deal_data["seller_name"], deal_data["seller_rating"],
+                    deal_data["shipping_cost_eur"], deal_data["original_currency"],
+                    deal_data["metadata"],
+                ),
+            )
 
         # Record price history
         if run_id:
@@ -109,8 +168,14 @@ class StorageManager:
 
     def record_price_sighting(self, deal: Deal, run_id: str) -> int:
         """Record a price sighting in price_history table."""
+        # price_history.deal_id is NOT NULL, so the deal row must exist first.
+        row = self.db.execute("SELECT id FROM deals WHERE url = ?", (deal.url,)).fetchone()
+        if row is None:
+            self.save_deal(deal)
+            row = self.db.execute("SELECT id FROM deals WHERE url = ?", (deal.url,)).fetchone()
+
         sighting = {
-            "deal_id": self.db["deals"].get(deal.url).get("id") if self.db["deals"].get(deal.url) else None,
+            "deal_id": row["id"],
             "url": deal.url,
             "price_eur": deal.price_eur,
             "original_price_eur": getattr(deal, "original_price_eur", deal.price_eur),
@@ -256,8 +321,11 @@ class StorageManager:
 
     def mark_seen_today(self, urls: list[str]):
         """Call after each run for all URLs found in this run."""
-        for url in urls:
-            self.db["deals"].update(url, {"last_seen": today_iso()})
+        today = today_iso()
+        self.db.conn.executemany(
+            "UPDATE deals SET last_seen = ? WHERE url = ?",
+            [(today, url) for url in urls],
+        )
 
     def prune_missing(self, max_age_days: int = 30, grace_period_days: int = 7) -> dict:
         """
@@ -290,8 +358,8 @@ class StorageManager:
         }
 
     def get_all_deals(self) -> list[StoredDeal]:
-        rows = self.db["deals"].rows_where(order_by="last_seen DESC")
-        return [StoredDeal(**row) for row in rows]
+        rows = self.db.execute("SELECT * FROM deals ORDER BY last_seen DESC").fetchall()
+        return [_row_to_stored_deal(row) for row in rows]
 
     def is_known(self, url: str) -> bool:
         return self.get_deal(url) is not None

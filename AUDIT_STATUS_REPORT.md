@@ -24,6 +24,25 @@ The project is a substantial, well-structured Python codebase: 14 `src/` subpack
 
 **Bottom line:** the scaffolding is comprehensive and tests pass, but the *functional* core (non-Bazos adapters + local LLM client) is the critical path. Fix secrets, the LLM timeout, and the adapters before relying on it.
 
+### 1.1 Addendum (post-audit remediation round)
+
+A second round of empirical probing found a **P0 that blocked all persistence**, which the first-round static review had missed. Reproduced, then fixed:
+
+| # | Defect | Evidence | Status |
+|---|---|---|---|
+| P0-1 | `deals` table PK is `id`, but code treated `url` as PK → `get_deal()`/`save_deal()` raised `sqlite_utils.NotFoundError` **on every call**. No deal could ever be persisted. | `db["deals"].pks == ['id']`; repro raised `NotFoundError` | ✅ fixed |
+| P0-2 | `StoredDeal(**row)` could never bind — rows carry extra `id`/`currency` columns. | `TypeError` path | ✅ fixed (`_row_to_stored_deal`) |
+| P0-3 | `sqlite_utils.Database.execute()` returns **plain tuples**, so every `row["col"]` in trends/change-detector failed. | `type(row).__name__ == 'tuple'` | ✅ fixed (`row_factory = sqlite3.Row`) |
+| P0-4 | `ChangeDetector._get_deals_for_run()` selected non-existent `ph.site_name` / `ph.title`. | `OperationalError: no such column: ph.site_name` | ✅ fixed (aliased `LEFT JOIN`) |
+| P1-5 | `PriceTracker.get_price_trend_for_deal()` called non-existent `storage.get_deal_by_id`. | `AttributeError` | ✅ fixed (method added) |
+| P1-6 | `trends.py`: `url_prices` NameError, `last` NameError, wrong positional indices for `title`/`site_name`. | NameError / wrong data | ✅ fixed |
+| P1-7 | `db.executemany` does not exist on `Database`. | `AttributeError` | ✅ fixed (`db.conn.executemany`) |
+| P0-8 | `LLMClient` hardcoded `timeout=5` on all four HTTP calls. | source + 5s read timeouts in logs | ✅ fixed (`LOCAL_TIMEOUT=900`, `CLOUD_TIMEOUT=60`, env-overridable) |
+
+P0-1/2/3 explain why `history trends` reported *"insufficient data"* despite runs completing: **nothing was ever written**. Root-cause chain, not three unrelated bugs.
+
+**Verification:** `pytest` 20 → **38 passed** (18 new regression tests). End-to-end search → save → trends now persists 3/3 deals and writes 3 price-history rows.
+
 <!-- SECTION:STRUCT -->
 ## 2. Repository Structure
 

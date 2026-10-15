@@ -1,5 +1,6 @@
 """Database schema and migrations using sqlite-utils."""
 
+import sqlite3
 from pathlib import Path
 
 from sqlite_utils import Database
@@ -146,6 +147,13 @@ def _migration_002_price_history(db: Database) -> None:
 
 
 def get_db(db_path: str | Path = "data/deals.db") -> Database:
-    """Get initialized database instance."""
+    """Get initialized database instance.
+
+    sqlite-utils' ``execute()`` returns plain tuples by default, which makes
+    ``row["column"]`` access fail. Row factory is set to sqlite3.Row so rows
+    support both key and index access, as the rest of the codebase expects.
+    """
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    return init_db(db_path)
+    db = init_db(db_path)
+    db.conn.row_factory = sqlite3.Row
+    return db

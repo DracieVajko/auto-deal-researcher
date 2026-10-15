@@ -3,12 +3,30 @@
 import asyncio
 import concurrent.futures
 import logging
+import os
 
 import requests
 
 from src.searcher.adapters.base import Deal
 
 logger = logging.getLogger(__name__)
+
+# Adaptive HTTP timeouts (seconds) per provider class.
+#
+# Local models (LM Studio / Ollama / llama.cpp) need a long budget: the model
+# may not be loaded yet and a 30B load alone can take minutes on RAM-only
+# hardware, and slow models generate at ~1-2 tok/s. Cloud APIs answer quickly,
+# so they get a shorter budget to fail over fast.
+LOCAL_TIMEOUT = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "900"))
+CLOUD_TIMEOUT = float(os.environ.get("ADS_CLOUD_LLM_TIMEOUT", "60"))
+
+
+def _timeout_from_env(name: str = "ADS_LOCAL_LLM_TIMEOUT", default: float = LOCAL_TIMEOUT) -> float:
+    """Read a timeout override from the environment, ignoring invalid values."""
+    try:
+        return float(os.environ[name])
+    except (KeyError, TypeError, ValueError):
+        return default
 
 
 class LLMClient:
@@ -137,9 +155,9 @@ class LLMClient:
             "temperature": 0.3,
             "max_tokens": max_tokens
         }
-        # Run sync request in thread pool with reduced timeout
+        # Local inference may need a long prefill/load window (see LOCAL_TIMEOUT).
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=5))
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=LOCAL_TIMEOUT))
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 
@@ -173,7 +191,7 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=5))
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=CLOUD_TIMEOUT))
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 
@@ -189,7 +207,7 @@ class LLMClient:
             }
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=5))
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=CLOUD_TIMEOUT))
         response.raise_for_status()
         return response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
 
@@ -209,11 +227,10 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=5))
+        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=CLOUD_TIMEOUT))
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
 
     def _get_api_key(self, env_var: str) -> str | None:
         """Get API key from environment variable."""
-        import os
         return os.environ.get(env_var)

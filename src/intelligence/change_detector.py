@@ -251,8 +251,12 @@ class ChangeDetector:
     def _get_deals_for_run(self, run_id: str) -> dict[str, dict]:
         """Get all deals associated with a specific run from price_history."""
         rows = self.storage.db.execute("""
-            SELECT ph.url, ph.price_eur, ph.condition, ph.availability, ph.site_name, ph.title
+            SELECT ph.url AS url, ph.price_eur AS price_eur,
+                   ph.condition AS condition, ph.availability AS availability,
+                   d.site_name AS site_name, d.title AS title,
+                   ph.timestamp AS timestamp
             FROM price_history ph
+            LEFT JOIN deals d ON ph.url = d.url
             WHERE ph.run_id = ?
         """, (run_id,)).fetchall()
 

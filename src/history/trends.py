@@ -45,9 +45,9 @@ class TrendsAnalyzer:
         product_prices = {}
         for row in rows:
             url = row["url"]
-            if url not in url_prices:
-                url_prices[url] = []
-            url_prices[url].append({
+            if url not in product_prices:
+                product_prices[url] = []
+            product_prices[url].append({
                 "price": row["price_eur"],
                 "timestamp": row["timestamp"],
                 "condition": row["condition"],
@@ -61,12 +61,12 @@ class TrendsAnalyzer:
             
             prices_sorted = sorted(prices, key=lambda x: x["timestamp"])
             first_price = prices_sorted[0]["price"]
-            last_price = prices[-1]["price"]
-            
+            last_price = prices_sorted[-1]["price"]
+
             if first_price == 0:
                 continue
-            
-            change_pct = ((last - first) / first) * 100
+
+            change_pct = ((last_price - first_price) / first_price) * 100
             
             # Calculate volatility
             prices = [p["price"] for p in prices_sorted]
@@ -127,54 +127,54 @@ class TrendsAnalyzer:
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
         
         rows = self.storage.db.execute("""
-            SELECT ph.*, d.title, d.url, d.site_name, d.condition
+            SELECT ph.url AS url, ph.price_eur AS price_eur,
+                   ph.timestamp AS timestamp, ph.condition AS condition,
+                   d.title AS title, d.site_name AS site_name
             FROM price_history ph
             JOIN deals d ON ph.url = d.url
             WHERE ph.timestamp >= ?
             ORDER BY ph.timestamp DESC
         """, (cutoff,)).fetchall()
-        
-        drops = []
+
         # Group by URL
         url_prices = {}
         for row in rows:
-            # row is a tuple, access by index
-            url = row[2]  # url column
+            url = row["url"]
             if url not in url_prices:
                 url_prices[url] = []
             url_prices[url].append({
-                "price": row[3],  # price_eur
-                "timestamp": row[12],  # timestamp
-                "condition": row[6],  # condition
-                "title": row[1],  # title
-                "site": row[4],  # site_name
+                "price": row["price_eur"],
+                "timestamp": row["timestamp"],
+                "condition": row["condition"],
+                "title": row["title"],
+                "site": row["site_name"],
             })
-        
+
         drops = []
         for url, prices in url_prices.items():
             if len(prices) < 2:
                 continue
-            
+
             prices_sorted = sorted(prices, key=lambda x: x["timestamp"])
-            first = prices[0]
-            last = prices[-1]
-            
+            first = prices_sorted[0]
+            last = prices_sorted[-1]
+
             if first["price"] == 0:
                 continue
-            
+
             change_pct = ((last["price"] - first["price"]) / first["price"]) * 100
-            
-            if last["price"] < first["price"] and ((first["price"] - last["price"]) / first["price"]) * 100 >= threshold_pct:
+
+            if change_pct <= -threshold_pct:
                 drops.append({
                     "url": url,
-                    "title": prices[0]["title"],
-                    "site": prices[0]["site"],
+                    "title": last["title"],
+                    "site": last["site"],
                     "old_price": first["price"],
                     "new_price": last["price"],
-                    "change_pct": round(((last["price"] - first["price"]) / first["price"]) * 100, 2),
+                    "change_pct": round(change_pct, 2),
                     "condition": last["condition"],
                 })
-        
+
         return sorted(drops, key=lambda x: x["change_pct"])  # most negative first
     
     def get_new_lows(self, days: int = 30) -> list[dict]:
@@ -182,21 +182,28 @@ class TrendsAnalyzer:
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
         
         rows = self.storage.db.execute("""
-            SELECT ph.*, d.title, d.url, d.site_name, d.condition
+            SELECT ph.url AS url, ph.price_eur AS price_eur,
+                   ph.timestamp AS timestamp, ph.condition AS condition,
+                   d.title AS title, d.site_name AS site_name
             FROM price_history ph
-            JOIN deals d ON ph.deal_id = d.id
+            JOIN deals d ON ph.url = d.url
             WHERE ph.timestamp >= ?
             ORDER BY ph.timestamp ASC
         """, (cutoff,)).fetchall()
-        
+
         # Group by URL and find min price
         url_min = {}
         for row in rows:
             url = row["url"]
-            price = row["price_eur"]
             if url not in url_min or row["price_eur"] < url_min[url]["price"]:
-                url_min[url] = {"price": row["price_eur"], "timestamp": row["timestamp"], "title": row["title"], "site": row["site_name"], "condition": row["condition"]}
-        
+                url_min[url] = {
+                    "price": row["price_eur"],
+                    "timestamp": row["timestamp"],
+                    "title": row["title"],
+                    "site": row["site_name"],
+                    "condition": row["condition"],
+                }
+
         # Filter to only those at their minimum
         new_lows = []
         for url, data in url_min.items():
@@ -212,5 +219,5 @@ class TrendsAnalyzer:
                     "site": data["site"],
                     "condition": data["condition"],
                 })
-        
+
         return new_lows

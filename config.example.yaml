@@ -48,8 +48,8 @@ search:
 llm:
   local:
     - type: "lmstudio"
-      endpoint: "http://100.88.219.120:1234"
-      model: "auto"
+      endpoint: "http://localhost:1234"
+      model: "qwen/qwen3-coder-30b"
     - type: "ollama"
       endpoint: "http://localhost:11434"
       model: "llama3.1:8b"
@@ -64,7 +64,9 @@ llm:
       api_key_env: "MISTRAL_API_KEY"
       model: "mistral-small-latest"
   # Legacy fields (for backward compatibility)
-  local_endpoint: "http://100.88.219.120:1234"
+  # Secrets are read from the environment — copy .env.example to .env and fill
+  # in your own keys. Never commit real keys.
+  local_endpoint: "http://localhost:1234"
   model_name: "llama3"
 
 output:

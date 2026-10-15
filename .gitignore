@@ -59,4 +59,6 @@ results/
 data/
 config.yaml
 .env
+.env.*
+!.env.example
 browser_profile/

@@ -12,6 +12,7 @@ markdown>=3.6.0
 pyyaml
 sqlite-utils
 aiohttp
+python-dotenv>=1.0.0
 
 # Testing dependencies
 pytest>=8.0.0

@@ -557,4 +557,4 @@ Deals found: 10
 - `config.example.yaml`: stale remote IP → `localhost`, real model id, env-based secret guidance.
 - `pyproject.toml` + `requirements.txt`: added `aiohttp` (was missing from pyproject) and `python-dotenv>=1.0.0`.
 
-**Verification after change:** `config-check` OK · secrets resolve from `.env` (`sk-or-v1-a18e…`, `AIzaSyCuQ5…`, `RWqRy9QL…`) · no key material in any tracked file · `.env` confirmed ignored · `pytest` **20 passed**.
+**Verification after change:** `config-check` OK · secrets resolve from `.env` (3 of 3 providers) · no key material in any tracked file · `.env` confirmed ignored · `pytest` 20 passed at that point.

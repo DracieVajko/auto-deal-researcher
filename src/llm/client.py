@@ -114,11 +114,33 @@ class LLMClient:
     def __init__(self, config):
         self.config = config
         self.llm_config = config.llm
+        self._apply_env_overrides()
         self._breaker = LocalCircuitBreaker(
             cooldown=float(os.environ.get("ADS_LOCAL_BREAKER_COOLDOWN", "300")),
             threshold=int(os.environ.get("ADS_LOCAL_BREAKER_THRESHOLD", "2")),
         )
         self._coordinator = self._build_coordinator()
+
+    def _apply_env_overrides(self) -> None:
+        """Environment wins over config.yaml.
+
+        LMSTUDIO_ENDPOINT / ADS_OLLAMA_ENDPOINT let a deployment move the
+        local endpoint without editing config.yaml. Only the type is matched,
+        so adding a provider needs no new flag.
+        """
+        mapping = {
+            "lmstudio": "LMSTUDIO_ENDPOINT",
+            "ollama": "ADS_OLLAMA_ENDPOINT",
+            "llamacpp": "ADS_LLAMACPP_ENDPOINT",
+        }
+        for local in self.llm_config.local:
+            var = mapping.get(local.type)
+            if not var:
+                continue
+            override = (os.environ.get(var) or "").strip()
+            if override:
+                logger.info("Local LLM endpoint overridden from %s: %s", var, override)
+                local.endpoint = override
 
     def _build_coordinator(self):
         """Create the local-backend coordinator from config (or env overrides)."""

@@ -18,6 +18,31 @@ An intelligent deal searching application that automates finding the best deals 
 
 ## Installation
 
+One command does the whole first run:
+
+```bash
+# Windows
+scripts\setup.bat
+
+# macOS / Linux
+./scripts/setup.sh
+```
+
+It checks Python, creates a virtualenv, installs dependencies and Playwright,
+creates `config.yaml` and `.env` from the templates, asks which browser to
+use, and verifies the result. Re-run it any time; finished steps are skipped.
+`setup.bat --check` / `setup.sh --check` only reports what is in place without
+changing anything.
+
+Then, once, sign in to the sites that need it:
+
+```bash
+scripts\login.bat              # Windows, every site that needs a login
+python scripts/login.py --all
+```
+
+### Manual install
+
 1. **Clone the repository**
    ```bash
    git clone https://github.com/DracieVajko/auto-deal-researcher.git
@@ -28,17 +53,12 @@ An intelligent deal searching application that automates finding the best deals 
    ```bash
    cp config.example.yaml config.yaml   # non-secret settings only
    cp .env.example .env                 # secrets go here, and .env is git-ignored
-   # then edit .env and fill in your own keys
    ```
    `config.yaml` references them with `${VAR}` / `${VAR:-default}` placeholders, and
    `.env` is loaded automatically (real environment variables always win).
 
 3. **Install dependencies**
    ```bash
-   # Windows
-   install_requirements.bat
-   
-   # Or manually (Linux/macOS/Windows)
    pip install -r requirements.txt
    playwright install chromium
    ```

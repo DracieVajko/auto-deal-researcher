@@ -9,6 +9,7 @@ import time
 
 import requests
 
+from src.llm.local_coordinator import LocalModelCoordinator
 from src.searcher.adapters.base import Deal
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,35 @@ class LLMClient:
             cooldown=float(os.environ.get("ADS_LOCAL_BREAKER_COOLDOWN", "300")),
             threshold=int(os.environ.get("ADS_LOCAL_BREAKER_THRESHOLD", "2")),
         )
+        self._coordinator = self._build_coordinator()
+
+    def _build_coordinator(self):
+        """Create the local-backend coordinator from config (or env overrides)."""
+        policy = os.environ.get("ADS_LOCAL_POLICY")
+        coord = getattr(self.llm_config, "local_coordination", None)
+        if coord is None:
+            return None
+        if policy:
+            policy = policy.strip().lower()
+        elif not coord.enabled:
+            policy = "never"
+        else:
+            policy = coord.policy
+        try:
+            return LocalModelCoordinator(
+                policy=policy,
+                quiet_seconds=int(os.environ.get("ADS_LOCAL_QUIET_SECONDS", coord.quiet_seconds)),
+                poll_seconds=int(os.environ.get("ADS_LOCAL_POLL_SECONDS", coord.poll_seconds)),
+                max_wait_seconds=int(os.environ.get("ADS_LOCAL_MAX_WAIT", coord.max_wait_seconds)),
+                probe_busy=coord.probe_busy,
+            )
+        except ValueError as e:
+            logger.error("Invalid local coordination policy %r: %s; defaulting to 'never'", policy, e)
+            return LocalModelCoordinator(policy="never")
+
+    def describe_local_state(self) -> str:
+        """Human-readable state of both local backends (read-only)."""
+        return self._coordinator.describe() if self._coordinator else "not configured"
 
     # === Sync methods (backward compatibility) ===
     def generate_search_query(self, product_description):
@@ -154,6 +184,14 @@ class LLMClient:
     async def _chat(self, system: str, user: str, max_tokens: int = 100) -> str:
         """Unified chat method with fallback chain."""
         # Try local LLMs first
+        # Try local LLMs first, but only when the backend is free.
+        our_models = {getattr(l, "model", "") for l in self.llm_config.local}
+        if self._coordinator is not None:
+            safe, reason = self._coordinator.acquire(our_models)
+            if not safe:
+                logger.info("Skipping local LLMs: %s", reason)
+                self.llm_config.local = []
+
         for local in self.llm_config.local:
             key = f"{local.type}:{local.endpoint}"
             if self._breaker.is_open(key):

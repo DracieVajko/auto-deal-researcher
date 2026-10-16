@@ -151,6 +151,33 @@ def selector_health(
 
 
 @app.command()
+def local_state():
+    """Show what is resident in the local LLM backends (read-only).
+
+    Loads and unloads nothing. Use this to check whether another model is
+    occupying LM Studio or Ollama before starting a run.
+    """
+    from src.llm.client import LLMClient
+
+    llm = LLMClient(load_config())
+    typer.echo(llm.describe_local_state())
+
+    coord = llm._coordinator
+    if coord is None:
+        return
+    our = {getattr(l, "model", "") for l in llm.llm_config.local}
+    foreign = coord.foreign_models(our)
+    typer.echo(f"\npolicy      : {coord.policy}")
+    typer.echo(f"quiet window: {coord.quiet_seconds}s")
+    if foreign:
+        typer.echo("foreign models resident (we would wait, then unload after quiet):")
+        for m in foreign:
+            typer.echo(f"  - {m}")
+    else:
+        typer.echo("no foreign model resident — local backend is free")
+
+
+@app.command()
 def schedule_install():
     """Install automated scheduled tasks (Windows Task Scheduler / cron)."""
     config = load_config()

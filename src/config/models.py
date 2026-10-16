@@ -46,9 +46,29 @@ class LLMAPIConfig(BaseModel):
     model: str
 
 
+class LocalCoordinationConfig(BaseModel):
+    """How to behave when another model already occupies a local backend.
+
+    policy:
+      wait   respect a resident foreign model, unload it only after
+             ``quiet_seconds`` without any change to the resident set
+      cloud  never load or unload anything; use cloud fallbacks instead
+      never  do not even probe the local backend
+      force  unload immediately (only safe when nothing else is running)
+    """
+
+    enabled: bool = True
+    policy: Literal["wait", "cloud", "never", "force"] = "wait"
+    quiet_seconds: int = 300      # 5 minutes, as required
+    poll_seconds: int = 15
+    max_wait_seconds: int = 0     # 0 = wait indefinitely
+    probe_busy: bool = False      # 1-token latency probe; occupies a request slot
+
+
 class LLMConfig(BaseModel):
     local: list[LLMLocalConfig] = []
     api_fallback: list[LLMAPIConfig] = []
+    local_coordination: LocalCoordinationConfig = LocalCoordinationConfig()
     # Legacy fields for backward compatibility
     local_endpoint: str = "http://localhost:11434"
     openrouter: str | None = None

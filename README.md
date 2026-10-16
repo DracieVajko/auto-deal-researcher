@@ -156,6 +156,49 @@ python -m src.cli history trends --category electronics
 python -m src.cli history watchlist watchlist-cmd list
 ```
 
+### Sharing a local LLM backend safely
+
+LM Studio and Ollama load models into RAM on demand. Loading our model while
+another one is already resident risks OOM or heavy swap on a
+RAM-constrained machine. The client therefore checks what is resident before
+touching the backend:
+
+```bash
+# Read-only: shows what is loaded and what would happen. Loads nothing.
+python -m src.cli local-state
+```
+
+```
+lmstudio: lmstudio:mistralai/ministral-3-14b-reasoning
+ollama: not reachable
+
+policy      : wait
+quiet window: 300s
+foreign models resident (we would wait, then unload after quiet):
+  - lmstudio:mistralai/ministral-3-14b-reasoning
+```
+
+Configured under `llm.local_coordination` in `config.yaml`:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `policy` | `wait` | `wait` respects a resident foreign model and unloads it only after the quiet window; `cloud` never loads or unloads and falls back to cloud providers; `never` does not even probe; `force` unloads immediately |
+| `quiet_seconds` | `300` | How long the resident set must stay unchanged before unloading |
+| `poll_seconds` | `15` | How often the resident set is re-checked while waiting |
+| `max_wait_seconds` | `0` | `0` waits as long as it takes; set a value to fall back to cloud instead of blocking |
+| `probe_busy` | `false` | Send a 1-token completion to time queue latency (never loads anything, but occupies a request slot) |
+
+Environment overrides: `ADS_LOCAL_POLICY`, `ADS_LOCAL_QUIET_SECONDS`,
+`ADS_LOCAL_POLL_SECONDS`, `ADS_LOCAL_MAX_WAIT`.
+
+> **Known limitation.** Neither backend exposes a read-only "a generation is
+> in progress" endpoint — LM Studio replies HTTP 200 with an error body for
+> every unknown route, so even the status code carries no signal. "Quiet"
+> therefore means the *set of resident models* has not changed for
+> `quiet_seconds`. A single long streaming generation keeps the same model
+> resident, so it still looks idle after five minutes. Enable `probe_busy`
+> for tighter detection if you accept the extra request.
+
 ### Scheduled (Auto Mode)
 ```bash
 # Install scheduled tasks (Windows Task Scheduler / cron)

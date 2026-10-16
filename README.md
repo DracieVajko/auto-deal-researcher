@@ -157,6 +157,57 @@ python scripts/login.py --site facebook --logout   # delete it
 Sessions land in `data/sessions/<site>.json` (git-ignored). They contain real
 login cookies — treat them like a password.
 
+### Choosing a browser
+
+Any Chromium-family browser works, and the project detects what you have:
+
+```bash
+python -m src.cli browsers
+```
+
+```
+  brave      Brave (Chromium)           installed  CDP attach OK
+  chrome     Google Chrome              installed  CDP attach OK
+  msedge     Microsoft Edge             not found  CDP attach OK
+  firefox    Mozilla Firefox            not found  no CDP (launch only)
+  safari     Safari (WebKit)            not found  no CDP (launch only)
+```
+
+Pick one in `config.yaml`:
+
+```yaml
+browser:
+  browser_id: "brave"        # brave, chrome, msedge, opera, vivaldi, chromium, firefox, safari
+```
+
+Left empty, the first installed Chromium browser is chosen, falling back to
+Playwright's bundled Chromium. `ADS_BROWSER_EXECUTABLE` overrides everything.
+With `separate_profiles: true` (default) each browser gets its own profile
+directory, so switching browsers keeps separate logins.
+
+> **CDP attach is Chromium-only.** Playwright cannot attach to a running
+> Firefox or Safari; those can only be launched by us. That is a Playwright
+> limitation, not a preference.
+
+### Logging in to sites that need a real browser
+
+Sites with 2FA or mobile approval cannot be logged into automatically. Sign
+in once, by hand, in a visible browser; the cookies are saved and reused:
+
+```bash
+python scripts/login.py --list                 # which sites need it
+python scripts/login.py --site facebook        # opens a browser, you log in
+python scripts/login.py --all                  # every site that needs it
+python scripts/login.py --site facebook --check # still valid?
+python scripts/login.py --site facebook --logout
+```
+
+Which sites are included comes from `browser.login_sites` in `config.yaml`
+plus any adapter declaring `requires_login`.
+
+Sessions are written to `data/sessions/<site>.json`, which is git-ignored.
+**They are real login cookies — treat them like a password.**
+
 ### Using your own browser over CDP
 
 To drive the browser you already use, start it with a remote debugging port;

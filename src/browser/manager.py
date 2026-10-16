@@ -29,6 +29,26 @@ class BrowserManager:
         self._context = None
         self._fingerprint_rotator = FingerprintRotator()
 
+    def _resolve_browser(self, browser_config) -> tuple[str | None, str | None, str]:
+        """Pick the browser to launch.
+
+        Returns (browser_id, executable_path, label). Falls back to Playwright's
+        bundled Chromium when nothing is detected.
+        """
+        from src.browser.browsers import by_id, resolve
+
+        self._extra_args = []
+        try:
+            exe, label = resolve(browser_config.browser_id, browser_config.browser_executable)
+        except ValueError as e:
+            logger.warning("%s", e)
+            return None, None, "Playwright bundled Chromium (requested browser not found)"
+
+        profile = by_id(browser_config.browser_id) if browser_config.browser_id else None
+        if profile:
+            self._extra_args = list(profile.extra_args)
+        return (profile.id if profile else None), exe, label
+
     async def get_browser(self) -> Browser | BrowserContext:
         """Get or create browser instance (for async context manager)."""
         if self._browser is None:
@@ -58,9 +78,12 @@ class BrowserManager:
         
         # Fallback to persistent context (headless by default)
         if browser_config.use_persistent_context:
-            user_data_dir = Path(browser_config.user_data_dir)
+            browser_id, exe_path, label = self._resolve_browser(browser_config)
+            suffix = f"/{browser_id}" if (browser_id and browser_config.separate_profiles) else ""
+            user_data_dir = Path(browser_config.user_data_dir) / suffix if suffix \
+                else Path(browser_config.user_data_dir)
             await asyncio.to_thread(user_data_dir.mkdir, parents=True, exist_ok=True)
-            logger.info(f"Launching persistent context (headless={browser_config.headless}): {user_data_dir}")
+            logger.info(f"Launching {label} persistent context (headless={browser_config.headless}): {user_data_dir}")
             launch: dict = {
                 "user_data_dir": str(user_data_dir),
                 "headless": browser_config.headless,
@@ -77,12 +100,14 @@ class BrowserManager:
                     '--disable-features=IsolateOrigins,site-per-process',
                 ],
             }
-            # Point at Brave/Edge/Chrome instead of the bundled Chromium.
-            if browser_config.browser_executable:
-                launch["executable_path"] = browser_config.browser_executable
+            # Point at the chosen real browser instead of bundled Chromium.
+            if exe_path:
+                launch["executable_path"] = exe_path
                 port = _port_from(browser_config.cdp_endpoint)
                 if port:
                     launch["args"] = launch["args"] + [f"--remote-debugging-port={port}"]
+                if self._extra_args:
+                    launch["args"] = launch["args"] + self._extra_args
             context = await self._playwright.chromium.launch_persistent_context(**launch)
             await self._setup_context(context)
             return context

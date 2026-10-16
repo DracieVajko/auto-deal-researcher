@@ -111,13 +111,22 @@ class BrowserConfig(BaseModel):
     # 127.0.0.1, not localhost: Chrome/Brave bind their debugging port to IPv4,
     # while "localhost" may resolve to ::1 first and fail with ECONNREFUSED.
     cdp_endpoint: str = "http://127.0.0.1:9222"
-    browser_executable: str | None = None  # e.g. Brave / Chrome path
+    # Registry id of the browser to drive: brave, chrome, msedge, opera,
+    # vivaldi, chromium, firefox, safari. Empty = auto-detect, then fall back
+    # to Playwright's bundled Chromium.
+    browser_id: str | None = None
+    # Explicit executable path; overrides browser_id.
+    browser_executable: str | None = None
     use_persistent_context: bool = True
     user_data_dir: str = "./browser_profile"
+    # Per-browser profile dirs so switching browsers keeps separate logins.
+    separate_profiles: bool = True
     headless: bool = True  # Run headless by default (no admin prompts)
     slow_mo: int = 0  # Slow down operations by N ms (useful for debugging)
     # Reuse cookies/credentials between runs instead of a fresh profile.
     storage_state: str | None = None
+    # Sites that need a manual login on first run (adapter id list).
+    login_sites: list[str] = ["facebook"]
 
 
 class StorageConfig(BaseModel):

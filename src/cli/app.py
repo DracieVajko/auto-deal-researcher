@@ -178,6 +178,58 @@ def local_state():
 
 
 @app.command()
+def browsers():
+    """List the browsers detected on this machine and which one is selected."""
+    from src.browser.browsers import REGISTRY, detect_all, resolve
+
+    cfg = load_config()
+    typer.echo("\nDetected browsers:\n")
+    found = {p.id: exe for p, exe in detect_all()}
+    for profile in REGISTRY:
+        exe = found.get(profile.id)
+        mark = "installed" if exe else "not found"
+        cdp = "CDP attach OK" if profile.supports_cdp else "no CDP (launch only)"
+        typer.echo(f"  {profile.id:<10} {profile.name:<26} {mark:<10} {cdp}")
+        if exe:
+            typer.echo(f"             {exe}")
+
+    try:
+        exe, label = resolve(cfg.browser.browser_id, cfg.browser.browser_executable)
+        typer.echo(f"\nSelected: {label}")
+        typer.echo(f"           {exe or '(Playwright bundled Chromium)'}")
+    except ValueError as e:
+        typer.echo(f"\nSelection problem: {e}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo('\nSet it in config.yaml under "browser: browser_id".')
+
+
+@app.command()
+def login_sites():
+    """List sites that need a manual login and which sessions are saved."""
+    from pathlib import Path as _Path
+
+    from src.searcher.adapters import ADAPTER_REGISTRY
+
+    cfg = load_config()
+    configured = {s.strip().lower() for s in cfg.browser.login_sites}
+    needed = configured | {name for name, cls in ADAPTER_REGISTRY.items()
+                            if getattr(cls, "requires_login", False)}
+
+    typer.echo("\nSites needing a manual login:\n")
+    session_dir = _Path("data") / "sessions"
+    for site in sorted(needed):
+        if site not in ADAPTER_REGISTRY:
+            typer.echo(f"  {site:<12} (unknown adapter id - check browser.login_sites)")
+            continue
+        path = session_dir / f"{site}.json"
+        state = "session saved" if path.exists() else "NOT logged in"
+        typer.echo(f"  {site:<12} {state}")
+    typer.echo("\nLog in with:  python scripts/login.py --site <id>")
+    typer.echo("Verify with:  python scripts/login.py --site <id> --check")
+
+
+@app.command()
 def schedule_install():
     """Install automated scheduled tasks (Windows Task Scheduler / cron)."""
     config = load_config()

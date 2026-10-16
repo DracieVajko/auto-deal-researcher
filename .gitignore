@@ -61,4 +61,5 @@ config.yaml
 .env
 .env.*
 !.env.example
+.selector_health.log
 browser_profile/

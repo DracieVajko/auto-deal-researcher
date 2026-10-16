@@ -74,6 +74,7 @@ class SelectorHealthTracker:
     """Tracks selector health across sites and adapters."""
     
     STORAGE_FILE = "data/selector_health.json"
+    EVENT_LOG = ".selector_health.log"
     HEALTH_THRESHOLD = 0.5  # Below this = unhealthy
     
     def __init__(self):
@@ -135,7 +136,8 @@ class SelectorHealthTracker:
         success: bool, 
         deals_found: int, 
         latency_ms: float,
-        selector_results: dict[str, bool] | None = None
+        selector_results: dict[str, bool] | None = None,
+        blocked: bool = False,
     ):
         """Record search result with per-selector outcomes."""
         if site_name not in self.sites:
@@ -166,8 +168,61 @@ class SelectorHealthTracker:
                 else:
                     metric.failure_count += 1
                     metric.last_failure = datetime.now()
-        
+
+        # Append one JSON line per run so degradation can be tailed/alerted on.
+        self._append_event(site_name, site, len(site.metrics), latency_ms, blocked)
         self._save()
+
+    def _append_event(
+        self,
+        site_name: str,
+        site: SiteHealth,
+        selectors: int,
+        latency_ms: float,
+        blocked: bool,
+    ) -> None:
+        """Append a JSON line to .selector_health.log."""
+        try:
+            path = Path(self.EVENT_LOG)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            entry = {
+                "ts": datetime.now().isoformat(),
+                "site": site_name,
+                "adapter_class": site.adapter_class,
+                "success_rate": round(site.success_rate, 3),
+                "total_searches": site.total_searches,
+                "consecutive_failures": site.consecutive_failures,
+                "selectors_tracked": selectors,
+                "avg_deals_per_search": round(site.avg_deals_per_search, 2),
+                "latency_ms": round(latency_ms, 1),
+                "blocked": blocked,
+                "is_healthy": site.is_healthy,
+            }
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(entry) + "\n")
+        except OSError as e:
+            logger.warning(f"Failed to append selector health event: {e}")
+
+    @staticmethod
+    def read_events(limit: int = 20) -> list[dict]:
+        """Read the most recent JSONL events, oldest first."""
+        path = Path(SelectorHealthTracker.EVENT_LOG)
+        if not path.exists():
+            return []
+        out: list[dict] = []
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        out.append(json.loads(line))
+                    except ValueError:
+                        continue
+        except OSError:
+            return []
+        return out[-limit:]
     
     def record_selector_latency(self, site_name: str, selector: str, latency_ms: float):
         """Record latency for a specific selector."""

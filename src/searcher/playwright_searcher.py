@@ -178,7 +178,7 @@ class PlaywrightSearcher:
                 # Anti-bot interstitial: expected for some sites, not a bug.
                 logger.warning(f"[{site.name}] Blocked: {e}")
                 self.health.record_search_result(
-                    site.name, False, 0, (time.perf_counter() - started) * 1000
+                    site.name, False, 0, (time.perf_counter() - started) * 1000, blocked=True
                 )
             except Exception:
                 logger.exception(f"[{site.name}] Search error")

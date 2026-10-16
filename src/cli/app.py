@@ -115,6 +115,42 @@ async def _diamond_search_async(prompt, condition, category, winners, output_dir
 
 
 @app.command()
+def selector_health(
+    limit: int = typer.Option(20, "--limit", "-n", help="How many recent events to show"),
+    summary: bool = typer.Option(False, "--summary", help="Show the aggregate summary only"),
+):
+    """Show recent selector-health events and the per-site summary."""
+    from src.diagnostics.selector_health import SelectorHealthTracker
+
+    tracker = SelectorHealthTracker()
+
+    if not summary:
+        events = SelectorHealthTracker.read_events(limit)
+        if not events:
+            typer.echo("No selector health events recorded yet.")
+        else:
+            typer.echo(f"\nRecent selector-health events (last {len(events)}):")
+            typer.echo(f"{'timestamp':<26} {'site':<14} {'ok':<4} {'deals':>6} {'ms':>9}  blocked")
+            typer.echo("-" * 86)
+            for e in events:
+                typer.echo(
+                    f"{e['ts']:<26} {e['site']:<14} "
+                    f"{'yes' if e['success_rate'] > 0 else 'no':<4} "
+                    f"{e['avg_deals_per_search']:>6} {e['latency_ms']:>9}  {e['blocked']}"
+                )
+
+    summary_data = tracker.get_summary()
+    typer.echo(f"\nSelector health summary: {summary_data['healthy_sites']}/{summary_data['total_sites']} healthy")
+    for site_name, data in summary_data["sites"].items():
+        mark = "OK " if data["is_healthy"] else "BAD"
+        typer.echo(
+            f"  [{mark}] {site_name:<14} {data['success_rate']:>6.1%} success  "
+            f"{data['consecutive_failures']} consecutive failures  "
+            f"{data['avg_deals']} avg deals"
+        )
+
+
+@app.command()
 def schedule_install():
     """Install automated scheduled tasks (Windows Task Scheduler / cron)."""
     config = load_config()

@@ -4,6 +4,7 @@ import asyncio
 import concurrent.futures
 import logging
 import os
+import re
 import time
 
 import requests
@@ -213,35 +214,94 @@ class LLMClient:
         # Fallback: return the user prompt as search query
         return user
 
+    @staticmethod
+    def _clean_query(raw: str, fallback: str = "", max_words: int = 12) -> str:
+        """Turn an LLM reply into a single usable marketplace search query.
+
+        Small instruct models often answer with prose ("Here's a refined
+        search query: ... *\\"a\\" OR \\"b\\" OR \\"c\\"") or a chain of
+        alternatives. Fed to a site search that becomes a 300+ character URL
+        that matches nothing, which is why runs intermittently returned zero
+        deals. The first quoted phrase wins; otherwise strip the preamble,
+        take the first sentence and cap the length.
+        """
+        if not raw:
+            return fallback
+        text = raw.strip()
+
+        quoted = re.findall(r'"([^"\n]{2,60})"', text)
+        if quoted:
+            return quoted[0].strip()
+
+        text = re.sub(r"\*{1,3}|`", "", text)
+        text = re.sub(
+            r"(?is)^(here(?: is|'s| is)?[^:\n]*|sure[^:\n]*|certainly[^:\n]*):\s*",
+            "",
+            text,
+        ).strip()
+        line = next((ln for ln in text.splitlines() if ln.strip()), "")
+        line = line.strip(" -*:.\t")
+        line = re.split(r"(?<=[.!?])\s", line)[0].strip(" -*:.")
+        words = line.split()[:max_words]
+        cleaned = " ".join(words).strip(" -*:.")
+        return cleaned or fallback
+
     async def _generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
         system = "You are a search query optimizer for e-commerce sites. Output ONLY the search query string."
         user = f"User wants: {prompt}\nGenerate a concise search query for marketplace sites."
         if broader:
             user += " Make it broader to find more results."
-        return await self._chat(system, user, max_tokens=100)
+        raw = await self._chat(system, user, max_tokens=100)
+        return self._clean_query(raw, fallback=prompt)
 
     async def refine_query(self, prompt: str, current_deals: list[Deal], round_num: int) -> str:
         """Generate query to find DIFFERENT items than already found."""
         titles = [d.title for d in current_deals[:10]]
         system = "Generate a search query to find DIFFERENT items than these already found."
         user = f"Original request: {prompt}\nAlready found: {titles}\nRound: {round_num}\nNew query:"
-        return await self._chat(system, user, max_tokens=100)
+        raw = await self._chat(system, user, max_tokens=100)
+        return self._clean_query(raw, fallback=prompt)
 
     async def judge_results(self, prompt: str, deals: list[Deal]) -> dict:
-        """Classify each deal as keep/discard. Return {'keep': [urls]}."""
+        """Classify each deal as keep/discard. Return {'keep': [urls]}.
+
+        Small models often answer with prose or fewer lines than the batch,
+        so zero KEEP verdicts usually means the reply was unreadable rather
+        than that every item was bad. In that case the original deals are
+        kept instead of returning nothing, which is what made whole runs
+        come back empty.
+        """
         if not deals:
             return {"keep": []}
-        
-        keep_urls = []
+
+        keep_urls: list[str] = []
+        parsed_lines = 0
+
         for i in range(0, len(deals), 10):
-            batch = deals[i:i+10]
-            items = "\n".join([f"- {d.title} | {d.price_eur}€ | {d.condition} | {d.site_name}" for d in batch])
-            system = "You are a deal judge. For each item, reply KEEP or DISCARD only."
+            batch = deals[i : i + 10]
+            items = "\n".join(
+                [f"- {d.title} | {d.price_eur} EUR | {d.condition} | {d.site_name}" for d in batch]
+            )
+            system = (
+                "You are a deal judge. For each item reply with exactly one line "
+                "containing KEEP or DISCARD and nothing else. No commentary."
+            )
             user = f"User wants: {prompt}\nItems:\n{items}\nReply with KEEP/DISCARD per line:"
             response = await self._chat(system, user, max_tokens=200)
-            for line, deal in zip(response.strip().splitlines(), batch, strict=False):
-                if "KEEP" in line.upper():
-                    keep_urls.append(deal.url)
+
+            verdicts = re.findall(r"\b(KEEP|DISCARD)\b", response or "", re.IGNORECASE)
+            if verdicts:
+                parsed_lines += len(verdicts)
+                for verdict, deal in zip(verdicts, batch, strict=False):
+                    if verdict.upper() == "KEEP":
+                        keep_urls.append(deal.url)
+
+        if not keep_urls and parsed_lines == 0:
+            logger.warning(
+                "Deal judge returned no parseable verdicts; keeping all %d deals", len(deals)
+            )
+            return {"keep": [d.url for d in deals]}
+
         return {"keep": keep_urls}
 
     async def rank_results(self, prompt: str, deals: list[Deal], top_n: int) -> list[Deal]:

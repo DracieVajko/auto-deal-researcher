@@ -1,6 +1,6 @@
 """Record a full browser walkthrough so the flow can be turned into an adapter.
 
-You drive the browser, this captures every action (navigation, clicks, typing,
+You drive the browser; this captures every action (navigation, clicks, typing,
 form submits, XHR/fetch) plus page snapshots (HTML + screenshot) at each
 navigation. The resulting JSON is everything needed to build or repair an
 adapter without me having to reproduce the site myself.
@@ -8,7 +8,7 @@ adapter without me having to reproduce the site myself.
 Usage:
     python scripts/map_site.py record https://www.alza.sk --out flows/alza.json
     # ... a browser opens; navigate, type, click, accept cookies as usual ...
-    # close the window or press Enter in the terminal to finish
+    # close the window (or press Ctrl+C) when finished
 
     python scripts/map_site.py show flows/alza.json          # summary
     python scripts/map_site.py replay flows/alza.json        # verify it still works
@@ -39,33 +39,61 @@ SNAP_DIR = "snapshots"
 def _selector(el) -> str:
     """Build a short, stable selector for an element."""
     parts = []
-    tag = el.evaluate("e => e.tagName.toLowerCase()")
-    parts.append(tag)
+    try:
+        tag = el.evaluate("e => e.tagName.toLowerCase()")
+        parts.append(tag)
+    except Exception:
+        pass
     for attr in ("id", "data-testid", "data-qa", "data-webid", "data-code",
                  "data-product", "role", "name", "type", "href"):
-        val = el.get_attribute(attr)
+        try:
+            val = el.get_attribute(attr)
+        except Exception:
+            val = None
         if val:
             if attr == "href":
-                # keep only the path component, not query params
                 val = val.split("?")[0][:60]
             parts.append(f'{attr}="{val}"')
             break
-    cls = el.get_attribute("class")
+    try:
+        cls = el.get_attribute("class")
+    except Exception:
+        cls = None
     if cls:
-        # first 2 classes only, to avoid huge strings
         short = " ".join(cls.split()[:2])
         parts.append(f'class="{short}"')
-    text = (el.inner_text() or "").strip()[:40]
+    try:
+        text = (el.inner_text() or "").strip()[:40]
+    except Exception:
+        text = ""
     if text:
         parts.append(f'text="{text}"')
-    return " | ".join(parts)
+    return " | ".join(parts) if parts else "unknown"
+
+
+def _safe_snapshot(page, label, snap_counter, snapshots, events):
+    """Capture page HTML + metadata without crashing on a closing page."""
+    try:
+        if page.is_closed():
+            return
+        html = page.content()
+        snap_counter["n"] += 1
+        key = f"{snap_counter['n']:02d}_{label}"
+        snapshots[key] = html
+        events.append({"type": "snapshot", "key": key,
+                       "url": page.url, "title": page.title(),
+                       "ts": datetime.now().isoformat()})
+    except Exception as e:
+        events.append({"type": "snapshot_error", "error": str(e)[:200],
+                       "url": getattr(page, "url", "")})
 
 
 def record(url: str, out: Path, headed: bool = True, user_dir: str = "./browser_profile") -> None:
     """Open a real browser and record clicks/typing/navigation + snapshots."""
     events: list[dict] = []
-    snapshots: dict[str, str] = {}  # label -> html
+    snapshots: dict[str, str] = {}
     snap_counter = {"n": 0}
+    browser_closed = {"flag": False}
 
     with sync_playwright() as p:
         ctx = p.chromium.launch_persistent_context(
@@ -76,38 +104,41 @@ def record(url: str, out: Path, headed: bool = True, user_dir: str = "./browser_
         )
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
-        def snapshot(label: str):
-            try:
-                html = page.content()
-                snap_counter["n"] += 1
-                key = f"{snap_counter['n']:02d}_{label}"
-                snapshots[key] = html
-                events.append({"type": "snapshot", "key": key, "url": page.url,
-                               "title": page.title(), "ts": datetime.now().isoformat()})
-            except Exception as e:
-                events.append({"type": "snapshot_error", "error": str(e),
-                               "url": page.url})
+        def on_close(_):
+            browser_closed["flag"] = True
+
+        ctx.on("close", on_close)
 
         def on_click(msg):
             try:
+                el = msg.get("element") if isinstance(msg, dict) else None
                 events.append({"type": "click",
-                               "selector": _selector(msg.get("element")),
-                               "tag": msg.get("element").evaluate("e=>e.tagName.toLowerCase()"),
+                               "selector": _selector(el) if el else "unknown",
                                "ts": datetime.now().isoformat()})
-            except Exception:
+            except Exception as e:
                 events.append({"type": "click", "raw": str(msg)[:200],
                                "ts": datetime.now().isoformat()})
 
         def on_fill(msg):
-            events.append({"type": "fill",
-                           "selector": _selector(msg.get("element")),
-                           "value": (msg.get("value") or "")[:200],
-                           "ts": datetime.now().isoformat()})
+            try:
+                el = msg.get("element") if isinstance(msg, dict) else None
+                events.append({"type": "fill",
+                               "selector": _selector(el) if el else "unknown",
+                               "value": (msg.get("value") or "")[:200] if isinstance(msg, dict) else "",
+                               "ts": datetime.now().isoformat()})
+            except Exception as e:
+                events.append({"type": "fill", "raw": str(msg)[:200],
+                               "ts": datetime.now().isoformat()})
 
         def on_submit(msg):
-            events.append({"type": "submit",
-                           "selector": _selector(msg.get("element")),
-                           "ts": datetime.now().isoformat()})
+            try:
+                el = msg.get("element") if isinstance(msg, dict) else None
+                events.append({"type": "submit",
+                               "selector": _selector(el) if el else "unknown",
+                               "ts": datetime.now().isoformat()})
+            except Exception as e:
+                events.append({"type": "submit", "raw": str(msg)[:200],
+                               "ts": datetime.now().isoformat()})
 
         page.on("click", on_click)
         page.on("fill", on_fill)
@@ -117,23 +148,32 @@ def record(url: str, out: Path, headed: bool = True, user_dir: str = "./browser_
             if frame == page.main_frame:
                 events.append({"type": "goto", "url": frame.url,
                                "ts": datetime.now().isoformat()})
-                # snapshot after a short settle
-                page.wait_for_timeout(1500)
-                snapshot("nav")
+                # snapshot after a short settle, only if page still alive
+                try:
+                    page.wait_for_timeout(1500)
+                    _safe_snapshot(page, "nav", snap_counter, snapshots, events)
+                except Exception:
+                    pass
 
         page.on("framenavigated", on_nav)
 
         def on_request(r):
-            if r.resource_type in ("xhr", "fetch") and "analytics" not in r.url:
-                events.append({"type": "request",
-                               "method": r.method, "url": r.url[:300],
-                               "resource": r.resource_type,
-                               "ts": datetime.now().isoformat()})
+            try:
+                if r.resource_type in ("xhr", "fetch") and "analytics" not in r.url:
+                    events.append({"type": "request",
+                                   "method": r.method, "url": r.url[:300],
+                                   "resource": r.resource_type,
+                                   "ts": datetime.now().isoformat()})
+            except Exception:
+                pass
 
         page.on("request", on_request)
 
-        page.goto(url, wait_until="domcontentloaded")
-        snapshot("initial")
+        try:
+            page.goto(url, wait_until="domcontentloaded")
+        except Exception as e:
+            events.append({"type": "nav_error", "error": str(e)[:200], "url": url})
+        _safe_snapshot(page, "initial", snap_counter, snapshots, events)
 
         print("\nBrowser open. Do the search manually:")
         print("  - accept cookies")
@@ -144,18 +184,18 @@ def record(url: str, out: Path, headed: bool = True, user_dir: str = "./browser_
         print("Close the window (or Ctrl+C) when finished.\n")
 
         try:
-            while ctx.pages:
+            while not browser_closed["flag"]:
                 try:
                     page.wait_for_timeout(500)
                 except Exception:
                     break
         except KeyboardInterrupt:
             print("\ninterrupted by user")
-        finally:
-            try:
-                ctx.close()
-            except Exception:
-                pass
+
+        try:
+            ctx.close()
+        except Exception:
+            pass
 
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = {"url": url, "recorded_at": datetime.now().isoformat(),
@@ -223,6 +263,8 @@ def replay(path: Path, headed: bool = False) -> int:
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
         for ev in events:
+            if ev["type"] in ("snapshot", "request", "nav_error"):
+                continue
             try:
                 if ev["type"] == "goto":
                     page.goto(ev["url"], wait_until="domcontentloaded", timeout=30000)

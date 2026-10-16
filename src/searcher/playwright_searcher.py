@@ -254,11 +254,12 @@ class PlaywrightSearcher:
         price = await self._diamond_coordinator._run_price_layer(
             prompt, research, expertise, run_id, scored
         )
-        self._diamond_coordinator._synthesize_results(
+        final = await self._diamond_coordinator._synthesize_results(
             prompt, {"research": research, "expertise": expertise, "price": price}, run_id
         )
 
         evaluated_deals = scored
+        best = final.get("recommendation") if isinstance(final, dict) else None
 
         if evaluated_deals:
             # Merge expert scores with deals
@@ -268,5 +269,8 @@ class PlaywrightSearcher:
                     deal.expert_score = expert_by_url[deal.url].get("expert_score", 0)
                     deal.expert_analysis = expert_by_url[deal.url].get("expert_analysis", "")
 
-        logger.info(f"Diamond Search completed [run_id={run_id}] with {len(deals)} deals")
+        logger.info(
+            f"Diamond Search completed [run_id={run_id}]: {len(deals)} deals, "
+            f"best={best.get('title') if best else 'n/a'}"
+        )
         return deals

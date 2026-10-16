@@ -29,6 +29,26 @@ def _timeout_from_env(name: str = "ADS_LOCAL_LLM_TIMEOUT", default: float = LOCA
         return default
 
 
+def _content_from(payload: dict) -> str:
+    """Extract assistant text from an OpenAI-shaped response.
+
+    Reasoning models may return content=None, or place the answer under
+    'reasoning' / 'reasoning_content'. The previous inline
+    ``...["content"].strip()`` raised AttributeError in those cases, and
+    AttributeError was not caught by the fallback chain, so one such response
+    aborted the entire provider loop.
+    """
+    try:
+        message = payload["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError):
+        return ""
+    for key in ("content", "reasoning_content", "reasoning"):
+        value = message.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
+
+
 class LLMClient:
     def __init__(self, config):
         self.config = config
@@ -175,7 +195,7 @@ class LLMClient:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=LOCAL_TIMEOUT))
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"].strip()
+        return _content_from(response.json())
 
     # === Cloud API calls ===
     async def _call_cloud_llm_async(self, provider: str, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
@@ -209,7 +229,7 @@ class LLMClient:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=CLOUD_TIMEOUT))
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"].strip()
+        return _content_from(response.json())
 
     async def _call_gemini_async(self, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
@@ -245,7 +265,7 @@ class LLMClient:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=CLOUD_TIMEOUT))
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"].strip()
+        return _content_from(response.json())
 
     def _get_api_key(self, env_var: str) -> str | None:
         """Get API key from environment variable."""

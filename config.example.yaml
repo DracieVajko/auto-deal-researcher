@@ -56,13 +56,13 @@ llm:
   api_fallback:
     - provider: "openrouter"
       api_key_env: "OPENROUTER_API_KEY"
-      model: "mistralai/ministral-3b-2512"
+      model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
     - provider: "gemini"
       api_key_env: "GEMINI_API_KEY"
-      model: "gemini-2.5-flash"
+      model: "gemini-3.7-flash"
     - provider: "mistral"
       api_key_env: "MISTRAL_API_KEY"
-      model: "ministral-3b-latest"
+      model: "ministral-14b-2512"
   # Legacy fields (for backward compatibility)
   # Secrets are read from the environment — copy .env.example to .env and fill
   # in your own keys. Never commit real keys.

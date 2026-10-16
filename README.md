@@ -1,4 +1,4 @@
-# Auto Deal Researcher
+﻿# Auto Deal Researcher
 
 An intelligent deal searching application that automates finding the best deals across multiple online marketplaces in Slovakia, Czech Republic, and international sites.
 
@@ -56,9 +56,6 @@ All secrets live in `.env` (git-ignored). See `.env.example` for the full list.
 | `OPENROUTER_API_KEY` | `src/llm/client.py` | https://openrouter.ai/keys |
 | `GEMINI_API_KEY` | `src/llm/client.py` | https://aistudio.google.com/apikeys |
 | `MISTRAL_API_KEY` | `src/llm/client.py` | https://console.mistral.ai/api-keys |
-| `EBAY_APP_ID`, `EBAY_CERT_ID` | `ebay_api` adapter | https://developer.ebay.com (OAuth client-credentials) |
-| `EBAY_SANDBOX` | `ebay_api` adapter | `1` to use `api.sandbox.ebay.com` |
-| `EBAY_MARKETPLACE_ID` | `ebay_api` adapter | Default `EBAY_DE` |
 | `ADS_LOCAL_LLM_TIMEOUT` | `LLMClient` | Seconds, default `900` |
 | `ADS_CLOUD_LLM_TIMEOUT` | `LLMClient` | Seconds, default `60` |
 
@@ -204,7 +201,6 @@ src/
 │       ├── backmarket.py         # blocked by Cloudflare — disabled by default
 │       ├── facebook.py
 │       ├── ebay.py               # HTML scraper (unreliable, disabled)
-│       └── ebay_api.py           # official eBay Browse API
 ├── agents/                       # 7-agent Diamond Search pipeline
 │   ├── coordinator.py            # orchestration + LLM budget
 │   ├── llm_support.py            # LLM mixin, JSON extraction, list coercion
@@ -228,7 +224,6 @@ src/
 |------|------------|--------|-------|
 | Alza.sk/cz | `alza` | ✅ working | Retailer. Uses `/search.htm?exps=`, results are `.browsingitem` |
 | Bazos.sk/cz | `bazos` | ✅ working | Classifieds, high volume. Consent handling included |
-| eBay (API) | `ebay_api` | ✅ working | Official Browse API, needs `EBAY_APP_ID` / `EBAY_CERT_ID` |
 | eBay (HTML) | `ebay` | ⚠️ disabled | Rate-limited and serves decoy listings to scrapers |
 | BackMarket.sk | `backmarket` | ⚠️ disabled | Cloudflare challenge that does not clear for automated sessions |
 | Facebook Marketplace | `facebook` | ⚠️ disabled | Requires an authenticated CDP session |

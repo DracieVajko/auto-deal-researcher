@@ -75,13 +75,8 @@ def test_backmarket_uses_locale_aware_search_path():
 
 
 def test_html_adapters_expose_selectors():
-    """API adapters have no CSS; every HTML scraper must declare both selectors."""
-    from src.searcher.adapters.ebay_api import EbayApiAdapter
-
+    """Every scraper adapter must declare both selectors for diagnostics."""
     for name, cls in ADAPTER_REGISTRY.items():
-        if issubclass(cls, EbayApiAdapter):
-            assert cls.item_selector == ""
-            continue
         assert cls.item_selector, f"{name} has no item_selector"
         assert cls.results_selector, f"{name} has no results_selector"
 

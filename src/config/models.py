@@ -108,11 +108,16 @@ class ScheduleConfig(BaseModel):
 
 
 class BrowserConfig(BaseModel):
-    cdp_endpoint: str = "http://localhost:9222"
+    # 127.0.0.1, not localhost: Chrome/Brave bind their debugging port to IPv4,
+    # while "localhost" may resolve to ::1 first and fail with ECONNREFUSED.
+    cdp_endpoint: str = "http://127.0.0.1:9222"
+    browser_executable: str | None = None  # e.g. Brave / Chrome path
     use_persistent_context: bool = True
     user_data_dir: str = "./browser_profile"
     headless: bool = True  # Run headless by default (no admin prompts)
     slow_mo: int = 0  # Slow down operations by N ms (useful for debugging)
+    # Reuse cookies/credentials between runs instead of a fresh profile.
+    storage_state: str | None = None
 
 
 class StorageConfig(BaseModel):

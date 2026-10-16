@@ -12,6 +12,15 @@ from src.browser.fingerprint import FingerprintRotator, apply_fingerprint
 logger = logging.getLogger(__name__)
 
 
+def _port_from(endpoint: str | None) -> int | None:
+    """Extract the debugging port from a CDP endpoint URL."""
+    if not endpoint:
+        return None
+    tail = endpoint.rsplit(":", 1)[-1]
+    tail = tail.split("/")[0]
+    return int(tail) if tail.isdigit() else None
+
+
 class BrowserManager:
     def __init__(self, config):
         self.config = config
@@ -30,17 +39,17 @@ class BrowserManager:
     async def _create_browser(self) -> Browser | BrowserContext:
         browser_config = self.config.browser
         
-        # Try CDP connection first (connect to existing browser)
+        # Try CDP connection first (attach to an already-running browser so the
+        # user's real profile, cookies and logins are reused).
+        # connect_over_cdp() is the API for a raw DevTools endpoint;
+        # connect() speaks Playwright's own protocol and fails against it.
         try:
             logger.info(f"Connecting to browser via CDP: {browser_config.cdp_endpoint}")
-            browser = await self._playwright.chromium.connect(browser_config.cdp_endpoint)
-            logger.info("CDP connection successful - using existing browser")
-            # Create a new context in the existing browser
-            self._context = await browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                ignore_https_errors=True,
+            browser = await self._playwright.chromium.connect_over_cdp(
+                browser_config.cdp_endpoint
             )
+            logger.info("CDP connection successful - using existing browser")
+            self._context = browser.contexts[0] if browser.contexts else await browser.new_context()
             await self._setup_context(self._context)
         except PlaywrightError as e:
             logger.info(f"CDP connection failed: {e}")
@@ -52,22 +61,29 @@ class BrowserManager:
             user_data_dir = Path(browser_config.user_data_dir)
             await asyncio.to_thread(user_data_dir.mkdir, parents=True, exist_ok=True)
             logger.info(f"Launching persistent context (headless={browser_config.headless}): {user_data_dir}")
-            context = await self._playwright.chromium.launch_persistent_context(
-                user_data_dir=str(user_data_dir),
-                headless=browser_config.headless,
-                slow_mo=browser_config.slow_mo,
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                ignore_https_errors=True,
-                args=[
+            launch: dict = {
+                "user_data_dir": str(user_data_dir),
+                "headless": browser_config.headless,
+                "slow_mo": browser_config.slow_mo,
+                "viewport": {'width': 1920, 'height': 1080},
+                "user_agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                "ignore_https_errors": True,
+                "args": [
                     '--disable-blink-features=AutomationControlled',
                     '--disable-dev-shm-usage',
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-web-security',
                     '--disable-features=IsolateOrigins,site-per-process',
-                ]
-            )
+                ],
+            }
+            # Point at Brave/Edge/Chrome instead of the bundled Chromium.
+            if browser_config.browser_executable:
+                launch["executable_path"] = browser_config.browser_executable
+                port = _port_from(browser_config.cdp_endpoint)
+                if port:
+                    launch["args"] = launch["args"] + [f"--remote-debugging-port={port}"]
+            context = await self._playwright.chromium.launch_persistent_context(**launch)
             await self._setup_context(context)
             return context
         

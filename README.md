@@ -142,6 +142,57 @@ python -m src.cli monitor --prompt-file prompts/auto.yaml --interval 12
 Each cycle writes `results/monitoring/<run_id>.md` with new deals, price
 drops/increases, removals and condition changes versus the previous run.
 
+### Logging in to sites that need a real browser (Facebook)
+
+Facebook Marketplace needs a signed-in session and often 2FA or mobile
+approval, which a throwaway Playwright profile cannot satisfy. Log in once,
+by hand, in a visible browser; the cookies are saved and reused:
+
+```bash
+python scripts/login.py --site facebook            # you log in manually
+python scripts/login.py --site facebook --check    # is it still valid?
+python scripts/login.py --site facebook --logout   # delete it
+```
+
+Sessions land in `data/sessions/<site>.json` (git-ignored). They contain real
+login cookies — treat them like a password.
+
+### Using your own browser over CDP
+
+To drive the browser you already use, start it with a remote debugging port;
+the project attaches and reuses that profile's cookies and logins:
+
+```powershell
+# Brave (or Chrome), dedicated profile so your everyday one is not locked
+& "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" `
+  --remote-debugging-port=9222 `
+  --user-data-dir="$PWD\browser_profile\brave"
+```
+
+```yaml
+# config.yaml
+browser:
+  cdp_endpoint: "http://127.0.0.1:9222"
+```
+
+Check what the project sees (read-only, loads nothing):
+
+```bash
+python -m src.cli local-state
+```
+
+> Use `127.0.0.1`, not `localhost`: Chromium binds its debugging port to
+> IPv4, while `localhost` may resolve to `::1` first and fail with
+> `ECONNREFUSED`. This was the original reason the CDP path silently fell
+> back to a fresh profile.
+
+Or let the project launch Brave/Edge/Chrome itself instead of bundled Chromium:
+
+```yaml
+browser:
+  browser_executable: "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe"
+```
+
 ### Diagnostics & health
 ```bash
 # Per-site health: are selectors still valid?

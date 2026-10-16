@@ -5,7 +5,8 @@ An intelligent deal searching application that automates finding the best deals 
 ## Features
 
 - **Multi-platform support**: Works on Windows, Linux, and macOS
-- **Site Adapters**: Native adapters for Alza, Bazos, BackMarket, Facebook Marketplace, eBay (extensible)
+- **Site Adapters**: Alza, Bazos (verified working), eBay via the official Browse API; Facebook (needs login), BackMarket and eBay HTML scraping are disabled by default with reasons documented in `config.yaml`
+- **Diamond Search**: optional 7-agent pipeline (query expansion, site selection, market intel, domain expert, latest tech, price hunter, recommendation) with LLM budget tracking
 - **Condition & Category Filtering**: Filter by `new`, `used`, `refurbished`, `open_box` × `electronics`, `appliances`, `auto`, `general`
 - **LLM Integration**: Local LLMs (LM Studio/Ollama) with cloud API fallbacks (OpenRouter, Gemini, Mistral)
 - **Browser Automation**: Playwright with CDP connection to existing browser or persistent context fallback
@@ -23,11 +24,14 @@ An intelligent deal searching application that automates finding the best deals 
    cd auto-deal-researcher
    ```
 
-2. **Configure** (copy template and add your API keys)
+2. **Configure secrets** — keys are **never** stored in `config.yaml`.
    ```bash
-   cp config.example.yaml config.yaml
-   # Edit config.yaml with your endpoints and API keys
+   cp config.example.yaml config.yaml   # non-secret settings only
+   cp .env.example .env                 # secrets go here, and .env is git-ignored
+   # then edit .env and fill in your own keys
    ```
+   `config.yaml` references them with `${VAR}` / `${VAR:-default}` placeholders, and
+   `.env` is loaded automatically (real environment variables always win).
 
 3. **Install dependencies**
    ```bash
@@ -38,6 +42,27 @@ An intelligent deal searching application that automates finding the best deals 
    pip install -r requirements.txt
    playwright install chromium
    ```
+
+   Requires Python 3.11–3.13. (The suite also passes on 3.14, but Playwright and
+   `pydantic-core` do not publish 3.14 wheels for every platform.)
+
+## Environment variables
+
+All secrets live in `.env` (git-ignored). See `.env.example` for the full list.
+
+| Variable | Used by | Notes |
+|---|---|---|
+| `LMSTUDIO_ENDPOINT` | config | Optional override; default `http://localhost:1234` |
+| `OPENROUTER_API_KEY` | `src/llm/client.py` | https://openrouter.ai/keys |
+| `GEMINI_API_KEY` | `src/llm/client.py` | https://aistudio.google.com/apikeys |
+| `MISTRAL_API_KEY` | `src/llm/client.py` | https://console.mistral.ai/api-keys |
+| `EBAY_APP_ID`, `EBAY_CERT_ID` | `ebay_api` adapter | https://developer.ebay.com (OAuth client-credentials) |
+| `EBAY_SANDBOX` | `ebay_api` adapter | `1` to use `api.sandbox.ebay.com` |
+| `EBAY_MARKETPLACE_ID` | `ebay_api` adapter | Default `EBAY_DE` |
+| `ADS_LOCAL_LLM_TIMEOUT` | `LLMClient` | Seconds, default `900` |
+| `ADS_CLOUD_LLM_TIMEOUT` | `LLMClient` | Seconds, default `60` |
+
+`config-check` fails loudly when a `${VAR}` has no value and no default.
 
 ## Configuration
 
@@ -67,8 +92,8 @@ search:
 llm:
   local:
     - type: "lmstudio"
-      endpoint: "http://100.88.219.120:1234"
-      model: "auto"
+      endpoint: "http://localhost:1234"
+      model: "qwen/qwen3-coder-30b"   # must be a model id LM Studio actually serves
   api_fallback:
     - provider: "openrouter"
       api_key_env: "OPENROUTER_API_KEY"
@@ -95,6 +120,43 @@ python -m src.cli run --prompt "DJI drone under 350 euros" --condition refurbish
 
 # With prompt file
 python -m src.cli run --prompt-file prompts/auto.yaml
+
+# Keep only the best N, and force an output format
+python -m src.cli run --prompt "laptop under 1000" --winners 5 --format markdown
+```
+
+### Diamond Search (7-agent pipeline)
+```bash
+python -m src.cli diamond-search --prompt "DJI drone under 350" --condition any --category electronics
+```
+Runs query expansion → site selection → market intel → domain expert →
+latest-tech → price hunter → recommendation, and prints the ranking with the
+expert score attached. Agents use the configured LLM and fall back to
+deterministic heuristics when no model is reachable, so this never hangs.
+
+### Monitoring
+```bash
+# One cycle only (useful for smoke tests)
+python -m src.cli monitor --prompt-file prompts/auto.yaml --max-runs 1
+
+# Continuous, every 12 hours
+python -m src.cli monitor --prompt-file prompts/auto.yaml --interval 12
+```
+Each cycle writes `results/monitoring/<run_id>.md` with new deals, price
+drops/increases, removals and condition changes versus the previous run.
+
+### Diagnostics & health
+```bash
+# Per-site health: are selectors still valid?
+python -m src.cli doctor
+python -m src.cli doctor --site bazos
+
+# Recent selector-health events + summary
+python -m src.cli selector-health --limit 20
+
+# Historical price / trend queries
+python -m src.cli history trends --category electronics
+python -m src.cli history watchlist watchlist-cmd list
 ```
 
 ### Scheduled (Auto Mode)
@@ -125,33 +187,53 @@ python -m src.cli config-check
 
 ```
 src/
-├── cli.py                    # Typer CLI with run/schedule/config-check
-├── config/                   # Pydantic models + YAML loader
-├── browser/                  # BrowserManager (CDP + persistent context)
-├── llm/                      # LLMClient (local-first fallback chain)
+├── cli/
+│   ├── app.py                    # Typer CLI (run, monitor, doctor, diamond-search,
+│   │                             #   config-check, schedule-*, selector-health)
+│   └── commands/                 # monitor, doctor, config_check, history
+├── config/                       # Pydantic models + YAML loader with ${VAR} support
+├── browser/                      # BrowserManager (CDP + persistent context) + fingerprint
+│   └── pom/                      # Page objects and reusable components
+├── llm/                          # LLMClient (local-first fallback chain) + MockLLMClient
 ├── searcher/
-│   ├── playwright_searcher.py  # Multi-round search orchestrator
-│   └── adapters/               # Site-specific adapters
-│       ├── base.py             # BaseAdapter + Deal dataclass
-│       ├── alza.py
+│   ├── playwright_searcher.py    # Multi-round search + Diamond orchestration
+│   └── adapters/                 # Site-specific adapters
+│       ├── base.py               # BaseAdapter, Deal, SiteBlockedError, parse_price_eur
+│       ├── alza.py               # https://www.alza.sk/search.htm?exps=
 │       ├── bazos.py
-│       ├── backmarket.py
+│       ├── backmarket.py         # blocked by Cloudflare — disabled by default
 │       ├── facebook.py
-│       └── ebay.py
-├── storage/                  # StorageManager (SQLite dedup + prune)
-├── output/                   # ResultProcessor (JSON + Markdown)
-└── scheduler/                # Cross-platform task installation
+│       ├── ebay.py               # HTML scraper (unreliable, disabled)
+│       └── ebay_api.py           # official eBay Browse API
+├── agents/                       # 7-agent Diamond Search pipeline
+│   ├── coordinator.py            # orchestration + LLM budget
+│   ├── llm_support.py            # LLM mixin, JSON extraction, list coercion
+│   ├── research/                 # query_expansion, site_selection, market_intel
+│   ├── expertise/                # domain_expert, latest_tech_tracker
+│   ├── price/                    # price_hunter
+│   └── synthesis/                # recommendation
+├── intelligence/                 # change_detector, price_tracker
+├── diagnostics/                  # doctor, selector_health (JSON + JSONL)
+├── history/                      # watchlist, trends
+├── notifications/                # console/webhook/discord/email channels + rules
+├── storage/                      # StorageManager, schema migrations
+├── output/                       # ResultProcessor (JSON + Markdown)
+├── scheduler/                    # Cross-platform task installation
+└── utils/
 ```
 
 ## Supported Sites (Adapters)
 
-| Site | Adapter | Conditions | Categories | Notes |
-|------|---------|------------|------------|-------|
-| Alza.sk/cz | `alza` | new, open_box | electronics, appliances | Major SK/CZ retailer |
-| Bazos.sk/cz | `bazos` | used | all | Classifieds, high volume |
-| BackMarket.sk | `backmarket` | refurbished | electronics | Refurbished specialist |
-| Facebook Marketplace | `facebook` | used, marketplace | all | Requires CDP login |
-| eBay.de/co.uk | `ebay` | used, refurbished, new, open_box | all | International |
+| Site | Adapter id | Status | Notes |
+|------|------------|--------|-------|
+| Alza.sk/cz | `alza` | ✅ working | Retailer. Uses `/search.htm?exps=`, results are `.browsingitem` |
+| Bazos.sk/cz | `bazos` | ✅ working | Classifieds, high volume. Consent handling included |
+| eBay (API) | `ebay_api` | ✅ working | Official Browse API, needs `EBAY_APP_ID` / `EBAY_CERT_ID` |
+| eBay (HTML) | `ebay` | ⚠️ disabled | Rate-limited and serves decoy listings to scrapers |
+| BackMarket.sk | `backmarket` | ⚠️ disabled | Cloudflare challenge that does not clear for automated sessions |
+| Facebook Marketplace | `facebook` | ⚠️ disabled | Requires an authenticated CDP session |
+
+Enable a site by setting `enabled: true` under its entry in `config.yaml`.
 
 ## Prompts
 
@@ -174,11 +256,15 @@ See `prompts/example_prompts.md` for more examples.
 # Run tests
 pytest tests/
 
-# Format code
-black src/
+# With coverage
+pytest tests/ --cov=src --cov-report=term-missing
 
-# Lint
-flake8 src/
+# Format / lint
+black src/
+ruff check src/
+
+# Type check
+mypy src/
 ```
 
 ## License

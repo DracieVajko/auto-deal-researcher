@@ -145,7 +145,10 @@ def record(url: str, out: Path, headed: bool = True, user_dir: str = "./browser_
 
         try:
             while ctx.pages:
-                page.wait_for_timeout(500)
+                try:
+                    page.wait_for_timeout(500)
+                except Exception:
+                    break
         except KeyboardInterrupt:
             print("\ninterrupted by user")
         finally:

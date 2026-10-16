@@ -4,6 +4,7 @@ import asyncio
 import concurrent.futures
 import logging
 import os
+import time
 
 import requests
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 # hardware, and slow models generate at ~1-2 tok/s. Cloud APIs answer quickly,
 # so they get a shorter budget to fail over fast.
 LOCAL_TIMEOUT = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "900"))
-CLOUD_TIMEOUT = float(os.environ.get("ADS_CLOUD_LLM_TIMEOUT", "60"))
+CLOUD_TIMEOUT = float(os.environ.get("ADS_CLOUD_LLM_TIMEOUT", "120"))
 
 
 def _timeout_from_env(name: str = "ADS_LOCAL_LLM_TIMEOUT", default: float = LOCAL_TIMEOUT) -> float:
@@ -27,6 +28,64 @@ def _timeout_from_env(name: str = "ADS_LOCAL_LLM_TIMEOUT", default: float = LOCA
         return float(os.environ[name])
     except (KeyError, TypeError, ValueError):
         return default
+
+
+class LocalCircuitBreaker:
+    """Skip a local endpoint for a while after it fails.
+
+    Without this, an unreachable or hung LM Studio is retried on *every*
+    LLM call and each one burns the full local timeout, so a run that should
+    take seconds stalls for many minutes.
+    """
+
+    def __init__(self, cooldown: float = 300.0, threshold: int = 2):
+        self.cooldown = cooldown
+        self.threshold = threshold
+        self._failures: dict[str, int] = {}
+        self._open_until: dict[str, float] = {}
+
+    def is_open(self, key: str) -> bool:
+        until = self._open_until.get(key, 0.0)
+        if until and time.time() < until:
+            return True
+        if until:
+            # cooldown elapsed: half-open, allow a probe
+            self._open_until.pop(key, None)
+            self._failures.pop(key, None)
+        return False
+
+    def record_success(self, key: str) -> None:
+        self._failures.pop(key, None)
+        self._open_until.pop(key, None)
+
+    def record_failure(self, key: str) -> None:
+        n = self._failures.get(key, 0) + 1
+        self._failures[key] = n
+        if n >= self.threshold:
+            self._open_until[key] = time.time() + self.cooldown
+
+    def reset(self) -> None:
+        self._failures.clear()
+        self._open_until.clear()
+
+
+def _post_with_retry(url: str, *, headers: dict, json_body: dict, timeout: float,
+                     attempts: int = 3) -> requests.Response:
+    """POST, retrying transient 5xx / 429 responses with a short backoff.
+
+    Cloud providers intermittently answer 503 (model overloaded) or 429
+    (rate limited). Both clear on their own, so retrying avoids needlessly
+    failing over to another provider. Client errors (4xx) are not retried.
+    """
+    last: requests.Response | None = None
+    for attempt in range(attempts):
+        last = requests.post(url, headers=headers, json=json_body, timeout=timeout)
+        if last.status_code < 500 and last.status_code != 429:
+            return last
+        if attempt < attempts - 1:
+            logger.info(f"Transient {last.status_code} from {url}; retrying")
+            time.sleep(2 * (attempt + 1))
+    return last
 
 
 def _content_from(payload: dict) -> str:
@@ -53,6 +112,10 @@ class LLMClient:
     def __init__(self, config):
         self.config = config
         self.llm_config = config.llm
+        self._breaker = LocalCircuitBreaker(
+            cooldown=float(os.environ.get("ADS_LOCAL_BREAKER_COOLDOWN", "300")),
+            threshold=int(os.environ.get("ADS_LOCAL_BREAKER_THRESHOLD", "2")),
+        )
 
     # === Sync methods (backward compatibility) ===
     def generate_search_query(self, product_description):
@@ -91,11 +154,21 @@ class LLMClient:
         """Unified chat method with fallback chain."""
         # Try local LLMs first
         for local in self.llm_config.local:
+            key = f"{local.type}:{local.endpoint}"
+            if self._breaker.is_open(key):
+                logger.info(f"Skipping local LLM {local.type} (circuit open)")
+                continue
             try:
                 logger.info(f"Trying local LLM: {local.type} at {local.endpoint}")
-                return await self._call_local_llm_async(local, system, user, max_tokens)
+                reply = await self._call_local_llm_async(local, system, user, max_tokens)
+                if reply.strip():
+                    self._breaker.record_success(key)
+                    return reply
+                logger.warning(f"Local LLM ({local.type}) returned an empty response")
+                self._breaker.record_failure(key)
             except (requests.RequestException, ValueError, KeyError, IndexError) as e:
                 logger.warning(f"Local LLM ({local.type}) failed: {e}")
+                self._breaker.record_failure(key)
 
         # Try cloud APIs from new config
         for api in self.llm_config.api_fallback:
@@ -103,7 +176,13 @@ class LLMClient:
             if api_key:
                 try:
                     logger.info(f"Trying cloud API: {api.provider} with model {api.model}")
-                    return await self._call_cloud_llm_async(api.provider, api_key, api.model, system, user, max_tokens)
+                    reply = await self._call_cloud_llm_async(
+                        api.provider, api_key, api.model, system, user, max_tokens
+                    )
+                    if reply.strip():
+                        return reply
+                    # An empty body is a failure; fall through to the next provider.
+                    logger.warning(f"Cloud API ({api.provider}) returned an empty response")
                 except (requests.RequestException, ValueError, KeyError, IndexError) as e:
                     logger.warning(f"Cloud API ({api.provider}) failed: {e}")
             else:
@@ -121,7 +200,12 @@ class LLMClient:
                 model = legacy_models.get(provider, "mistralai/mistral-7b-instruct")
                 try:
                     logger.info(f"Trying legacy {provider} with model {model}")
-                    return await self._call_cloud_llm_async(provider, api_key, model, system, user, max_tokens)
+                    reply = await self._call_cloud_llm_async(
+                        provider, api_key, model, system, user, max_tokens
+                    )
+                    if reply.strip():
+                        return reply
+                    logger.warning(f"Legacy {provider} returned an empty response")
                 except (requests.RequestException, ValueError, KeyError, IndexError) as e:
                     logger.warning(f"Legacy {provider} failed: {e}")
 
@@ -193,7 +277,7 @@ class LLMClient:
         }
         # Local inference may need a long prefill/load window (see LOCAL_TIMEOUT).
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=LOCAL_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=LOCAL_TIMEOUT))
         response.raise_for_status()
         return _content_from(response.json())
 
@@ -227,7 +311,7 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=CLOUD_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=CLOUD_TIMEOUT))
         response.raise_for_status()
         return _content_from(response.json())
 
@@ -243,7 +327,7 @@ class LLMClient:
             }
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=CLOUD_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=CLOUD_TIMEOUT))
         response.raise_for_status()
         return response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
 
@@ -263,7 +347,7 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: requests.post(api_url, headers=headers, json=payload, timeout=CLOUD_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=CLOUD_TIMEOUT))
         response.raise_for_status()
         return _content_from(response.json())
 

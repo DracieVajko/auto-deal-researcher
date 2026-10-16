@@ -63,3 +63,5 @@ config.yaml
 !.env.example
 .selector_health.log
 browser_profile/
+# Recorded site flows (contain selectors, review before committing)
+flows/

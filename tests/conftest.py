@@ -55,8 +55,14 @@ def pytest_configure(config):
 
 
 @pytest.fixture(scope="session")
-def config():
-    return load_config()
+def config(request):
+    """Project config. `--headed` flips headless off so you can watch."""
+    cfg = load_config()
+    if request.config.getoption("--headed"):
+        cfg = cfg.model_copy(deep=True)
+        cfg.browser.headless = False
+        cfg.browser.slow_mo = 200
+    return cfg
 
 
 @pytest.fixture

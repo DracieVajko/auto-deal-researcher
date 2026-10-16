@@ -2,9 +2,10 @@
 
 from .alza import AlzaAdapter
 from .backmarket import BackMarketAdapter
-from .base import BaseAdapter, Deal
+from .base import BaseAdapter, Deal, SiteBlockedError
 from .bazos import BazosAdapter
 from .ebay import EbayAdapter
+from .ebay_api import EbayApiAdapter
 from .facebook import FacebookAdapter
 
 ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = {
@@ -13,6 +14,7 @@ ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = {
     "backmarket": BackMarketAdapter,
     "facebook": FacebookAdapter,
     "ebay": EbayAdapter,
+    "ebay_api": EbayApiAdapter,
 }
 
 
@@ -32,6 +34,8 @@ __all__ = [
     "BazosAdapter",
     "Deal",
     "EbayAdapter",
+    "EbayApiAdapter",
     "FacebookAdapter",
+    "SiteBlockedError",
     "get_adapter",
 ]

@@ -14,7 +14,14 @@ class PriceHunterAgent:
     async def run(self, input_data: dict) -> dict:
         deals = input_data.get("deals", [])
         if not deals:
-            return {"enriched_deals": [], "summary": "No deals to process"}
+            # Same keys as the populated path so downstream agents can rely on
+            # the shape regardless of input.
+            return {
+                "enriched_deals": [],
+                "best_overall": None,
+                "price_comparison": "",
+                "summary": "No deals to process",
+            }
         enriched = []
         for deal in input_data.get("deals", []):
             enriched_deal = await self._enrich_deal(deal)

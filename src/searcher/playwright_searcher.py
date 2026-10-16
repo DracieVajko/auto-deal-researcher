@@ -15,6 +15,7 @@ from src.llm.client import LLMClient
 from src.searcher.adapters import Deal, get_adapter
 from src.searcher.adapters.base import SiteBlockedError
 from src.storage.manager import StorageManager
+from src.utils.time import utcnow_stamp
 
 # Diamond Search agents (optional import)
 try:
@@ -67,8 +68,8 @@ class PlaywrightSearcher:
     def _init_diamond_agents(self):
         """Initialize the 7-agent Diamond Search pipeline."""
         agents = [
-            QueryExpansionAgent(),
-            SiteSelectionAgent(),  # Need to create this
+            QueryExpansionAgent(self.llm),
+            SiteSelectionAgent(),
             MarketIntelAgent(),
             DomainExpertAgent(),
             LatestTechTrackerAgent(),
@@ -212,13 +213,13 @@ class PlaywrightSearcher:
             "condition": condition,
             "category": category,
         }
-        
+
         result = await self._diamond_coordinator.run(input_data)
-        
+
         if not result.success:
             logger.error(f"Diamond Search failed: {result.error}")
             return await self.search(prompt, condition, category)
-        
+
         # The coordinator returns the final recommendation
         # We need to also run the actual searches to get real deals
         # The agent pipeline provides intelligence, but we still need to fetch deals
@@ -226,15 +227,39 @@ class PlaywrightSearcher:
         # For now, run standard search but with enhanced queries from the pipeline
         # The recommendation agent's output can guide which results to prioritize
         recommendation = result.payload.get("final_recommendation", {})
-        
-        # Run standard search
-        deals = await self.search(prompt, condition, category)
-        
-        # Apply expert scoring if available
-        expertise = result.payload.get("expertise", {})
-        expert_analysis = expertise.get("domain_expert", {})
-        evaluated_deals = expert_analysis.get("evaluated_deals", [])
-        
+
+        # Re-run the pipeline now that real deals exist, so the expertise,
+        # price and synthesis agents actually receive something to score.
+        run_id = f"diamond_{utcnow_stamp()}"
+        research = result.payload.get("research", {})
+        queries = (research.get("query_expansion") or {}).get("expanded_queries") or []
+        search_query = queries[0] if queries else prompt
+        logger.info(f"[{run_id}] research layer -> searching for {search_query!r}")
+
+        deals = await self.search(search_query, condition, category)
+
+        deal_dicts = [
+            {
+                "url": d.url, "title": d.title, "price_eur": d.price_eur,
+                "condition": d.condition, "category": d.category,
+                "site_name": d.site_name, "metadata": dict(d.metadata or {}),
+            }
+            for d in deals
+        ]
+
+        expertise = await self._diamond_coordinator._run_expertise_layer(
+            prompt, research, run_id, deal_dicts
+        )
+        scored = (expertise.get("domain_expert") or {}).get("evaluated_deals") or deal_dicts
+        price = await self._diamond_coordinator._run_price_layer(
+            prompt, research, expertise, run_id, scored
+        )
+        self._diamond_coordinator._synthesize_results(
+            prompt, {"research": research, "expertise": expertise, "price": price}, run_id
+        )
+
+        evaluated_deals = scored
+
         if evaluated_deals:
             # Merge expert scores with deals
             expert_by_url = {d.get("url"): d for d in evaluated_deals if d.get("url")}
@@ -242,6 +267,6 @@ class PlaywrightSearcher:
                 if deal.url in expert_by_url:
                     deal.expert_score = expert_by_url[deal.url].get("expert_score", 0)
                     deal.expert_analysis = expert_by_url[deal.url].get("expert_analysis", "")
-        
-        logger.info(f"Diamond Search completed with {len(deals)} deals")
+
+        logger.info(f"Diamond Search completed [run_id={run_id}] with {len(deals)} deals")
         return deals

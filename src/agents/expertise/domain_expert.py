@@ -41,8 +41,13 @@ class DomainExpertAgent:
         if not deals:
             return {"evaluated_deals": [], "analysis": "No deals to evaluate"}
 
+        benchmark = (research.get("market_intel") or {}).get("price_benchmarks", {}) \
+            if isinstance(research, dict) else {}
         evaluated = []
         for deal in deals:
+            deal.setdefault("metadata", {})
+            if benchmark:
+                deal["metadata"].setdefault("benchmark", self._category_benchmark(deal, benchmark))
             score = await self._score_deal(deal)
             analysis = await self._analyze_deal(deal)
             deal["expert_score"] = score
@@ -58,11 +63,48 @@ class DomainExpertAgent:
             "questions_answered": await self._answer_critical_questions(evaluated),
         }
 
+    @staticmethod
+    def _category_benchmark(deal, benchmark: dict) -> float | None:
+        """Pick the closest benchmark range for a deal title."""
+        title = str(deal.get("title", "")).lower()
+        for key, band in (benchmark or {}).items():
+            if not isinstance(band, dict):
+                continue
+            if key.lower() in title:
+                mid = band.get("mid")
+                if mid:
+                    try:
+                        return float(mid)
+                    except (TypeError, ValueError):
+                        return None
+        return None
+
     async def _score_deal(self, deal) -> float:
-        """Score a deal based on weighted criteria."""
+        """Score a deal on weighted criteria (0-100).
+
+        price_score was previously hard-coded to 0, which made every deal
+        score identically; it is now derived from the price against a
+        category benchmark.
+        """
         weights = self.SCORING_WEIGHTS
-        price_score = 0
-        condition_score = 1.0
+        price = float(deal.get("price_eur", 0) or 0)
+        benchmark = self._benchmark(deal)
+
+        if benchmark and price > 0:
+            ratio = price / benchmark
+            # ratio 0.5 -> 1.0, ratio 1.0 -> 0.6, ratio >= 2 -> 0.1
+            if ratio <= 1:
+                price_score = min(1.0, 0.5 + (1 - ratio) * 1.0)
+            else:
+                price_score = max(0.1, 0.6 - (ratio - 1) * 0.5)
+        else:
+            price_score = 0.5
+
+        condition = (deal.get("condition") or "unknown").lower()
+        condition_score = {
+            "new": 1.0, "refurbished": 0.8, "open_box": 0.75, "used": 0.6,
+        }.get(condition, 0.5)
+
         seller_score = 0.8
         total = (
             price_score * weights["price_vs_benchmark"]
@@ -71,6 +113,21 @@ class DomainExpertAgent:
             + 0.9 * weights["specs_match"]
         )
         return round(total * 100, 1)
+
+    @staticmethod
+    def _benchmark(deal) -> float:
+        """Reference price for a deal, from metadata or a category default."""
+        meta = deal.get("metadata") or {}
+        for key in ("market_price", "benchmark", "avg_price"):
+            value = meta.get(key)
+            if value:
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    continue
+        price = float(deal.get("price_eur", 0) or 0)
+        # Without history, treat the current price as the reference midpoint.
+        return price if price > 0 else 0.0
 
     async def _analyze_deal(self, deal) -> str:
         """Generate expert analysis text for a deal."""

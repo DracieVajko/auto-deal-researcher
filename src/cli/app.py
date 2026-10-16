@@ -72,6 +72,49 @@ async def _run_async(prompt, prompt_file, condition, category, winners, output_f
 
 
 @app.command()
+def diamond_search(
+    prompt: str = typer.Option(..., "--prompt", "-p", help="Search prompt"),
+    condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
+    category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, any"),
+    winners: int = typer.Option(3, "--winners", "-w", help="How many ranked deals to keep"),
+    output_dir: str = typer.Option("./results", "--output-dir", help="Where to write the ranking"),
+):
+    """Run the full 7-agent Diamond Search pipeline."""
+    asyncio.run(_diamond_search_async(prompt, condition, category, winners, output_dir))
+
+
+async def _diamond_search_async(prompt, condition, category, winners, output_dir):
+    config = load_config()
+    if not config.search.diamond_search.enabled:
+        typer.echo("Error: diamond_search.enabled is false in config.yaml", err=True)
+        raise typer.Exit(1)
+
+    llm = LLMClient(config)
+    storage = StorageManager(config.storage.db_path)
+    browser_mgr = BrowserManager(config)
+    processor = ResultProcessor(config)
+    config.search.winners_count = winners
+
+    async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
+        if not searcher.diamond_search_enabled:
+            typer.echo("Error: Diamond Search agents unavailable", err=True)
+            raise typer.Exit(1)
+        deals = await searcher.search_with_diamond(prompt, condition, category)
+
+    for deal in deals:
+        storage.save_deal(deal)
+
+    processor.save_results(deals, output_dir)
+
+    typer.echo(f"Diamond Search finished: {len(deals)} deals")
+    for d in deals:
+        score = getattr(d, "expert_score", None)
+        suffix = f" [expert {score}]" if score else ""
+        typer.echo(f"  {d.site_name:<10} {d.price_eur:>9.2f} EUR {d.condition:<10} {d.title[:48]}{suffix}")
+    typer.echo(f"Results in {output_dir}/")
+
+
+@app.command()
 def schedule_install():
     """Install automated scheduled tasks (Windows Task Scheduler / cron)."""
     config = load_config()

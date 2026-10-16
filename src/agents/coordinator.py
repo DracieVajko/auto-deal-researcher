@@ -42,9 +42,15 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         self.llm_tokens_used += tokens
 
     async def execute(self, input_data: dict) -> AgentResult[dict]:
-        """Execute the full Diamond Search pipeline."""
+        """Execute the full Diamond Search pipeline.
+
+        input_data may carry ``deals`` (already-scraped Deal dicts). When
+        present they are forwarded to the expertise, price and synthesis
+        layers; otherwise those layers run in intelligence-only mode.
+        """
         prompt = input_data.get("prompt", "")
         max_rounds = self.config.get("max_rounds", 3)
+        deals = input_data.get("deals") or []
 
         # Generate or use existing run_id for traceability
         run_id = input_data.get("run_id", str(uuid.uuid4()))
@@ -59,12 +65,17 @@ class CoordinatorAgent(AgentBase[dict, dict]):
 
         # Phase 2: Expertise Layer (parallel)
         logger.info(f"[run_id={run_id}] Starting Expertise Layer (parallel)")
-        expertise_results = await self._run_expertise_layer(prompt, research_results, run_id)
+        expertise_results = await self._run_expertise_layer(
+            prompt, research_results, run_id, deals
+        )
         results["expertise"] = expertise_results
 
         # Phase 3: Price Layer (sequential)
         logger.info(f"[run_id={run_id}] Starting Price Layer (sequential)")
-        price_results = await self._run_price_layer(prompt, research_results, expertise_results, run_id)
+        scored = expertise_results.get("domain_expert", {}).get("evaluated_deals") or deals
+        price_results = await self._run_price_layer(
+            prompt, research_results, expertise_results, run_id, scored
+        )
         results["price"] = price_results
 
         # Final synthesis
@@ -115,15 +126,20 @@ class CoordinatorAgent(AgentBase[dict, dict]):
             if agent
         }
 
-    async def _run_expertise_layer(self, prompt: str, research_results: dict, run_id: str) -> dict:
+    async def _run_expertise_layer(self, prompt: str, research_results: dict, run_id: str,
+                                   deals: list | None = None) -> dict:
         """Run domain expert and latest tech agents."""
         if not self._check_budget(estimated_calls=2, estimated_tokens=4000):
             logger.warning(f"[run_id={run_id}] Budget exceeded, skipping expertise layer")
             return {"domain_expert": "Budget exceeded, skipped", "latest_tech": "Budget exceeded, skipped"}
 
+        deals = deals or []
         tasks = [
-            self.agents["domain_expert"].run({"prompt": "", "research": research_results, "run_id": run_id}),
-            self.agents["latest_tech"].run({"prompt": "", "research": research_results, "run_id": run_id}),
+            self.agents["domain_expert"].run({
+                "prompt": prompt, "research": research_results,
+                "run_id": run_id, "deals": deals,
+            }),
+            self.agents["latest_tech"].run({"prompt": prompt, "research": research_results, "run_id": run_id}),
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         self._record_llm_usage(calls=2, tokens=4000)
@@ -143,17 +159,19 @@ class CoordinatorAgent(AgentBase[dict, dict]):
             "latest_tech": extract_result(results[1]),
         }
 
-    async def _run_price_layer(self, prompt: str, research_results: dict, expertise_results: dict, run_id: str) -> dict:
+    async def _run_price_layer(self, prompt: str, research_results: dict, expertise_results: dict,
+                                run_id: str, deals: list | None = None) -> dict:
         """Run price hunter agent."""
         if not self._check_budget(estimated_calls=2, estimated_tokens=5000):
             logger.warning(f"[run_id={run_id}] Budget exceeded, skipping price layer")
             return {"price_hunter": "Budget exceeded, skipped"}
 
         result = await self.agents["price_hunter"].run({
-            "prompt": "",
+            "prompt": prompt,
             "research": research_results,
             "expertise": expertise_results,
             "run_id": run_id,
+            "deals": deals or [],
         })
         self._record_llm_usage(calls=2, tokens=5000)
 

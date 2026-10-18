@@ -27,6 +27,9 @@ class EbayAdapter(BaseAdapter):
     item_selector = ".s-card"
     supported_conditions: ClassVar[list[str]] = ["used", "refurbished", "new", "open_box"]
     supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
+    seller_type = "marketplace"
+    has_warranty = False
+    warranty_note = "eBay Money Back Guarantee; manufacturer warranty only if the seller provides it."
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
         search_url = f"{self.base_url}/sch/i.html?_nkw={quote_plus(query)}&_sacat=0"

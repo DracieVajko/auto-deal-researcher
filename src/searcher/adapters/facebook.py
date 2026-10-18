@@ -16,6 +16,9 @@ class FacebookAdapter(BaseAdapter):
     requires_login = True
     supported_conditions: ClassVar[list[str]] = ["used", "marketplace"]
     supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
+    seller_type = "classifieds"
+    has_warranty = False
+    warranty_note = "Private sellers; warranty depends on the seller."
     results_selector = '[role="feed"]'
     item_selector = '[role="feed"] > div > div > div > div > a'
 

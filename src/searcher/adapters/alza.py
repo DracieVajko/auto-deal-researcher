@@ -19,6 +19,9 @@ class AlzaAdapter(BaseAdapter):
     item_selector = ".browsingitem"
     supported_conditions: ClassVar[list[str]] = ["new", "open_box"]
     supported_categories: ClassVar[list[str]] = ["electronics", "appliances"]
+    seller_type = "retailer"
+    has_warranty = True
+    warranty_note = "New items carry the manufacturer warranty; open-box carries Alza's warranty."
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
         # /search is a 404 on alza.sk; the real endpoint is /search.htm?exps=

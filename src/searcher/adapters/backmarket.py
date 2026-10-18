@@ -18,6 +18,9 @@ class BackMarketAdapter(BaseAdapter):
     item_selector = '[data-testid="product-card"]'
     supported_conditions: ClassVar[list[str]] = ["refurbished"]
     supported_categories: ClassVar[list[str]] = ["electronics"]
+    seller_type = "marketplace"
+    has_warranty = True
+    warranty_note = "BackMarket provides its own warranty on refurbished items."
 
     async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
         search_url = f"{self.base_url}/sk-sk/search?q={quote_plus(query)}"

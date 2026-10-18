@@ -44,7 +44,14 @@ class BaseAdapter(ABC):
     requires_login: bool = False
     supported_conditions: ClassVar[list[str]] = ["new", "used", "refurbished", "open_box"]
     supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
-    
+
+    # Warranty / seller trust metadata. These are the deciding factors when
+    # choosing between a cheap classifieds listing and a slightly dearer
+    # retailer open-box item with a real warranty.
+    seller_type: str = "retailer"  # retailer | marketplace | classifieds | auction
+    has_warranty: bool = False     # true when the seller is a retailer/official
+    warranty_note: str = ""        # human-readable caveat for the user
+
     # Selectors for doctor diagnostics
     results_selector: str = ""      # Main results container selector
     item_selector: str = ""         # Individual item selector

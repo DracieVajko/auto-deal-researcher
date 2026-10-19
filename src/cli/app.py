@@ -12,6 +12,7 @@ from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.llm.client import LLMClient
 from src.output.processor import ResultProcessor
 from src.scheduler.tasks import install_schedule, uninstall_schedule
+from src.searcher.orchestrator import SearchOrchestrator
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
 
@@ -273,6 +274,54 @@ async def _doctor_async(site: str | None, offline: bool):
     else:
         results = await doctor.check_all(live=not offline)
         print_doctor_results(results)
+
+
+def search(
+    prompt: str = typer.Option(..., "--prompt", "-p", help="Search prompt (e.g., 'DJI drone under 350 euros')"),
+    condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
+    category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, any"),
+    winners: int = typer.Option(3, "--winners", "-w", help="How many ranked deals to keep"),
+    output_dir: str = typer.Option("./results", "--output-dir", help="Output directory for results"),
+    max_pages: int = typer.Option(5, "--max-pages", help="Max pages per site"),
+    headless: bool = typer.Option(True, "--headless/--no-headless", help="Run browser headless"),
+):
+    """AI-powered search across multiple sites with LLM judgment."""
+    asyncio.run(_search_async(prompt, condition, category, winners, output_dir, max_pages, headless))
+
+
+async def _search_async(prompt, condition, category, winners, output_dir, max_pages, headless):
+    from src.vlm import VLMClient
+    from src.searcher.orchestrator import SearchOrchestrator
+
+    config = load_config()
+    config.search.winners_count = winners
+
+    llm = LLMClient(config)
+    vlm = VLMClient(
+        provider="lmstudio",
+        model="qwen2.5-vl-7b",
+        endpoint="http://127.0.0.1:1234/v1",
+    )
+    storage = StorageManager(config.storage.db_path)
+    browser_mgr = BrowserManager(config)
+
+    orchestrator = SearchOrchestrator(config, llm, vlm, storage, browser_mgr)
+
+    typer.echo(f"Searching for: {prompt}")
+    typer.echo(f"Condition: {condition}, Category: {category}, Winners: {winners}")
+
+    async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
+        deals = await searcher.search(prompt, condition, category)
+
+    # Save results
+    for deal in deals:
+        storage.save_deal(deal)
+
+    typer.echo(f"Found {len(deals)} deals")
+    for d in deals[:winners]:
+        typer.echo(f"  {d.site_name:<10} {d.price_eur:>9.2f} EUR {d.condition:<10} {d.title[:50]}")
+
+    typer.echo(f"Results in {output_dir}/")
 
 
 @app.command()

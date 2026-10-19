@@ -94,13 +94,29 @@ class VLMClient:
         endpoint: str = "http://127.0.0.1:1234/v1",
         api_key: Optional[str] = None,
         timeout: float = 120.0,
+        # Optimization params
+        reasoning_enabled: bool = True,
+        reasoning_effort: str = "medium",
+        reasoning_token_budget: int = 4096,
+        context_window: int = 32768,
+        total_token_budget: int = 128000,
+        reasoning_token_budget_max: int = 8192,
+        auto_context_sizing: bool = True,
     ):
         self.provider = provider
         self.model = model
         self.endpoint = endpoint.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self.reasoning_enabled = reasoning_enabled
+        self.reasoning_effort = reasoning_effort
+        self.reasoning_token_budget = reasoning_token_budget
+        self.context_window = context_window
+        self.total_token_budget = total_token_budget
+        self.reasoning_token_budget_max = reasoning_token_budget_max
+        self.auto_context_sizing = auto_context_sizing
         self._client: Optional[httpx.AsyncClient] = None
+        self._token_usage = {"prompt": 0, "completion": 0, "reasoning": 0}
 
     @property
     def client(self) -> httpx.AsyncClient:
@@ -130,8 +146,9 @@ class VLMClient:
         max_tokens: int = 2048,
         temperature: float = 0.1,
         response_format: Optional[dict] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> dict:
-        """Send chat completion request."""
+        """Send chat completion request with optional reasoning control."""
         payload = {
             "model": self.model,
             "messages": messages,
@@ -140,9 +157,34 @@ class VLMClient:
         }
         if response_format:
             payload["response_format"] = response_format
+        
+        # Add reasoning parameters if enabled
+        if self.reasoning_enabled:
+            reasoning_config = {
+                "effort": self.reasoning_effort,
+                "max_tokens": min(self.reasoning_token_budget, max_tokens // 2)
+            }
+            # Override with provided effort if specified
+            if reasoning_effort:
+                reasoning_config["effort"] = reasoning_effort
+            payload["reasoning"] = reasoning_config
+        
+        # Track token budget
+        estimated_prompt_tokens = sum(len(str(m.get("content", ""))) for m in messages) // 4
+        if self._token_usage["prompt"] + estimated_prompt_tokens + max_tokens > self.total_token_budget:
+            logger.warning(f"Token budget exceeded: {self._token_usage['prompt'] + estimated_prompt_tokens + max_tokens} > {self.total_token_budget}")
 
         response = await self.client.post("/chat/completions", json=payload)
         response.raise_for_status()
+        result = response.json()
+        
+        # Track token usage if available
+        if "usage" in result:
+            usage = result["usage"]
+            self._token_usage["prompt"] += usage.get("prompt_tokens", 0)
+            self._token_usage["completion"] += usage.get("completion_tokens", 0)
+            self._token_usage["reasoning"] += usage.get("reasoning_tokens", 0)
+        
         return response.json()
 
     def _encode_image(self, image_bytes: bytes) -> str:

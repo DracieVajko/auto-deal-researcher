@@ -68,6 +68,19 @@ class LocalCoordinationConfig(BaseModel):
 class LLMConfig(BaseModel):
     local: list[LLMLocalConfig] = []
     api_fallback: list[LLMAPIConfig] = []
+    # LLM optimization settings
+    reasoning_enabled: bool = True
+    reasoning_effort: Literal["low", "medium", "high"] = "medium"
+    reasoning_token_budget: int = 8192
+    # Max context window for local models
+    context_window: int = 32768
+    # Dynamic context sizing based on available RAM
+    auto_context_sizing: bool = True
+    # Token budget for the entire pipeline
+    total_token_budget: int = 128000
+    # Legacy fields
+    local: list[LLMLocalConfig] = []
+    api_fallback: list[LLMAPIConfig] = []
     local_coordination: LocalCoordinationConfig = LocalCoordinationConfig()
     # Legacy fields for backward compatibility
     local_endpoint: str = "http://localhost:11434"

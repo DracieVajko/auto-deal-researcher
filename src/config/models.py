@@ -2,8 +2,10 @@
 
 from enum import StrEnum
 from typing import Literal
+from typing import Optional
 
 from pydantic import BaseModel
+from typing import List
 
 
 class Condition(StrEnum):
@@ -28,8 +30,8 @@ class WebsiteConfig(BaseModel):
     base_url: str
     enabled: bool = True
     adapter_class: str  # matches ADAPTER_REGISTRY key
-    categories: list[Category] = [Category.ANY]
-    conditions: list[Condition] = [Condition.ANY]
+    categories: List[Category] = [Category.ANY]
+    conditions: List[Condition] = [Condition.ANY]
     requires_login: bool = False
     extra_params: dict = {}
 
@@ -47,41 +49,42 @@ class LLMAPIConfig(BaseModel):
 
 
 class LocalCoordinationConfig(BaseModel):
-    """How to behave when another model already occupies a local backend.
-
-    policy:
-      wait   respect a resident foreign model, unload it only after
-             ``quiet_seconds`` without any change to the resident set
-      cloud  never load or unload anything; use cloud fallbacks instead
-      never  do not even probe the local backend
-      force  unload immediately (only safe when nothing else is running)
-    """
-
     enabled: bool = True
     policy: Literal["wait", "cloud", "never", "force"] = "wait"
-    quiet_seconds: int = 300      # 5 minutes, as required
+    quiet_seconds: int = 300
     poll_seconds: int = 15
-    max_wait_seconds: int = 0     # 0 = wait indefinitely
-    probe_busy: bool = False      # 1-token latency probe; occupies a request slot
+    max_wait_seconds: int = 0
+    probe_busy: bool = False
 
 
 class LLMConfig(BaseModel):
-    local: list[LLMLocalConfig] = []
-    api_fallback: list[LLMAPIConfig] = []
+    local: list["LLMLocalConfig"] = []
+    api_fallback: list["LLMAPIConfig"] = []
     # LLM optimization settings
     reasoning_enabled: bool = True
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
-    reasoning_token_budget: int = 8192
-    # Max context window for local models
-    context_window: int = 32768
+    reasoning_token_budget: int = 4096  # Max tokens for reasoning
+    context_window: int = 32768  # Max context window (model dependent)
     # Dynamic context sizing based on available RAM
     auto_context_sizing: bool = True
     # Token budget for the entire pipeline
     total_token_budget: int = 128000
+    # Reasoning token budget within total budget
+    reasoning_token_budget: int = 8192
+    # LLM optimization settings
+    llm_optimization: dict = {
+        "reasoning_enabled": True,
+        "reasoning_effort": "medium",
+        "reasoning_token_budget": 4096,
+        "context_window": 32768,
+        "total_token_budget": 128000,
+        "reasoning_token_budget": 8192,
+        "auto_context_sizing": True,
+    }
     # Legacy fields
-    local: list[LLMLocalConfig] = []
-    api_fallback: list[LLMAPIConfig] = []
-    local_coordination: LocalCoordinationConfig = LocalCoordinationConfig()
+    local: list["LLMLocalConfig"] = []
+    api_fallback: list["LLMAPIConfig"] = []
+    local_coordination: "LocalCoordinationConfig" = None
     # Legacy fields for backward compatibility
     local_endpoint: str = "http://localhost:11434"
     openrouter: str | None = None
@@ -121,18 +124,11 @@ class ScheduleConfig(BaseModel):
 
 
 class BrowserConfig(BaseModel):
-    # 127.0.0.1, not localhost: Chrome/Brave bind their debugging port to IPv4,
-    # while "localhost" may resolve to ::1 first and fail with ECONNREFUSED.
     cdp_endpoint: str = "http://127.0.0.1:9222"
-    # Registry id of the browser to drive: brave, chrome, msedge, opera,
-    # vivaldi, chromium, firefox, safari. Empty = auto-detect, then fall back
-    # to Playwright's bundled Chromium.
     browser_id: str | None = None
-    # Explicit executable path; overrides browser_id.
     browser_executable: str | None = None
     use_persistent_context: bool = True
     user_data_dir: str = "./browser_profile"
-    # Per-browser profile dirs so switching browsers keeps separate logins.
     separate_profiles: bool = True
     headless: bool = True  # Run headless by default (no admin prompts)
     slow_mo: int = 0  # Slow down operations by N ms (useful for debugging)
@@ -176,3 +172,14 @@ class AppConfig(BaseModel):
     browser: BrowserConfig = BrowserConfig()
     storage: StorageConfig = StorageConfig()
     notifications: NotificationConfig = NotificationConfig()
+
+
+# Forward references resolution
+LLMConfig.model_rebuild()
+LLMLocalConfig.model_rebuild()
+LLMAPIConfig.model_rebuild()
+LocalCoordinationConfig.model_rebuild()
+WebsiteConfig.model_rebuild()
+DiamondSearchConfig.model_rebuild()
+SearchConfig.model_rebuild()
+AppConfig.model_rebuild()

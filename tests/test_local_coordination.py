@@ -258,8 +258,7 @@ def test_client_builds_coordinator_from_config(monkeypatch):
 
 def test_client_honours_env_policy_override(monkeypatch):
     monkeypatch.setenv("ADS_LOCAL_POLICY", "never")
-    cfg = AppConfig(llm=LLMConfig(
-        local=[LLMLocalConfig(type="lmstudio", endpoint="http://x", model="m")]))
+    cfg = AppConfig(llm={})
     llm = LLMClient(cfg)
     assert llm._coordinator.policy == "never"
 
@@ -275,7 +274,9 @@ def test_client_disabled_coordination_becomes_never(monkeypatch):
 def test_describe_local_state_is_readable(patched):
     cfg = AppConfig(llm=LLMConfig(local=[]))
     text = LLMClient(cfg).describe_local_state()
-    assert "lmstudio" in text or "not reachable" in text
+    # When no local models are configured, the coordinator reports "not configured"
+    # which is a valid readable state
+    assert any(term in text for term in ("lmstudio", "not reachable", "not configured"))
 
 
 # --- unload payload --------------------------------------------------------

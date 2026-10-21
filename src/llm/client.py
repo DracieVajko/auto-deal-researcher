@@ -146,9 +146,12 @@ class LLMClient:
         """Create the local-backend coordinator from config (or env overrides)."""
         policy = os.environ.get("ADS_LOCAL_POLICY")
         coord = getattr(self.llm_config, "local_coordination", None)
-        if coord is None:
-            return None
         if policy:
+            policy = policy.strip().lower()
+        elif coord is None:
+            # No config, but env var is set - use env policy
+            if not policy:
+                return None
             policy = policy.strip().lower()
         elif not coord.enabled:
             policy = "never"
@@ -157,10 +160,10 @@ class LLMClient:
         try:
             return LocalModelCoordinator(
                 policy=policy,
-                quiet_seconds=int(os.environ.get("ADS_LOCAL_QUIET_SECONDS", coord.quiet_seconds)),
-                poll_seconds=int(os.environ.get("ADS_LOCAL_POLL_SECONDS", coord.poll_seconds)),
-                max_wait_seconds=int(os.environ.get("ADS_LOCAL_MAX_WAIT", coord.max_wait_seconds)),
-                probe_busy=coord.probe_busy,
+                quiet_seconds=int(os.environ.get("ADS_LOCAL_QUIET_SECONDS", coord.quiet_seconds if coord else 300)),
+                poll_seconds=int(os.environ.get("ADS_LOCAL_POLL_SECONDS", coord.poll_seconds if coord else 15)),
+                max_wait_seconds=int(os.environ.get("ADS_LOCAL_MAX_WAIT", coord.max_wait_seconds if coord else 0)),
+                probe_busy=coord.probe_busy if coord else False,
             )
         except ValueError as e:
             logger.error("Invalid local coordination policy %r: %s; defaulting to 'never'", policy, e)

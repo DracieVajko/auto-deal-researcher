@@ -141,6 +141,9 @@ class LocalBackend:
                         context_length=m.get("loaded_context_length"),
                     ))
         loaded = [m for m in models if _is_resident(m, "lmstudio", models)]
+        if not models:
+            # No models data retrieved - likely server unreachable
+            return LocalStatus(reachable=False, backend="lmstudio", error="unreachable")
         return LocalStatus(reachable=True, backend="lmstudio", loaded=loaded)
 
     def _ollama_status(self) -> LocalStatus:

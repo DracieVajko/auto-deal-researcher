@@ -44,7 +44,7 @@ async def test_empty_reply_advances_to_next_provider(monkeypatch):
     """An empty completion must not be treated as success."""
     calls = []
 
-    async def fake_call(provider, key, model, system, user, max_tokens):
+    async def fake_call(provider, key, model, system, user, max_tokens, temperature=0.3):
         calls.append(provider)
         return "" if provider == "openrouter" else "gemini answer"
 
@@ -62,7 +62,7 @@ async def test_empty_reply_advances_to_next_provider(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_all_empty_falls_back_to_prompt(monkeypatch):
-    async def fake_call(provider, key, model, system, user, max_tokens):
+    async def fake_call(provider, key, model, system, user, max_tokens, temperature=0.3):
         return ""
 
     for key in ("OPENROUTER_KEY", "GEMINI_KEY"):

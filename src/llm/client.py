@@ -206,7 +206,8 @@ class LLMClient:
         return extract_json(raw)
 
     # === New async methods ===
-    async def _chat(self, system: str, user: str, max_tokens: int = 100) -> str:
+    async def _chat(self, system: str, user: str, max_tokens: int = 100,
+                    temperature: float = 0.3) -> str:
         """Unified chat method with fallback chain."""
         # Try local LLMs first
         # Try local LLMs first, but only when the backend is free.
@@ -224,7 +225,9 @@ class LLMClient:
                 continue
             try:
                 logger.info(f"Trying local LLM: {local.type} at {local.endpoint}")
-                reply = await self._call_local_llm_async(local, system, user, max_tokens)
+                reply = await self._call_local_llm_async(
+                        local, system, user, max_tokens, temperature
+                    )
                 if reply.strip():
                     self._breaker.record_success(key)
                     return reply
@@ -241,7 +244,8 @@ class LLMClient:
                 try:
                     logger.info(f"Trying cloud API: {api.provider} with model {api.model}")
                     reply = await self._call_cloud_llm_async(
-                        api.provider, api_key, api.model, system, user, max_tokens
+                        api.provider, api_key, api.model, system, user,
+                        max_tokens, temperature
                     )
                     if reply.strip():
                         return reply
@@ -265,7 +269,7 @@ class LLMClient:
                 try:
                     logger.info(f"Trying legacy {provider} with model {model}")
                     reply = await self._call_cloud_llm_async(
-                        provider, api_key, model, system, user, max_tokens
+                        provider, api_key, model, system, user, max_tokens, temperature
                     )
                     if reply.strip():
                         return reply
@@ -278,52 +282,104 @@ class LLMClient:
         return user
 
     @staticmethod
-    def _clean_query(raw: str, fallback: str = "", max_words: int = 12) -> str:
+    def _clean_query(raw: str, fallback: str = "", max_words: int = 6) -> str:
         """Turn an LLM reply into a single usable marketplace search query.
 
-        Small instruct models often answer with prose ("Here's a refined
-        search query: ... *\\"a\\" OR \\"b\\" OR \\"c\\"") or a chain of
-        alternatives. Fed to a site search that becomes a 300+ character URL
-        that matches nothing, which is why runs intermittently returned zero
-        deals. The first quoted phrase wins; otherwise strip the preamble,
-        take the first sentence and cap the length.
+        Small instruct models answer with prose, an OR-chain of alternatives,
+        or one long descriptive sentence. Fed to a site search that becomes a
+        URL nobody's catalogue matches, which is why runs returned zero deals.
+        The first quoted phrase wins; if it is longer than ``max_words`` the
+        filler words are dropped so "mini PC or barebone new/used with
+        Thunderbolt/OCuLink, DDR5 RAM 32GB/64GB, AMD Ryzen" becomes
+        "mini PC barebone Thunderbolt OCuLink DDR5".
         """
         if not raw:
             return fallback
         text = raw.strip()
 
-        quoted = re.findall(r'"([^"\n]{2,60})"', text)
+        quoted = re.findall(r'"([^"\n]{2,160})"', text)
         if quoted:
-            return quoted[0].strip()
+            candidate = quoted[0].strip()
+        else:
+            text = re.sub(r"\*{1,3}|`", "", text)
+            text = re.sub(
+                r"(?is)^(here(?: is|'s| is)?[^:\n]*|sure[^:\n]*|certainly[^:\n]*):\s*",
+                "",
+                text,
+            ).strip()
+            line = next((ln for ln in text.splitlines() if ln.strip()), "")
+            line = line.strip(" -*:.\t")
+            line = re.split(r"(?<=[.!?])\s", line)[0].strip(" -*:.")
+            candidate = line
 
-        text = re.sub(r"\*{1,3}|`", "", text)
-        text = re.sub(
-            r"(?is)^(here(?: is|'s| is)?[^:\n]*|sure[^:\n]*|certainly[^:\n]*):\s*",
-            "",
-            text,
-        ).strip()
-        line = next((ln for ln in text.splitlines() if ln.strip()), "")
-        line = line.strip(" -*:.\t")
-        line = re.split(r"(?<=[.!?])\s", line)[0].strip(" -*:.")
-        words = line.split()[:max_words]
-        cleaned = " ".join(words).strip(" -*:.")
-        return cleaned or fallback
+        words = candidate.split()
+        if len(words) <= max_words:
+            return candidate.strip(" -*:.,") or fallback
+
+        trimmed = LLMClient._trim_terms(candidate, max_words)
+        return trimmed or " ".join(words[:max_words]).strip(" -*:.,") or fallback
+
+    # Filler words that add no value to a marketplace search.
+    _QUERY_STOPWORDS = frozenset({
+        "a", "an", "and", "or", "the", "with", "without", "for", "of", "to",
+        "in", "on", "by", "at", "from", "as", "is", "are", "be", "been",
+        "new", "used", "refurbished", "open", "box", "any", "all", "either",
+        "preferably", "prefer", "preferred", "good", "better", "best", "great",
+        "least", "less", "than", "more", "most", "about", "around",
+        "must", "should", "would", "could", "can", "have", "has", "need",
+        "needs", "want", "wants", "looking", "search", "find", "product",
+        "products", "item", "items", "something", "like", "such", "including",
+        "include", "also", "both", "plus", "very", "really", "please", "that",
+        "this", "these", "those", "it", "its", "their", "your", "my",
+    })
+
+    @staticmethod
+    def _trim_terms(text: str, max_words: int) -> str:
+        """Keep the most searchable tokens, dropping filler words.
+
+        Splits on slashes too, so "new/used" and "Thunderbolt/OCuLink"
+        become separate tokens instead of one unusable compound.
+        """
+        tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9+._-]*", text)
+        kept = [
+            t.strip("+._-")
+            for t in tokens
+            if t.lower() not in LLMClient._QUERY_STOPWORDS and len(t) > 1
+        ]
+        kept = [t for t in kept if len(t) > 1]
+        return " ".join(kept[:max_words])
+
+    @staticmethod
+    def keyword_query(prompt: str, max_words: int = 5) -> str:
+        """Deterministic short query derived from the prompt.
+
+        Used when the LLM's query returns nothing, so a run does not depend
+        on one model's phrasing.
+        """
+        return LLMClient._trim_terms(prompt, max_words)
 
     async def _generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
-        system = "You are a search query optimizer for e-commerce sites. Output ONLY the search query string."
-        user = f"User wants: {prompt}\nGenerate a concise search query for marketplace sites."
+        system = (
+            "You convert a product request into a SHORT marketplace search query. "
+            "Reply with 2-5 plain words only, for example 'mini pc ryzen' or "
+            "'dji drone 350'. No quotes, no punctuation, no lists, no explanation."
+        )
+        user = f"Request: {prompt}\nShort search query:"
         if broader:
-            user += " Make it broader to find more results."
-        raw = await self._chat(system, user, max_tokens=100)
-        return self._clean_query(raw, fallback=prompt)
+            user += " Use only 1-3 generic words."
+        raw = await self._chat(system, user, max_tokens=40)
+        return self._clean_query(raw, fallback=self.keyword_query(prompt))
 
     async def refine_query(self, prompt: str, current_deals: list[Deal], round_num: int) -> str:
         """Generate query to find DIFFERENT items than already found."""
         titles = [d.title for d in current_deals[:10]]
-        system = "Generate a search query to find DIFFERENT items than these already found."
-        user = f"Original request: {prompt}\nAlready found: {titles}\nRound: {round_num}\nNew query:"
-        raw = await self._chat(system, user, max_tokens=100)
-        return self._clean_query(raw, fallback=prompt)
+        system = (
+            "Write a SHORT marketplace search query (2-5 plain words) for items "
+            "different from those already found. No quotes, no punctuation."
+        )
+        user = f"Original request: {prompt}\nAlready found: {titles}\nNew query:"
+        raw = await self._chat(system, user, max_tokens=40)
+        return self._clean_query(raw, fallback=self.keyword_query(prompt))
 
     async def judge_results(self, prompt: str, deals: list[Deal]) -> dict:
         """Classify each deal as keep/discard. Return {'keep': [urls]}.
@@ -346,11 +402,22 @@ class LLMClient:
                 [f"- {d.title} | {d.price_eur} EUR | {d.condition} | {d.site_name}" for d in batch]
             )
             system = (
-                "You are a deal judge. For each item reply with exactly one line "
-                "containing KEEP or DISCARD and nothing else. No commentary."
+                "You are a strict product-matching judge. Check requirements in this order:\n"
+                "1. PRODUCT TYPE first. If the listing is not the product the user asked "
+                "for (a full-size desktop, a laptop, a part, an accessory or a different "
+                "kind of item), reply DISCARD even when its specs look impressive.\n"
+                "2. Then price, condition and the requested specs.\n"
+                "3. If the price is implausibly low for that product, DISCARD it as a "
+                "likely accessory, part or pricing error.\n"
+                "For each item reply with exactly one line containing KEEP or DISCARD "
+                "and nothing else. No commentary."
             )
-            user = f"User wants: {prompt}\nItems:\n{items}\nReply with KEEP/DISCARD per line:"
-            response = await self._chat(system, user, max_tokens=200)
+            user = (
+                f"User wants: {prompt}\n\n"
+                f"Items (title | price | condition | site):\n{items}\n\n"
+                "One KEEP/DISCARD line per item, in the same order:"
+            )
+            response = await self._chat(system, user, max_tokens=200, temperature=0.0)
 
             verdicts = re.findall(r"\b(KEEP|DISCARD)\b", response or "", re.IGNORECASE)
             if verdicts:
@@ -384,7 +451,8 @@ class LLMClient:
             return deals[:top_n]
 
     # === Local LLM calls ===
-    async def _call_local_llm_async(self, local_cfg, system: str, user: str, max_tokens: int) -> str:
+    async def _call_local_llm_async(self, local_cfg, system: str, user: str,
+                                    max_tokens: int, temperature: float = 0.3) -> str:
         """Call local LLM (LM Studio / Ollama / llama.cpp) via OpenAI-compatible API."""
         endpoint = local_cfg.endpoint.rstrip("/")
         api_url = f"{endpoint}/v1/chat/completions"
@@ -395,7 +463,7 @@ class LLMClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user}
             ],
-            "temperature": 0.3,
+            "temperature": temperature,
             "max_tokens": max_tokens
         }
         # Local inference may need a long prefill/load window (see LOCAL_TIMEOUT).
@@ -405,18 +473,28 @@ class LLMClient:
         return _content_from(response.json())
 
     # === Cloud API calls ===
-    async def _call_cloud_llm_async(self, provider: str, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
+    async def _call_cloud_llm_async(self, provider: str, api_key: str, model: str,
+                                    system: str, user: str, max_tokens: int,
+                                    temperature: float = 0.3) -> str:
         if provider == "openrouter":
-            return await self._call_openrouter_async(api_key, model, system, user, max_tokens)
+            return await self._call_openrouter_async(
+            api_key, model, system, user, max_tokens, temperature
+        )
         elif provider == "gemini":
-            return await self._call_gemini_async(api_key, model, system, user, max_tokens)
+            return await self._call_gemini_async(
+            api_key, model, system, user, max_tokens, temperature
+        )
         elif provider == "mistral":
-            return await self._call_mistral_async(api_key, model, system, user, max_tokens)
+            return await self._call_mistral_async(
+            api_key, model, system, user, max_tokens, temperature
+        )
         else:
             msg = f"Unknown provider: {provider}"
             raise ValueError(msg)
 
-    async def _call_openrouter_async(self, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
+    async def _call_openrouter_async(self, api_key: str, model: str, system: str,
+                                     user: str, max_tokens: int,
+                                     temperature: float = 0.3) -> str:
         api_url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -430,7 +508,7 @@ class LLMClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user}
             ],
-            "temperature": 0.3,
+            "temperature": temperature,
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
@@ -438,14 +516,16 @@ class LLMClient:
         response.raise_for_status()
         return _content_from(response.json())
 
-    async def _call_gemini_async(self, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
+    async def _call_gemini_async(self, api_key: str, model: str, system: str,
+                                 user: str, max_tokens: int,
+                                 temperature: float = 0.3) -> str:
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
         # Gemini doesn't support system prompt separately, combine them
         payload = {
             "contents": [{"parts": [{"text": f"{system}\n\n{user}"}]}],
             "generationConfig": {
-                "temperature": 0.3,
+                "temperature": temperature,
                 "maxOutputTokens": max_tokens
             }
         }
@@ -454,7 +534,9 @@ class LLMClient:
         response.raise_for_status()
         return response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
 
-    async def _call_mistral_async(self, api_key: str, model: str, system: str, user: str, max_tokens: int) -> str:
+    async def _call_mistral_async(self, api_key: str, model: str, system: str,
+                                  user: str, max_tokens: int,
+                                  temperature: float = 0.3) -> str:
         api_url = "https://api.mistral.ai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -466,7 +548,7 @@ class LLMClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user}
             ],
-            "temperature": 0.3,
+            "temperature": temperature,
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()

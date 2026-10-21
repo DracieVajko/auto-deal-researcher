@@ -24,7 +24,7 @@ async def test_unreadable_reply_keeps_all_deals(monkeypatch):
     """The flake that made whole runs return zero deals."""
     llm = client()
 
-    async def prose(system, user, max_tokens=100):
+    async def prose(system, user, max_tokens=100, **kwargs):
         return "Sure! Based on your criteria these all look fine to me honestly."
 
     monkeypatch.setattr(llm, "_chat", prose)
@@ -38,7 +38,7 @@ async def test_unreadable_reply_keeps_all_deals(monkeypatch):
 async def test_real_discard_verdicts_are_respected(monkeypatch):
     llm = client()
 
-    async def verdicts(system, user, max_tokens=100):
+    async def verdicts(system, user, max_tokens=100, **kwargs):
         return "KEEP\nDISCARD\nDISCARD\nKEEP\nDISCARD"
 
     monkeypatch.setattr(llm, "_chat", verdicts)
@@ -52,7 +52,7 @@ async def test_all_discard_is_respected(monkeypatch):
     """If the model genuinely says no, honour it — do not second-guess."""
     llm = client()
 
-    async def verdicts(system, user, max_tokens=100):
+    async def verdicts(system, user, max_tokens=100, **kwargs):
         return "DISCARD\nDISCARD\nDISCARD"
 
     monkeypatch.setattr(llm, "_chat", verdicts)
@@ -66,7 +66,7 @@ async def test_verdicts_found_inside_prose_still_applied(monkeypatch):
     """A reply with real verdicts embedded in prose is parseable."""
     llm = client()
 
-    async def mixed(system, user, max_tokens=100):
+    async def mixed(system, user, max_tokens=100, **kwargs):
         return "Let me review:\n1. KEEP this one\n2. DISCARD overpriced\n3. KEEP cheap"
 
     monkeypatch.setattr(llm, "_chat", mixed)

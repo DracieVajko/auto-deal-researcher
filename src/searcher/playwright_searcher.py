@@ -109,37 +109,54 @@ class PlaywrightSearcher:
         seen_urls = set()
         rounds: list[SearchRound] = []
 
-        # Round 1: LLM generates initial query
-        query = await self.llm._generate_search_query_async(prompt)
+        max_rounds = getattr(self.config.search, "max_rounds", 3)
+        retry_on_empty = getattr(self.config.search, "retry_on_empty", True)
 
-        max_rounds = getattr(self.config.search, 'max_rounds', 3)
-        retry_on_empty = getattr(self.config.search, 'retry_on_empty', True)
+        # Query ladder. The model's own phrasing first, then deterministic
+        # keyword queries of decreasing specificity. Without this, one bad
+        # model phrasing ("mini PC or barebone new/used with Thunderbolt/
+        # OCuLink, DDR5 RAM 32GB/64GB, AMD Ryzen") makes every site return
+        # zero even though "mini pc ryzen" finds the right products.
+        attempts: list[str] = []
+        for candidate in (
+            await self.llm._generate_search_query_async(prompt),
+            self.llm.keyword_query(prompt, max_words=5),
+            self.llm.keyword_query(prompt, max_words=2),
+        ):
+            candidate = (candidate or "").strip()
+            if candidate and candidate not in attempts:
+                attempts.append(candidate)
 
-        for round_num in range(1, max_rounds + 1):
+        round_num = 0
+        while attempts and round_num < max_rounds:
+            query = attempts.pop(0)
+            round_num += 1
             round_deals = await self._execute_round(query, condition, category, seen_urls)
             rounds.append(SearchRound(round_num, query, len(round_deals), round_deals))
+            for deal in round_deals:
+                if deal.url not in seen_urls:
+                    seen_urls.add(deal.url)
+                    all_deals.append(deal)
+            if not retry_on_empty and not round_deals:
+                break
 
+        # Refine for additional, different items once we have something.
+        while all_deals and round_num < max_rounds:
+            round_num += 1
+            query = await self.llm.refine_query(prompt, all_deals, round_num)
+            round_deals = await self._execute_round(query, condition, category, seen_urls)
+            rounds.append(SearchRound(round_num, query, len(round_deals), round_deals))
             if not round_deals:
-                if round_num == 1 and retry_on_empty:
-                    # Retry once with broader query
-                    query = await self.llm._generate_search_query_async(prompt, broader=True)
-                    continue
-                break  # no results, stop
-
-            # Add new deals
+                break
             for deal in round_deals:
                 if deal.url not in seen_urls:
                     seen_urls.add(deal.url)
                     all_deals.append(deal)
 
-            # LLM judges results so far
-            if all_deals:
-                judged = await self.llm.judge_results(prompt, all_deals)
-                all_deals = [d for d in all_deals if d.url in judged["keep"]]
-
-            # Generate refined query for next round (find DIFFERENT items)
-            if round_num < max_rounds and all_deals:
-                query = await self.llm.refine_query(prompt, all_deals, round_num)
+        # Judge once at the end: fewer LLM calls than per-round judging.
+        if all_deals:
+            judged = await self.llm.judge_results(prompt, all_deals)
+            all_deals = [d for d in all_deals if d.url in judged["keep"]]
 
         # Final LLM ranking → top N
         winners_count = getattr(self.config.search, 'winners_count', 3)

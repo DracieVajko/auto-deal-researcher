@@ -59,11 +59,11 @@ async def test_dead_local_is_skipped_after_two_failures(monkeypatch):
 
     local_calls = []
 
-    async def fake_local(local_cfg, system, user, max_tokens):
+    async def fake_local(local_cfg, system, user, max_tokens, temperature=0.3):
         local_calls.append(local_cfg.endpoint)
         raise mod.requests.RequestException("connection refused")
 
-    async def fake_cloud(provider, key, model, system, user, max_tokens):
+    async def fake_cloud(provider, key, model, system, user, max_tokens, temperature=0.3):
         return "answer"
 
     monkeypatch.setattr(llm, "_call_local_llm_async", fake_local)

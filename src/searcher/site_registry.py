@@ -15,7 +15,7 @@ Status values:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,7 @@ class SiteSpec:
     has_warranty: bool = False
     warranty_note: str = ""
     notes: str = ""
+    discovery_queries: tuple[str, ...] = ()
 
 
 # fmt: off
@@ -155,6 +156,36 @@ SITES: list[SiteSpec] = [
              notes="SK classifieds; lots of used electronics."),
 ]
 # fmt: on
+
+
+# Discovery seeds. A real query is better than a site's empty search page:
+# it forces the search form and result cards to render so the recorder can
+# classify them.
+DEFAULT_DISCOVERY_QUERIES = {
+    "electronics": "notebook",
+    "appliances": "washing machine",
+    "auto": "car",
+    "general": "deal",
+}
+
+SITE_DISCOVERY_OVERRIDES = {
+    "sreality": {"general": "byt"},
+    "sauto": {"auto": "auto"},
+    "mimibazar": {"electronics": "notebook"},
+}
+
+
+def seed_query(site_id: str, category: str = "any") -> str:
+    """Return a useful search seed for a site/category."""
+    spec = by_id(site_id)
+    if spec and spec.discovery_queries:
+        return spec.discovery_queries[0]
+    overrides = SITE_DISCOVERY_OVERRIDES.get(site_id, {})
+    if category in overrides:
+        return overrides[category]
+    if overrides:
+        return next(iter(overrides.values()))
+    return DEFAULT_DISCOVERY_QUERIES.get(category, DEFAULT_DISCOVERY_QUERIES["general"])
 
 
 def sites_for(category: str, condition: str = "any") -> list[SiteSpec]:

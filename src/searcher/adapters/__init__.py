@@ -6,6 +6,7 @@ from .base import BaseAdapter, Deal, SiteBlockedError
 from .bazos import BazosAdapter
 from .ebay import EbayAdapter
 from .facebook import FacebookAdapter
+from .profile_adapter import ProfileAdapter
 
 ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = {
     "alza": AlzaAdapter,
@@ -33,6 +34,7 @@ __all__ = [
     "Deal",
     "EbayAdapter",
     "FacebookAdapter",
+    "ProfileAdapter",
     "SiteBlockedError",
     "get_adapter",
 ]

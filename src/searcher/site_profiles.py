@@ -154,6 +154,8 @@ class SearchSpec(BaseModel):
 
     url_template: str | None = None
     query_param: str | None = None
+    input_selector: str | None = None
+    submit_selector: str | None = None
     category_urls: dict[str, str] = Field(default_factory=dict)
 
 
@@ -167,7 +169,10 @@ class ExtractionSpec(BaseModel):
     image_selector: str | None = None
     condition_selector: str | None = None
     seller_selector: str | None = None
+    seller_type_selector: str | None = None
     location_selector: str | None = None
+    shipping_selector: str | None = None
+    brand_selector: str | None = None
     next_page_selector: str | None = None
 
 

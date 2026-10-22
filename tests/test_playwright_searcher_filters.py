@@ -80,6 +80,21 @@ def test_profile_only_site_honours_config_category_and_condition():
     assert searcher._filter_sites("new", "appliances") == []
 
 
+def test_profile_with_mismatched_base_url_is_ignored():
+    config = _config(
+        WebsiteConfig(
+            name="mall",
+            base_url="https://www.mall.cz",
+            adapter_class="mall",
+            categories=[Category.ELECTRONICS],
+            conditions=[Condition.NEW],
+        )
+    )
+    searcher = _searcher(config)
+    searcher.profiles = {"mall": _profile()}
+    assert searcher._profile_for(config.search.websites[0]) is None
+
+
 def test_unknown_site_without_profile_is_skipped():
     config = _config(
         WebsiteConfig(

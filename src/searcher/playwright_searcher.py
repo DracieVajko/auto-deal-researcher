@@ -100,7 +100,18 @@ class PlaywrightSearcher:
 
     def _profile_for(self, site: WebsiteConfig) -> SiteProfile | None:
         profiles = getattr(self, "profiles", {})
-        return profiles.get(site.name) or profiles.get(site.adapter_class)
+        profile = profiles.get(site.name)
+        if profile is None:
+            return None
+        if profile.base_url.rstrip("/") != site.base_url.rstrip("/"):
+            logger.warning(
+                "Ignoring profile %s: base URL %s does not match config %s",
+                profile.site_id,
+                profile.base_url,
+                site.base_url,
+            )
+            return None
+        return profile
 
     @staticmethod
     def _site_matches(site: WebsiteConfig, condition: str, category: str) -> bool:

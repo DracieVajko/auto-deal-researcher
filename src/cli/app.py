@@ -12,11 +12,49 @@ from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.llm.client import LLMClient
 from src.output.processor import ResultProcessor
 from src.scheduler.tasks import install_schedule, uninstall_schedule
+from src.searcher.filters import (
+    SearchFilters,
+    filters_from_mapping,
+    from_cli,
+    merge_filters,
+    resolve_filters,
+)
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
 
 app = typer.Typer(help="Auto Deal Searcher — find deals across marketplaces")
 app.add_typer(history_app, name="history")
+
+
+async def _resolve_runtime_filters(
+    config,
+    prompt: str,
+    llm,
+    min_price=None,
+    max_price=None,
+    condition=None,
+    brand=None,
+    location=None,
+    shipping=None,
+    seller_type=None,
+    sort=None,
+    extra_filters=None,
+) -> SearchFilters:
+    """Merge config defaults, prompt extraction and CLI values (CLI wins)."""
+    config_filters = filters_from_mapping(config.search.default_filters)
+    cli_filters = from_cli(
+        min_price=min_price,
+        max_price=max_price,
+        condition=condition,
+        brand=brand,
+        location=location,
+        shipping=shipping,
+        seller_type=seller_type,
+        sort=sort,
+        extra_filters=extra_filters,
+    )
+    prompt_filters = await resolve_filters(prompt, SearchFilters(), llm)
+    return merge_filters(merge_filters(config_filters, prompt_filters), cli_filters).validate()
 
 
 @app.command()
@@ -27,12 +65,52 @@ def run(
     category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, any"),
     winners: int | None = typer.Option(None, "--winners", "-w", help="Override winners_count from config"),
     output_format: str | None = typer.Option(None, "--format", help="Override output format: json, markdown, both"),
+    min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
+    max_price: str | None = typer.Option(None, "--max-price", help="Maximum price in EUR"),
+    brand: str | None = typer.Option(None, "--brand", help="Brand filter"),
+    location: str | None = typer.Option(None, "--location", help="Location filter"),
+    shipping: str | None = typer.Option(None, "--shipping", help="free or paid"),
+    seller_type: str | None = typer.Option(None, "--seller-type", help="retailer, marketplace, classifieds, auction, private"),
+    sort: str | None = typer.Option(None, "--sort", help="relevance, price_asc, price_desc, newest"),
+    extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
 ):
     """Run a single search cycle."""
-    asyncio.run(_run_async(prompt, prompt_file, condition, category, winners, output_format))
+    asyncio.run(
+        _run_async(
+            prompt,
+            prompt_file,
+            condition,
+            category,
+            winners,
+            output_format,
+            min_price,
+            max_price,
+            brand,
+            location,
+            shipping,
+            seller_type,
+            sort,
+            extra_filters,
+        )
+    )
 
 
-async def _run_async(prompt, prompt_file, condition, category, winners, output_format):
+async def _run_async(
+    prompt,
+    prompt_file,
+    condition,
+    category,
+    winners,
+    output_format,
+    min_price=None,
+    max_price=None,
+    brand=None,
+    location=None,
+    shipping=None,
+    seller_type=None,
+    sort=None,
+    extra_filters=None,
+):
     config = load_config()
 
     # Resolve prompt
@@ -52,13 +130,34 @@ async def _run_async(prompt, prompt_file, condition, category, winners, output_f
         config.output.format = output_format
 
     llm = LLMClient(config)
+    try:
+        filters = await _resolve_runtime_filters(
+            config,
+            prompt,
+            llm,
+            min_price=min_price,
+            max_price=max_price,
+            condition=condition,
+            brand=brand,
+            location=location,
+            shipping=shipping,
+            seller_type=seller_type,
+            sort=sort,
+            extra_filters=extra_filters,
+        )
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+    if condition == "any" and filters.condition:
+        condition = filters.condition
+
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
     processor = ResultProcessor(config, llm)
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         try:
-            deals = await searcher.search(prompt, condition, category)
+            deals = await searcher.search(prompt, condition, category, filters)
         finally:
             await browser_mgr.close()
 
@@ -81,18 +180,77 @@ def diamond_search(
     category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, any"),
     winners: int = typer.Option(3, "--winners", "-w", help="How many ranked deals to keep"),
     output_dir: str = typer.Option("./results", "--output-dir", help="Where to write the ranking"),
+    min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
+    max_price: str | None = typer.Option(None, "--max-price", help="Maximum price in EUR"),
+    brand: str | None = typer.Option(None, "--brand", help="Brand filter"),
+    location: str | None = typer.Option(None, "--location", help="Location filter"),
+    shipping: str | None = typer.Option(None, "--shipping", help="free or paid"),
+    seller_type: str | None = typer.Option(None, "--seller-type", help="retailer, marketplace, classifieds, auction, private"),
+    sort: str | None = typer.Option(None, "--sort", help="relevance, price_asc, price_desc, newest"),
+    extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
 ):
     """Run the full 7-agent Diamond Search pipeline."""
-    asyncio.run(_diamond_search_async(prompt, condition, category, winners, output_dir))
+    asyncio.run(
+        _diamond_search_async(
+            prompt,
+            condition,
+            category,
+            winners,
+            output_dir,
+            min_price,
+            max_price,
+            brand,
+            location,
+            shipping,
+            seller_type,
+            sort,
+            extra_filters,
+        )
+    )
 
 
-async def _diamond_search_async(prompt, condition, category, winners, output_dir):
+async def _diamond_search_async(
+    prompt,
+    condition,
+    category,
+    winners,
+    output_dir,
+    min_price=None,
+    max_price=None,
+    brand=None,
+    location=None,
+    shipping=None,
+    seller_type=None,
+    sort=None,
+    extra_filters=None,
+):
     config = load_config()
     if not config.search.diamond_search.enabled:
         typer.echo("Error: diamond_search.enabled is false in config.yaml", err=True)
         raise typer.Exit(1)
 
     llm = LLMClient(config)
+    try:
+        filters = await _resolve_runtime_filters(
+            config,
+            prompt,
+            llm,
+            min_price=min_price,
+            max_price=max_price,
+            condition=condition,
+            brand=brand,
+            location=location,
+            shipping=shipping,
+            seller_type=seller_type,
+            sort=sort,
+            extra_filters=extra_filters,
+        )
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+    if condition == "any" and filters.condition:
+        condition = filters.condition
+
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
     processor = ResultProcessor(config)
@@ -103,7 +261,7 @@ async def _diamond_search_async(prompt, condition, category, winners, output_dir
             typer.echo("Error: Diamond Search agents unavailable", err=True)
             raise typer.Exit(1)
         try:
-            deals = await searcher.search_with_diamond(prompt, condition, category)
+            deals = await searcher.search_with_diamond(prompt, condition, category, filters)
         finally:
             await browser_mgr.close()
 
@@ -281,6 +439,7 @@ async def _doctor_async(site: str | None, offline: bool):
         print_doctor_results(results)
 
 
+@app.command()
 def search(
     prompt: str = typer.Option(..., "--prompt", "-p", help="Search prompt (e.g., 'DJI drone under 350 euros')"),
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
@@ -289,16 +448,79 @@ def search(
     output_dir: str = typer.Option("./results", "--output-dir", help="Output directory for results"),
     max_pages: int = typer.Option(5, "--max-pages", help="Max pages per site"),
     headless: bool = typer.Option(True, "--headless/--no-headless", help="Run browser headless"),
+    min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
+    max_price: str | None = typer.Option(None, "--max-price", help="Maximum price in EUR"),
+    brand: str | None = typer.Option(None, "--brand", help="Brand filter"),
+    location: str | None = typer.Option(None, "--location", help="Location filter"),
+    shipping: str | None = typer.Option(None, "--shipping", help="free or paid"),
+    seller_type: str | None = typer.Option(None, "--seller-type", help="retailer, marketplace, classifieds, auction, private"),
+    sort: str | None = typer.Option(None, "--sort", help="relevance, price_asc, price_desc, newest"),
+    extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
 ):
     """AI-powered search across multiple sites with LLM judgment."""
-    asyncio.run(_search_async(prompt, condition, category, winners, output_dir, max_pages, headless))
+    asyncio.run(
+        _search_async(
+            prompt,
+            condition,
+            category,
+            winners,
+            output_dir,
+            max_pages,
+            headless,
+            min_price,
+            max_price,
+            brand,
+            location,
+            shipping,
+            seller_type,
+            sort,
+            extra_filters,
+        )
+    )
 
 
-async def _search_async(prompt, condition, category, winners, output_dir, max_pages, headless):
+async def _search_async(
+    prompt,
+    condition,
+    category,
+    winners,
+    output_dir,
+    max_pages,
+    headless,
+    min_price=None,
+    max_price=None,
+    brand=None,
+    location=None,
+    shipping=None,
+    seller_type=None,
+    sort=None,
+    extra_filters=None,
+):
     config = load_config()
     config.search.winners_count = winners
 
     llm = LLMClient(config)
+    try:
+        filters = await _resolve_runtime_filters(
+            config,
+            prompt,
+            llm,
+            min_price=min_price,
+            max_price=max_price,
+            condition=condition,
+            brand=brand,
+            location=location,
+            shipping=shipping,
+            seller_type=seller_type,
+            sort=sort,
+            extra_filters=extra_filters,
+        )
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
+    if condition == "any" and filters.condition:
+        condition = filters.condition
+
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
 
@@ -307,7 +529,7 @@ async def _search_async(prompt, condition, category, winners, output_dir, max_pa
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         try:
-            deals = await searcher.search(prompt, condition, category)
+            deals = await searcher.search(prompt, condition, category, filters)
         finally:
             await browser_mgr.close()
 

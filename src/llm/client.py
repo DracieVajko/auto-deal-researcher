@@ -209,6 +209,22 @@ class LLMClient:
 
         return extract_json(raw)
 
+    async def extract_search_filters(self, prompt: str) -> dict:
+        """Ask the LLM for canonical search filters from a natural-language prompt."""
+        system = (
+            "Extract marketplace search filters from the user request. "
+            "Return ONLY a JSON object with optional keys: "
+            "min_price, max_price, condition (new|used|refurbished|open_box|marketplace), "
+            "brand, location, shipping (free|paid), "
+            "seller_type (retailer|marketplace|classifieds|auction|private), "
+            "sort (relevance|price_asc|price_desc|newest), and extras "
+            "(an object of string key/value pairs). Use null for unknown values. "
+            "Prices are EUR numbers. Do not invent values that are not in the request."
+        )
+        data = await self.chat_json(system, prompt, max_tokens=300)
+        return data if isinstance(data, dict) else {}
+
+
     # === New async methods ===
     async def _chat(self, system: str, user: str, max_tokens: int = 100,
                     temperature: float = 0.3) -> str:

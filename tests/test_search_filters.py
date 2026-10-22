@@ -141,3 +141,33 @@ async def test_resolve_filters_survives_llm_error():
 def test_search_config_has_default_filters():
     config = SearchConfig(default_filters={"max_price": 500})
     assert config.default_filters == {"max_price": 500}
+
+
+@pytest.mark.asyncio
+async def test_llm_extract_search_filters_returns_dict(monkeypatch):
+    from src.llm.client import LLMClient
+
+    client = object.__new__(LLMClient)
+
+    async def fake_chat_json(system, user, max_tokens=400):
+        assert "min_price" in system
+        return {"max_price": 300, "condition": "used"}
+
+    monkeypatch.setattr(client, "chat_json", fake_chat_json)
+    assert await client.extract_search_filters("pc") == {
+        "max_price": 300,
+        "condition": "used",
+    }
+
+
+@pytest.mark.asyncio
+async def test_llm_extract_search_filters_ignores_non_dict(monkeypatch):
+    from src.llm.client import LLMClient
+
+    client = object.__new__(LLMClient)
+
+    async def fake_chat_json(system, user, max_tokens=400):
+        return "not json"
+
+    monkeypatch.setattr(client, "chat_json", fake_chat_json)
+    assert await client.extract_search_filters("pc") == {}

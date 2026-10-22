@@ -14,7 +14,10 @@ from src.diagnostics.selector_health import SelectorHealthTracker
 from src.llm.client import LLMClient
 from src.searcher.adapters import Deal, get_adapter
 from src.searcher.adapters.base import SiteBlockedError
+from src.searcher.filter_engine import FilterEngine
+from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
+from src.searcher.site_profiles import SiteProfile, load_profiles
 from src.storage.manager import StorageManager
 from src.utils.time import utcnow_stamp
 
@@ -59,6 +62,7 @@ class PlaywrightSearcher:
         self.browser_manager = browser_manager
         self.browser: BrowserContext | None = None
         self.page: Page | None = None
+        self.profiles = load_profiles()
         
         # Diamond Search setup
         self.diamond_search_enabled = (
@@ -94,22 +98,54 @@ class PlaywrightSearcher:
     async def __aexit__(self, *args):
         pass  # Browser manager handles cleanup
 
+    def _profile_for(self, site: WebsiteConfig) -> SiteProfile | None:
+        profiles = getattr(self, "profiles", {})
+        return profiles.get(site.name) or profiles.get(site.adapter_class)
+
+    @staticmethod
+    def _site_matches(site: WebsiteConfig, condition: str, category: str) -> bool:
+        categories = {getattr(item, "value", str(item)) for item in site.categories}
+        conditions = {getattr(item, "value", str(item)) for item in site.conditions}
+        if category != "any" and "any" not in categories and category not in categories:
+            return False
+        if condition != "any" and "any" not in conditions and condition not in conditions:
+            return False
+        return True
+
     def _filter_sites(self, user_condition: str, user_category: str) -> list[WebsiteConfig]:
-        """Return only enabled sites matching condition + category."""
+        """Return only enabled sites matching condition + category.
+
+        Registered adapters are selected by their declared capabilities.
+        Sites without an adapter are accepted only when a validated profile
+        exists, so a planned site cannot silently run an empty search.
+        """
         sites = []
         for site in self.config.search.websites:
             if not site.enabled:
                 continue
+            profile = self._profile_for(site)
             try:
                 adapter_cls = get_adapter(site.adapter_class)
-                adapter = adapter_cls()
-                if adapter.matches_condition(user_condition) and adapter.matches_category(user_category):
-                    sites.append(site)
             except ValueError:
-                continue  # unknown adapter
+                if (
+                    profile is not None
+                    and profile.is_runtime_ready
+                    and self._site_matches(site, user_condition, user_category)
+                ):
+                    sites.append(site)
+                continue
+            adapter = adapter_cls(base_url=site.base_url)
+            if adapter.matches_condition(user_condition) and adapter.matches_category(user_category):
+                sites.append(site)
         return sites
 
-    async def search(self, prompt: str, condition: str = "any", category: str = "any") -> list[Deal]:
+    async def search(
+        self,
+        prompt: str,
+        condition: str = "any",
+        category: str = "any",
+        filters: SearchFilters | None = None,
+    ) -> list[Deal]:
         """Main search entry point — multi-round with LLM query refinement."""
         all_deals: list[Deal] = []
         seen_urls = set()
@@ -137,7 +173,7 @@ class PlaywrightSearcher:
         while attempts and round_num < max_rounds:
             query = attempts.pop(0)
             round_num += 1
-            round_deals = await self._execute_round(query, condition, category, seen_urls)
+            round_deals = await self._execute_round(query, condition, category, seen_urls, filters)
             rounds.append(SearchRound(round_num, query, len(round_deals), round_deals))
             for deal in round_deals:
                 if deal.url not in seen_urls:
@@ -150,7 +186,7 @@ class PlaywrightSearcher:
         while all_deals and round_num < max_rounds:
             round_num += 1
             query = await self.llm.refine_query(prompt, all_deals, round_num)
-            round_deals = await self._execute_round(query, condition, category, seen_urls)
+            round_deals = await self._execute_round(query, condition, category, seen_urls, filters)
             rounds.append(SearchRound(round_num, query, len(round_deals), round_deals))
             if not round_deals:
                 break
@@ -161,6 +197,15 @@ class PlaywrightSearcher:
 
         # Judge once at the end: fewer LLM calls than per-round judging.
         if all_deals:
+            if filters is not None and not filters.is_empty():
+                before_filter = len(all_deals)
+                all_deals = FilterEngine.post_filter(all_deals, filters)
+                if len(all_deals) != before_filter:
+                    logger.info(
+                        "Post-filter removed %d deal(s) that ignored the requested filters",
+                        before_filter - len(all_deals),
+                    )
+
             # Deterministic form-factor gate before the LLM sees the list.
             # A keyword match on "mini pc" also returns laptops (ZenBook etc.),
             # and the judge kept them often enough to pollute the report.
@@ -188,7 +233,14 @@ class PlaywrightSearcher:
         )
         return final_ranked
 
-    async def _execute_round(self, query: str, condition: str, category: str, seen_urls: set) -> list[Deal]:
+    async def _execute_round(
+        self,
+        query: str,
+        condition: str,
+        category: str,
+        seen_urls: set,
+        filters: SearchFilters | None = None,
+    ) -> list[Deal]:
         sites = self._filter_sites(condition, category)
         all_deals = []
 
@@ -201,10 +253,25 @@ class PlaywrightSearcher:
                 page = await self.browser_manager.get_page(session_id=f"search-{site.name}")
                 page.set_default_timeout(30000)
                 page.set_default_navigation_timeout(30000)
-                
-                adapter_cls = get_adapter(site.adapter_class)
-                adapter = adapter_cls()
-                deals = await adapter.search(page, query, max_results=20)
+
+                profile = self._profile_for(site)
+                try:
+                    adapter_cls = get_adapter(site.adapter_class)
+                    adapter = adapter_cls(base_url=site.base_url)
+                except ValueError:
+                    if profile is None or not profile.is_runtime_ready:
+                        continue
+                    from src.searcher.adapters.profile_adapter import ProfileAdapter
+
+                    adapter = ProfileAdapter(base_url=site.base_url, profile=profile)
+                deals = await adapter.search(
+                    page,
+                    query,
+                    max_results=20,
+                    filters=filters,
+                    category=category,
+                    profile=profile,
+                )
                 latency = (time.perf_counter() - started) * 1000
                 self.health.record_search_result(
                     site.name, bool(deals), len(deals), latency
@@ -233,7 +300,13 @@ class PlaywrightSearcher:
 
         return all_deals
 
-    async def search_with_diamond(self, prompt: str, condition: str = "any", category: str = "any") -> list[Deal]:
+    async def search_with_diamond(
+        self,
+        prompt: str,
+        condition: str = "any",
+        category: str = "any",
+        filters: SearchFilters | None = None,
+    ) -> list[Deal]:
         """
         Execute search using the Diamond Search 7-agent pipeline.
         
@@ -245,7 +318,7 @@ class PlaywrightSearcher:
         """
         if not self.diamond_search_enabled or not self._diamond_coordinator:
             logger.warning("Diamond Search not available, falling back to standard search")
-            return await self.search(prompt, condition, category)
+            return await self.search(prompt, condition, category, filters)
         
         logger.info("Starting Diamond Search pipeline...")
         
@@ -260,7 +333,7 @@ class PlaywrightSearcher:
 
         if not result.success:
             logger.error(f"Diamond Search failed: {result.error}")
-            return await self.search(prompt, condition, category)
+            return await self.search(prompt, condition, category, filters)
 
         # The coordinator returns the final recommendation
         # We need to also run the actual searches to get real deals
@@ -277,7 +350,7 @@ class PlaywrightSearcher:
         search_query = queries[0] if queries else prompt
         logger.info(f"[{run_id}] research layer -> searching for {search_query!r}")
 
-        deals = await self.search(search_query, condition, category)
+        deals = await self.search(search_query, condition, category, filters)
 
         deal_dicts = [
             {

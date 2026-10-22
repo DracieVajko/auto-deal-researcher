@@ -54,13 +54,47 @@ Thumbs.db
 
 # Project specific
 *.db
+*.sqlite
+*.sqlite3
 *.log
 results/
 data/
 config.yaml
+config.local.yaml
+config.*.local.yaml
+
+# Secrets / credentials — never commit real values
 .env
 .env.*
 !.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+secrets*.json
+credentials*.json
+service-account*.json
+token*.json
+cookies*.json
+storage_state*.json
+auth*.json
+.netrc
+.pypirc
+.npmrc
+.git-credentials
+id_rsa
+id_ed25519
+*.ppk
+*.har
+.streamlit/secrets.toml
+playwright/.auth/
+
+# Ad-hoc key-testing scripts (kept out of the repo on purpose)
+/test_keys*.py
+/test_api.py
+/test_openrouter.py
+
 .selector_health.log
 browser_profile/
 # Recorded site flows (contain selectors, review before committing)

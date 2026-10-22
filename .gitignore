@@ -66,6 +66,7 @@ config.*.local.yaml
 # Secrets / credentials — never commit real values
 .env
 .env.*
+*.env
 !.env.example
 *.key
 *.pem
@@ -90,10 +91,9 @@ id_ed25519
 .streamlit/secrets.toml
 playwright/.auth/
 
-# Ad-hoc key-testing scripts (kept out of the repo on purpose)
-/test_keys*.py
-/test_api.py
-/test_openrouter.py
+# Ad-hoc root-level test/check scripts (real tests belong in tests/)
+/test_*.py
+/check_*.py
 
 .selector_health.log
 browser_profile/

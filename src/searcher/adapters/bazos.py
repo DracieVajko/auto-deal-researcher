@@ -2,9 +2,13 @@ import asyncio
 import logging
 import re
 from typing import ClassVar
+from urllib.parse import quote_plus
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
+
+from src.searcher.filters import SearchFilters
+from src.searcher.site_profiles import SiteProfile
 
 from .base import BaseAdapter, Deal
 
@@ -22,10 +26,17 @@ class BazosAdapter(BaseAdapter):
     results_selector = ".inzeraty"
     item_selector = ".inzeraty > div"
 
-    async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
-        search_url = f"{self.base_url}/search.php?hledat={query.replace(' ', '+')}"
+    async def search(
+        self,
+        page: Page,
+        query: str,
+        max_results: int = 20,
+        filters: SearchFilters | None = None,
+        category: str = "any",
+        profile: SiteProfile | None = None,
+    ) -> list[Deal]:
         try:
-            await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
+            await self._goto_search(page, query, filters, category, profile)
             # Wait a bit for cookie consent to appear
             await asyncio.sleep(2)
             # Handle cookie consent (TermsFeed used by Bazos)
@@ -35,6 +46,14 @@ class BazosAdapter(BaseAdapter):
         except PlaywrightError as e:
             logger.debug(f"[{self.name}] Navigation error: {e}")
             return []
+
+        applied = await self._apply_filters(page, filters, profile)
+        if applied:
+            try:
+                await page.wait_for_selector(self.item_selector, timeout=10000)
+            except PlaywrightError as e:
+                logger.debug(f"[{self.name}] filtered results not found: {e}")
+                return []
 
         deals = []
         # Items are split across 5 divs per listing in .inzeraty > div
@@ -57,6 +76,9 @@ class BazosAdapter(BaseAdapter):
                 deals.append(deal)
 
         return deals
+
+    def default_search_url(self, query: str) -> str:
+        return f"{self.base_url}/search.php?hledat={quote_plus(query)}"
 
     async def _handle_cookie_consent(self, page: Page):
         """Handle cookie consent dialogs explicitly."""

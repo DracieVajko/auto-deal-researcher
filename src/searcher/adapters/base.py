@@ -4,6 +4,9 @@ from typing import ClassVar
 
 from playwright.async_api import Page
 
+from src.searcher.filters import SearchFilters
+from src.searcher.site_profiles import SiteProfile
+
 
 class SiteBlockedError(RuntimeError):
     """Raised when a site serves an anti-bot / challenge page instead of results."""
@@ -56,10 +59,63 @@ class BaseAdapter(ABC):
     results_selector: str = ""      # Main results container selector
     item_selector: str = ""         # Individual item selector
 
+    def __init__(self, base_url: str | None = None):
+        """Allow a site entry to override the adapter's default country domain."""
+        self.base_url = (base_url or type(self).base_url).rstrip("/")
+
     @abstractmethod
-    async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
+    async def search(
+        self,
+        page: Page,
+        query: str,
+        max_results: int = 20,
+        filters: SearchFilters | None = None,
+        category: str = "any",
+        profile: SiteProfile | None = None,
+    ) -> list[Deal]:
         """Execute search on the site, return list of Deal objects."""
         ...
+
+    def default_search_url(self, query: str) -> str:
+        """Adapter-specific URL used when no profile supplies one."""
+        return ""
+
+    async def _goto_search(
+        self,
+        page: Page,
+        query: str,
+        filters: SearchFilters | None = None,
+        category: str = "any",
+        profile: SiteProfile | None = None,
+        *,
+        wait_until: str = "domcontentloaded",
+        timeout: int = 30000,  # noqa: ASYNC109 - Playwright wants milliseconds
+    ) -> str | None:
+        """Navigate to a profile URL when available, otherwise the adapter URL."""
+        url: str | None = None
+        if profile is not None:
+            from src.searcher.filter_engine import FilterEngine
+
+            url = FilterEngine.build_search_url(profile, query, category, filters)
+        if not url:
+            url = self.default_search_url(query)
+        if not url:
+            return None
+        await page.goto(url, wait_until=wait_until, timeout=timeout)
+        return url
+
+    async def _apply_filters(
+        self,
+        page: Page,
+        filters: SearchFilters | None = None,
+        profile: SiteProfile | None = None,
+    ) -> list[str]:
+        """Apply profile UI filters; no profile means no-op."""
+        if profile is None or filters is None:
+            return []
+        from src.searcher.filter_engine import FilterEngine
+
+        return await FilterEngine.apply_ui(page, profile, filters)
 
     @abstractmethod
     async def extract_deal(self, page: Page, element) -> Deal | None:
@@ -85,7 +141,7 @@ class BaseAdapter(ABC):
         try:
             url = (page.url or "").lower()
             title = ((await page.title()) or "").lower()
-        except Exception:
+        except Exception:  # noqa: BLE001 - page may already be closed
             return None
 
         for marker, reason in BLOCK_MARKERS:

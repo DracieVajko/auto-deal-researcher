@@ -1,9 +1,13 @@
 import logging
 import re
 from typing import ClassVar
+from urllib.parse import quote_plus
 
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
+
+from src.searcher.filters import SearchFilters
+from src.searcher.site_profiles import SiteProfile
 
 from .base import BaseAdapter, Deal
 
@@ -22,14 +26,32 @@ class FacebookAdapter(BaseAdapter):
     results_selector = '[role="feed"]'
     item_selector = '[role="feed"] > div > div > div > div > a'
 
-    async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
-        search_url = f"{self.base_url}/marketplace/search/?query={query.replace(' ', '%20')}"
+    async def search(
+        self,
+        page: Page,
+        query: str,
+        max_results: int = 20,
+        filters: SearchFilters | None = None,
+        category: str = "any",
+        profile: SiteProfile | None = None,
+    ) -> list[Deal]:
         try:
-            await page.goto(search_url, wait_until="networkidle", timeout=45000)
+            await self._goto_search(
+                page, query, filters, category, profile,
+                wait_until="networkidle", timeout=45000,
+            )
             await page.wait_for_selector(self.results_selector, timeout=20000)
         except PlaywrightError as e:
             logger.debug(f"[{self.name}] Navigation error: {e}")
             return []
+
+        applied = await self._apply_filters(page, filters, profile)
+        if applied:
+            try:
+                await page.wait_for_selector(self.results_selector, timeout=10000)
+            except PlaywrightError as e:
+                logger.debug(f"[{self.name}] filtered results not found: {e}")
+                return []
 
         deals = []
         elements = await page.query_selector_all(self.item_selector)
@@ -38,6 +60,12 @@ class FacebookAdapter(BaseAdapter):
             if deal:
                 deals.append(deal)
         return deals
+
+    def default_search_url(self, query: str) -> str:
+        base = self.base_url.rstrip("/")
+        if base.endswith("/marketplace"):
+            return f"{base}/search/?query={quote_plus(query)}"
+        return f"{base}/marketplace/search/?query={quote_plus(query)}"
 
     async def extract_deal(self, page: Page, element) -> Deal | None:
         try:

@@ -70,7 +70,7 @@ def test_ebay_selectors_match_live_dom():
 
 def test_backmarket_uses_locale_aware_search_path():
     """backmarket.sk serves /sk-sk/search, not /search."""
-    src = inspect.getsource(BackMarketAdapter.search)
+    src = inspect.getsource(BackMarketAdapter.default_search_url)
     assert "/sk-sk/search?q=" in src
 
 

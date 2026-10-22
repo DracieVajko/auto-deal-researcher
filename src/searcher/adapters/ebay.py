@@ -6,6 +6,9 @@ from urllib.parse import quote_plus
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
+from src.searcher.filters import SearchFilters
+from src.searcher.site_profiles import SiteProfile
+
 from .base import BaseAdapter, Deal, SiteBlockedError
 
 logger = logging.getLogger(__name__)
@@ -31,14 +34,20 @@ class EbayAdapter(BaseAdapter):
     has_warranty = False
     warranty_note = "eBay Money Back Guarantee; manufacturer warranty only if the seller provides it."
 
-    async def search(self, page: Page, query: str, max_results: int = 20) -> list[Deal]:
-        search_url = f"{self.base_url}/sch/i.html?_nkw={quote_plus(query)}&_sacat=0"
-
+    async def search(
+        self,
+        page: Page,
+        query: str,
+        max_results: int = 20,
+        filters: SearchFilters | None = None,
+        category: str = "any",
+        profile: SiteProfile | None = None,
+    ) -> list[Deal]:
         cards = []
         for attempt in range(SEARCH_ATTEMPTS):
-            cards = await self._collect_cards(page, search_url)
+            cards = await self._collect_cards(page, query, filters, category, profile)
             if not cards:
-                cards = await self._collect_via_search_box(page, query)
+                cards = await self._collect_via_search_box(page, query, filters, profile)
             if cards:
                 break
             logger.debug(f"[{self.name}] attempt {attempt + 1} returned no cards")
@@ -53,10 +62,23 @@ class EbayAdapter(BaseAdapter):
                     break
         return deals
 
-    async def _collect_cards(self, page: Page, url: str) -> list:
+    def default_search_url(self, query: str) -> str:
+        return f"{self.base_url}/sch/i.html?_nkw={quote_plus(query)}&_sacat=0"
+
+    async def _collect_cards(
+        self,
+        page: Page,
+        query: str,
+        filters: SearchFilters | None = None,
+        category: str = "any",
+        profile: SiteProfile | None = None,
+    ) -> list:
         """Navigate directly to the search URL and wait for result cards."""
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+            await self._goto_search(
+                page, query, filters, category, profile,
+                wait_until="domcontentloaded", timeout=25000,
+            )
         except PlaywrightError as e:
             logger.debug(f"[{self.name}] direct navigation failed: {e}")
             return []
@@ -64,9 +86,20 @@ class EbayAdapter(BaseAdapter):
         if await self.detect_block(page):
             return []
 
-        return await self._wait_for_cards(page)
+        cards = await self._wait_for_cards(page)
+        if cards:
+            applied = await self._apply_filters(page, filters, profile)
+            if applied:
+                cards = await self._wait_for_cards(page)
+        return cards
 
-    async def _collect_via_search_box(self, page: Page, query: str) -> list:
+    async def _collect_via_search_box(
+        self,
+        page: Page,
+        query: str,
+        filters: SearchFilters | None = None,
+        profile: SiteProfile | None = None,
+    ) -> list:
         """Fallback: use the site's own search box to reach the result page."""
         try:
             await page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=25000)
@@ -82,13 +115,19 @@ class EbayAdapter(BaseAdapter):
             except PlaywrightError:
                 pass
             if await self.detect_block(page):
-                raise SiteBlockedError(f"{self.name}: blocked during search-box flow")
-            return await self._wait_for_cards(page)
+                raise SiteBlockedError(f"{self.name}: blocked during search-box flow")  # noqa: TRY003, TRY301
+            cards = await self._wait_for_cards(page)
+            if cards:
+                applied = await self._apply_filters(page, filters, profile)
+                if applied:
+                    cards = await self._wait_for_cards(page)
         except SiteBlockedError:
             raise
         except PlaywrightError as e:
             logger.debug(f"[{self.name}] search-box flow failed: {e}")
             return []
+        else:
+            return cards
 
     async def _wait_for_cards(self, page: Page) -> list:
         """Poll for result cards; eBay hydrates them asynchronously."""

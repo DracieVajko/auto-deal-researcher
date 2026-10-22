@@ -2,10 +2,8 @@
 
 from enum import StrEnum
 from typing import Literal
-from typing import Optional
 
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
 
 
 class Condition(StrEnum):
@@ -30,8 +28,8 @@ class WebsiteConfig(BaseModel):
     base_url: str
     enabled: bool = True
     adapter_class: str  # matches ADAPTER_REGISTRY key
-    categories: List[Category] = [Category.ANY]
-    conditions: List[Condition] = [Condition.ANY]
+    categories: list[Category] = [Category.ANY]
+    conditions: list[Condition] = [Condition.ANY]
     requires_login: bool = False
     extra_params: dict = {}
 
@@ -78,7 +76,6 @@ class LLMConfig(BaseModel):
         "reasoning_token_budget": 4096,
         "context_window": 32768,
         "total_token_budget": 128000,
-        "reasoning_token_budget": 8192,
         "auto_context_sizing": True,
     }
     # Legacy fields
@@ -157,6 +154,7 @@ class DiamondSearchConfig(BaseModel):
 
 class SearchConfig(BaseModel):
     websites: list[WebsiteConfig] = []
+    default_filters: dict[str, str | float] = Field(default_factory=dict)
     winners_count: int = 3
     max_rounds: int = 3
     retry_on_empty: bool = True

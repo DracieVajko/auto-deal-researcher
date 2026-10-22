@@ -5,7 +5,8 @@ An intelligent deal searching application that automates finding the best deals 
 ## Features
 
 - **Multi-platform support**: Works on Windows, Linux, and macOS
-- **Site Adapters**: Alza, Bazos (verified working), eBay via the official Browse API; Facebook (needs login), BackMarket and eBay HTML scraping are disabled by default with reasons documented in `config.yaml`
+- **Site Adapters + Auto-Mapping**: 21 registered marketplaces, profile-driven discovery and a generic profile adapter; Alza and Bazos adapters verified working
+- **Runtime Filters**: canonical price/condition/brand/location/shipping/seller/sort filters applied through URL parameters, UI controls, then a Python post-filter
 - **Diamond Search**: optional 7-agent pipeline (query expansion, site selection, market intel, domain expert, latest tech, price hunter, recommendation) with LLM budget tracking
 - **Condition & Category Filtering**: Filter by `new`, `used`, `refurbished`, `open_box` × `electronics`, `appliances`, `auto`, `general`
 - **LLM Integration**: Local LLMs (LM Studio/Ollama) with cloud API fallbacks (OpenRouter, Gemini, Mistral)
@@ -100,7 +101,9 @@ search:
       adapter_class: "bazos"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used"]
-    # ... more sites
+    # ... more sites (all 21 registered sites are listed in config.example.yaml)
+  # Optional baseline filters. Precedence: CLI > prompt/LLM > these defaults.
+  default_filters: {}
   winners_count: 3
   max_rounds: 3
   retry_on_empty: true
@@ -141,6 +144,62 @@ python -m src.cli run --prompt-file prompts/auto.yaml
 # Keep only the best N, and force an output format
 python -m src.cli run --prompt "laptop under 1000" --winners 5 --format markdown
 ```
+
+### Runtime filters
+
+Filters can come from the prompt, the CLI, or `search.default_filters`.
+Precedence is **CLI > prompt/LLM > config default**. The canonical keys are
+`min_price`, `max_price`, `condition`, `brand`, `location`, `shipping`,
+`seller_type`, `sort`, plus arbitrary extras.
+
+```bash
+python -m src.cli run --prompt "notebook" --max-price 500 --condition used
+python -m src.cli run --prompt "grafická karta" --min-price 100 --max-price 250 \
+  --brand amd --sort price_asc --filter socket=AM5
+python -m src.cli run --prompt "notebook do 400 EUR, doprava zdarma"
+```
+
+Each site profile declares which filters it supports. At runtime the engine
+tries URL parameters first, then visible form controls, and finally removes
+anything still outside the requested range/condition in Python. Unknown
+prices are kept (the site did not expose a price), while known metadata is
+enforced.
+
+### Site discovery and profiles
+
+All 21 registered sites are listed in `config.example.yaml`. Sites without an
+adapter need a validated profile before they participate in a search.
+
+```bash
+# Record a search page, filters and extraction selectors.
+python scripts/discover_sites.py discover --all --headed
+
+# One site/category, or resume only unfinished work.
+python scripts/discover_sites.py discover --site mall --category electronics
+python scripts/discover_sites.py discover --all --resume
+
+# Replay saved profiles and update their status.
+python scripts/discover_sites.py validate --all
+```
+
+`discover` opens each site, accepts cookie banners, submits a category seed
+query, records controls/cards, and writes a sanitized profile. If Cloudflare
+or a login wall appears, the headed browser pauses so you can solve it and
+press Enter. Use `--no-pause` for non-interactive batch runs.
+
+- Raw recordings (HTML, controls, optional screenshots) go to
+  `flows/<site>/<category>.json` and are **git-ignored**.
+- Sanitized profiles go to `src/searcher/site_profiles/<site>.yaml` and are
+  safe to commit. Cookies, headers, raw HTML, tokens and e-mail addresses are
+  stripped.
+- Profile status is one of `draft`, `validated`, `failed`, `needs_login`,
+  `blocked`, `needs_manual`. Only `validated` profiles drive a generic
+  `ProfileAdapter` at runtime; registered adapters also run without a profile.
+
+A profile stores `search` (URL template/query parameter), `filters` (canonical
+key → URL/UI descriptor) and `extraction` (card/title/price/link selectors).
+The generic `ProfileAdapter` uses that data directly; registered adapters
+(Alza, Bazos, etc.) keep their own extraction but receive profile filters.
 
 ### Diamond Search (7-agent pipeline)
 ```bash
@@ -359,8 +418,14 @@ src/
 ├── llm/                          # LLMClient (local-first fallback chain) + MockLLMClient
 ├── searcher/
 │   ├── playwright_searcher.py    # Multi-round search + Diamond orchestration
+│   ├── filters.py                # Canonical filters, CLI/prompt parsing
+│   ├── filter_engine.py          # URL → UI → post-filter application
+│   ├── site_profiles.py          # Profile schema, loader, sanitizer
+│   ├── site_registry.py          # 21 sites, categories and discovery seeds
+│   ├── site_profiles/            # Sanitized committed profile YAML maps
 │   └── adapters/                 # Site-specific adapters
 │       ├── base.py               # BaseAdapter, Deal, SiteBlockedError, parse_price_eur
+│       ├── profile_adapter.py    # Generic adapter driven by a SiteProfile
 │       ├── alza.py               # https://www.alza.sk/search.htm?exps=
 │       ├── bazos.py
 │       ├── backmarket.py         # blocked by Cloudflare — disabled by default
@@ -387,13 +452,32 @@ src/
 
 | Site | Adapter id | Status | Notes |
 |------|------------|--------|-------|
-| Alza.sk/cz | `alza` | ✅ working | Retailer. Uses `/search.htm?exps=`, results are `.browsingitem` |
-| Bazos.sk/cz | `bazos` | ✅ working | Classifieds, high volume. Consent handling included |
-| eBay (HTML) | `ebay` | ⚠️ disabled | Rate-limited and serves decoy listings to scrapers |
-| BackMarket.sk | `backmarket` | ⚠️ disabled | Cloudflare challenge that does not clear for automated sessions |
-| Facebook Marketplace | `facebook` | ⚠️ disabled | Requires an authenticated CDP session |
+| Alza.sk | `alza` | ✅ working | Retailer. Uses `/search.htm?exps=`, results are `.browsingitem` |
+| Bazos.sk | `bazos` | ✅ working | Classifieds, high volume. Consent handling included |
+| BackMarket.sk | `backmarket` | ⛔ blocked | Cloudflare challenge that does not clear for automated sessions |
+| eBay.de | `ebay` | ⛔ blocked | Rate-limited and serves decoy listings to scrapers |
+| Facebook Marketplace | `facebook` | 🔐 needs auth | Requires an authenticated CDP session |
+| Mall.sk/cz | `mall` | 🧭 planned | Run discovery to create a validated profile |
+| Nay.sk | `nay` | 🧭 planned | Run discovery to create a validated profile |
+| Datart.sk/cz | `datart` | 🧭 planned | Run discovery to create a validated profile |
+| Heureka.sk | `heureka` | 🧭 planned | Price comparison; discovery profile needed |
+| Idealo.de | `idealo` | 🧭 planned | German price comparison; discovery profile needed |
+| Aukro.cz | `aukro` | 🧭 planned | Auction marketplace; bid logic not implemented |
+| Sbazar.cz | `sbazar` | 🧭 planned | CZ classifieds; discovery profile needed |
+| Bazos.cz | `bazos` | 🧭 planned | Reuses the Bazos adapter with `base_url: https://www.bazos.cz` |
+| Amazon.de | `amazon` | 🧭 planned | Official Product Advertising API is the supported route |
+| Alza.cz | `alza` | 🧭 planned | Reuses the Alza adapter with `base_url: https://www.alza.cz` |
+| AliExpress | `aliexpress` | 🧭 planned | Official Affiliate API is the supported route |
+| Prisiel.sk | `prisiel` | 🧭 planned | SK classifieds; discovery profile needed |
+| Bazar.sk | `bazar_sk` | 🧭 planned | SK classifieds; discovery profile needed |
+| Sauto.cz | `sauto` | 🧭 planned | CZ auto classifieds; auto category only |
+| Sreality.cz | `sreality` | 🧭 planned | CZ real estate; general category only |
+| Mimibazar.sk | `mimibazar` | 🧭 planned | SK classifieds; lots of used electronics |
 
 Enable a site by setting `enabled: true` under its entry in `config.yaml`.
+Planned sites need a validated profile from `scripts/discover_sites.py` unless
+their adapter is registered. `alza_cz` and `bazos_cz` already reuse working
+adapters; they are disabled by default to avoid cross-border duplicates.
 
 ## Prompts
 

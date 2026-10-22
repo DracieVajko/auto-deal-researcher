@@ -1,5 +1,6 @@
 search:
   websites:
+    # --- verified / adapter-backed -------------------------------------
     - name: "alza"
       base_url: "https://www.alza.sk"
       enabled: true
@@ -12,12 +13,20 @@ search:
       adapter_class: "bazos"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used"]
+
+    # --- blocked / login-only ------------------------------------------
     - name: "backmarket"
       base_url: "https://www.backmarket.sk"
-      enabled: true
+      enabled: false
       adapter_class: "backmarket"
       categories: ["electronics"]
       conditions: ["refurbished"]
+    - name: "ebay"
+      base_url: "https://www.ebay.de"
+      enabled: false
+      adapter_class: "ebay"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["used", "refurbished", "new", "open_box"]
     - name: "facebook"
       base_url: "https://www.facebook.com/marketplace"
       enabled: false
@@ -25,12 +34,111 @@ search:
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used", "marketplace"]
       requires_login: true
-    - name: "ebay"
-      base_url: "https://www.ebay.de"
-      enabled: true
-      adapter_class: "ebay"
+
+    # --- planned: enable after `discover_sites.py` writes a validated
+    # --- profile, or after an adapter is registered --------------------
+    - name: "mall"
+      base_url: "https://www.mall.sk"
+      enabled: false
+      adapter_class: "mall"
       categories: ["electronics", "appliances", "auto", "general"]
-      conditions: ["used", "refurbished", "new", "open_box"]
+      conditions: ["new", "open_box"]
+    - name: "nay"
+      base_url: "https://www.nay.sk"
+      enabled: false
+      adapter_class: "nay"
+      categories: ["electronics", "appliances"]
+      conditions: ["new", "open_box"]
+    - name: "datart"
+      base_url: "https://www.datart.sk"
+      enabled: false
+      adapter_class: "datart"
+      categories: ["electronics", "appliances"]
+      conditions: ["new", "open_box"]
+    - name: "heureka"
+      base_url: "https://www.heureka.sk"
+      enabled: false
+      adapter_class: "heureka"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["new", "used", "refurbished"]
+    - name: "idealo"
+      base_url: "https://www.idealo.de"
+      enabled: false
+      adapter_class: "idealo"
+      categories: ["electronics", "appliances", "auto"]
+      conditions: ["new", "used", "refurbished"]
+    - name: "aukro"
+      base_url: "https://aukro.cz"
+      enabled: false
+      adapter_class: "aukro"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["new", "used", "refurbished", "open_box"]
+    - name: "sbazar"
+      base_url: "https://www.sbazar.cz"
+      enabled: false
+      adapter_class: "sbazar"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["used"]
+    - name: "bazos_cz"
+      base_url: "https://www.bazos.cz"
+      enabled: false
+      adapter_class: "bazos"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["used"]
+    - name: "amazon_de"
+      base_url: "https://www.amazon.de"
+      enabled: false
+      adapter_class: "amazon"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["new", "used", "refurbished", "open_box"]
+    - name: "alza_cz"
+      base_url: "https://www.alza.cz"
+      enabled: false
+      adapter_class: "alza"
+      categories: ["electronics", "appliances"]
+      conditions: ["new", "open_box"]
+    - name: "aliexpress"
+      base_url: "https://www.aliexpress.com"
+      enabled: false
+      adapter_class: "aliexpress"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["new"]
+    - name: "prisiel"
+      base_url: "https://www.prisiel.sk"
+      enabled: false
+      adapter_class: "prisiel"
+      categories: ["electronics"]
+      conditions: ["new", "used"]
+    - name: "bazar_sk"
+      base_url: "https://www.bazar.sk"
+      enabled: false
+      adapter_class: "bazar_sk"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["used"]
+    - name: "sauto"
+      base_url: "https://www.sauto.cz"
+      enabled: false
+      adapter_class: "sauto"
+      categories: ["auto"]
+      conditions: ["used", "new"]
+    - name: "sreality"
+      base_url: "https://www.sreality.cz"
+      enabled: false
+      adapter_class: "sreality"
+      categories: ["general"]
+      conditions: ["new", "used"]
+    - name: "mimibazar"
+      base_url: "https://www.mimibazar.sk"
+      enabled: false
+      adapter_class: "mimibazar"
+      categories: ["electronics", "appliances", "auto", "general"]
+      conditions: ["used"]
+
+  # Optional baseline filters. Precedence: CLI > prompt/LLM > these defaults.
+  # Canonical keys: min_price, max_price, condition, brand, location,
+  # shipping, seller_type, sort, plus arbitrary extras (e.g. socket: AM5).
+  default_filters: {}
+
   winners_count: 3
   max_rounds: 3
   retry_on_empty: true

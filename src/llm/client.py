@@ -358,6 +358,41 @@ class LLMClient:
         """
         return LLMClient._trim_terms(prompt, max_words)
 
+    @staticmethod
+    def _clean_slug(raw: str) -> str:
+        """Reduce an LLM reply to a safe kebab-case file-name slug."""
+        text = (raw or "").strip().lower()
+        text = re.sub(r"[^a-z0-9]+", "-", text)
+        text = re.sub(r"-{2,}", "-", text).strip("-")
+        words = [w for w in text.split("-") if w][:4]
+        return "-".join(words)[:48].strip("-")
+
+    async def _filename_slug_async(self, prompt: str) -> str:
+        system = (
+            "Name this deal search in 2-4 kebab-case words. Output only the "
+            "slug: lowercase letters, digits and hyphens. Examples: "
+            "mini-pc-ddr5, dji-drone-350, used-laptop-16gb."
+        )
+        user = f"Search request: {prompt}\nSlug:"
+        raw = await self._chat(system, user, max_tokens=20, temperature=0.0)
+        return self._clean_slug(raw)
+
+    def _generate_filename_slug_sync(self, prompt: str) -> str:
+        """Synchronous wrapper used by ResultProcessor (naming must not block)."""
+
+        def _run() -> str:
+            return asyncio.run(self._filename_slug_async(prompt))
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                return executor.submit(_run).result()
+        return _run()
+
     async def _generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
         system = (
             "You convert a product request into a SHORT marketplace search query. "

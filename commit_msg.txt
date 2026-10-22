@@ -1,0 +1,14 @@
+feat: complete AI deal searcher with multi-provider LLM, Playwright scraping, and AI-named results
+
+- API-only mode: Mistral (ministral-14b-2512), Gemini (gemini-2.5-flash-lite), OpenRouter (auto free)
+- LLM optimization: reasoning tokens, context window, token budgets, auto context sizing
+- VLM client: extraction, classification, judgment with reasoning support
+- Playwright search with query ladder, deduplication, AI judge
+- Site registry: 21 sites with warranty/seller metadata
+- Manual login flow for auth-required sites (Facebook)
+- Site flow recorder (map_site.py) for new site onboarding
+- AI-generated result filenames (timestamp + AI slug)
+- Circuit breaker for local LLMs, retry logic, token budget tracking
+- Config: OpenRouter 'openrouter/free' model
+- Cleanup scripts for Windows/Linux
+- 184 tests pass (11 live skipped)

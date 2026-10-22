@@ -55,7 +55,7 @@ async def _run_async(prompt, prompt_file, condition, category, winners, output_f
     llm = LLMClient(config)
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
-    processor = ResultProcessor(config)
+    processor = ResultProcessor(config, llm)
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         deals = await searcher.search(prompt, condition, category)
@@ -67,8 +67,8 @@ async def _run_async(prompt, prompt_file, condition, category, winners, output_f
     for deal in deals:
         storage.save_deal(deal)
 
-    # Output
-    processor.save_results(deals, config.output.directory)
+    # Output (AI-named, timestamped)
+    processor.save_results(deals, config.output.directory, prompt=prompt)
     typer.echo(f"Found {len(deals)} deals. Results in {config.output.directory}/")
 
 

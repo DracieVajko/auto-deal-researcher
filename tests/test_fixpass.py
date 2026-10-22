@@ -1,6 +1,5 @@
 import inspect
-
-import pytest
+from pathlib import Path
 
 from src.storage.manager import StorageManager
 
@@ -12,13 +11,16 @@ def test_price_joins_use_url_not_id():
 
 
 def test_empty_deals_produce_valid_reports(tmp_path):
-    from src.output.processor import ResultProcessor
+    import asyncio
+
     from src.config import load_config
+    from src.output.processor import ResultProcessor
 
     config = load_config()
     proc = ResultProcessor(config)
-    out = proc.save_results([], str(tmp_path))
+    out = asyncio.run(proc.save_results([], str(tmp_path)))
     assert out is not None
+    assert all(Path(path).exists() for path in out)
 
 
 def test_coordinator_checks_budget_on_all_layers():

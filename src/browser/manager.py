@@ -27,6 +27,7 @@ class BrowserManager:
         self._playwright = None
         self._browser: Browser | BrowserContext | None = None
         self._context = None
+        self._cdp_connected = False
         self._fingerprint_rotator = FingerprintRotator()
 
     def _resolve_browser(self, browser_config) -> tuple[str | None, str | None, str]:
@@ -70,6 +71,7 @@ class BrowserManager:
             )
             logger.info("CDP connection successful - using existing browser")
             self._context = browser.contexts[0] if browser.contexts else await browser.new_context()
+            self._cdp_connected = True
             await self._setup_context(self._context)
         except PlaywrightError as e:
             logger.info(f"CDP connection failed: {e}")
@@ -208,13 +210,20 @@ class BrowserManager:
         page.on("framenavigated", lambda frame: asyncio.create_task(handle_cookies()))
 
     async def close(self):
-        """Close the browser and playwright."""
-        if self._context and hasattr(self._context, 'close'):
-            await self._context.close()
-        if self._browser and hasattr(self._browser, 'close'):
-            await self._browser.close()
+        """Close the browser and Playwright, without killing a CDP-attached browser."""
+        if self._cdp_connected:
+            # Only disconnect. Closing the context would close the user's own
+            # browser window and every tab in it.
+            if self._browser and hasattr(self._browser, "close"):
+                await self._browser.close()
+        else:
+            if self._context and hasattr(self._context, "close"):
+                await self._context.close()
+            if self._browser and hasattr(self._browser, "close"):
+                await self._browser.close()
         self._browser = None
         self._context = None
+        self._cdp_connected = False
         if self._playwright:
             await self._playwright.stop()
             self._playwright = None

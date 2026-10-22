@@ -34,7 +34,7 @@ class AlzaAdapter(BaseAdapter):
 
         blocked = await self.detect_block(page)
         if blocked:
-            raise SiteBlockedError(f"{self.name}: {blocked}")
+            raise SiteBlockedError(f"{self.name}: {blocked}")  # noqa: TRY003
 
         try:
             await page.wait_for_selector(self.item_selector, timeout=20000)
@@ -74,6 +74,21 @@ class AlzaAdapter(BaseAdapter):
             text = (await element.inner_text()).lower()
             condition = "open_box" if almost_new == "true" or "rozbalen" in text else "new"
 
+            description_el = await element.query_selector(".Description")
+            description = (
+                " ".join((await description_el.inner_text()).split())
+                if description_el
+                else ""
+            )
+            rating_el = await element.query_selector(".star-rating-block__value")
+            rating = (await rating_el.inner_text()).strip() if rating_el else ""
+            reviews_el = await element.query_selector(".star-rating-block__count")
+            reviews = (
+                (await reviews_el.inner_text()).strip().rstrip("\u00d7x")
+                if reviews_el
+                else ""
+            )
+
             return Deal(
                 url=url.split("?")[0],
                 title=title,
@@ -81,7 +96,13 @@ class AlzaAdapter(BaseAdapter):
                 condition=condition,
                 category="electronics",
                 site_name=self.name,
-                metadata={"source": "alza", "code": await element.get_attribute("data-code") or ""},
+                metadata={
+                    "source": "alza",
+                    "code": await element.get_attribute("data-code") or "",
+                    "description": description,
+                    "rating": rating,
+                    "reviews": reviews,
+                },
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
             logger.debug(f"[{self.name}] Extract error: {e}")

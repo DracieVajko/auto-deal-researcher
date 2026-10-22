@@ -2,7 +2,6 @@
 
 import pytest
 
-import src.llm.client as mod
 from src.llm.client import LLMClient
 from src.searcher.adapters.base import Deal
 
@@ -79,3 +78,33 @@ async def test_verdicts_found_inside_prose_still_applied(monkeypatch):
 async def test_empty_deals_short_circuits(monkeypatch):
     llm = client()
     assert await llm.judge_results("x", []) == {"keep": []}
+
+
+@pytest.mark.asyncio
+async def test_ranking_keeps_every_deal_the_model_forgot(monkeypatch):
+    """A short ranking reply must not silently drop listings."""
+    llm = client()
+
+    async def partial(system, user, max_tokens=100, **kwargs):
+        return "2,1"
+
+    monkeypatch.setattr(llm, "_chat", partial)
+    deals = [make_deal(i) for i in range(3)]
+    ranked = await llm.rank_results("mini pc", deals, top_n=3)
+
+    assert {d.url for d in ranked} == {"u0", "u1", "u2"}
+    assert [d.url for d in ranked[:2]] == ["u1", "u0"]
+
+
+@pytest.mark.asyncio
+async def test_ranking_honours_small_top_n(monkeypatch):
+    llm = client()
+
+    async def partial(system, user, max_tokens=100, **kwargs):
+        return "2,1"
+
+    monkeypatch.setattr(llm, "_chat", partial)
+    deals = [make_deal(i) for i in range(3)]
+    ranked = await llm.rank_results("mini pc", deals, top_n=2)
+
+    assert [d.url for d in ranked] == ["u1", "u0"]

@@ -12,7 +12,6 @@ from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.llm.client import LLMClient
 from src.output.processor import ResultProcessor
 from src.scheduler.tasks import install_schedule, uninstall_schedule
-from src.searcher.orchestrator import SearchOrchestrator
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
 
@@ -39,7 +38,7 @@ async def _run_async(prompt, prompt_file, condition, category, winners, output_f
     # Resolve prompt
     if prompt_file:
         import yaml
-        with open(prompt_file) as f:
+        with open(prompt_file) as f:  # noqa: ASYNC230 - small CLI startup read
             data = yaml.safe_load(f)
             prompt = data.get("prompt", "")
     if not prompt:
@@ -58,7 +57,10 @@ async def _run_async(prompt, prompt_file, condition, category, winners, output_f
     processor = ResultProcessor(config, llm)
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
-        deals = await searcher.search(prompt, condition, category)
+        try:
+            deals = await searcher.search(prompt, condition, category)
+        finally:
+            await browser_mgr.close()
 
     # Prune missing (deals not found this run)
     storage.prune_missing(max_age_days=config.search.prune_after_days or 30)
@@ -68,7 +70,7 @@ async def _run_async(prompt, prompt_file, condition, category, winners, output_f
         storage.save_deal(deal)
 
     # Output (AI-named, timestamped)
-    processor.save_results(deals, config.output.directory, prompt=prompt)
+    await processor.save_results(deals, config.output.directory, prompt=prompt)
     typer.echo(f"Found {len(deals)} deals. Results in {config.output.directory}/")
 
 
@@ -100,12 +102,15 @@ async def _diamond_search_async(prompt, condition, category, winners, output_dir
         if not searcher.diamond_search_enabled:
             typer.echo("Error: Diamond Search agents unavailable", err=True)
             raise typer.Exit(1)
-        deals = await searcher.search_with_diamond(prompt, condition, category)
+        try:
+            deals = await searcher.search_with_diamond(prompt, condition, category)
+        finally:
+            await browser_mgr.close()
 
     for deal in deals:
         storage.save_deal(deal)
 
-    processor.save_results(deals, output_dir)
+    await processor.save_results(deals, output_dir, prompt=prompt)
 
     typer.echo(f"Diamond Search finished: {len(deals)} deals")
     for d in deals:
@@ -166,7 +171,7 @@ def local_state():
     coord = llm._coordinator
     if coord is None:
         return
-    our = {getattr(l, "model", "") for l in llm.llm_config.local}
+    our = {getattr(model, "model", "") for model in llm.llm_config.local}
     foreign = coord.foreign_models(our)
     typer.echo(f"\npolicy      : {coord.policy}")
     typer.echo(f"quiet window: {coord.quiet_seconds}s")
@@ -200,7 +205,7 @@ def browsers():
         typer.echo(f"           {exe or '(Playwright bundled Chromium)'}")
     except ValueError as e:
         typer.echo(f"\nSelection problem: {e}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     typer.echo('\nSet it in config.yaml under "browser: browser_id".')
 
@@ -290,32 +295,27 @@ def search(
 
 
 async def _search_async(prompt, condition, category, winners, output_dir, max_pages, headless):
-    from src.vlm import VLMClient
-    from src.searcher.orchestrator import SearchOrchestrator
-
     config = load_config()
     config.search.winners_count = winners
 
     llm = LLMClient(config)
-    vlm = VLMClient(
-        provider="lmstudio",
-        model="qwen2.5-vl-7b",
-        endpoint="http://127.0.0.1:1234/v1",
-    )
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
-
-    orchestrator = SearchOrchestrator(config, llm, vlm, storage, browser_mgr)
 
     typer.echo(f"Searching for: {prompt}")
     typer.echo(f"Condition: {condition}, Category: {category}, Winners: {winners}")
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
-        deals = await searcher.search(prompt, condition, category)
+        try:
+            deals = await searcher.search(prompt, condition, category)
+        finally:
+            await browser_mgr.close()
 
     # Save results
     for deal in deals:
         storage.save_deal(deal)
+    processor = ResultProcessor(config, llm)
+    await processor.save_results(deals, output_dir, prompt=prompt)
 
     typer.echo(f"Found {len(deals)} deals")
     for d in deals[:winners]:

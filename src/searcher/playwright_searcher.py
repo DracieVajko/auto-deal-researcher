@@ -14,15 +14,21 @@ from src.diagnostics.selector_health import SelectorHealthTracker
 from src.llm.client import LLMClient
 from src.searcher.adapters import Deal, get_adapter
 from src.searcher.adapters.base import SiteBlockedError
+from src.searcher.listing_filter import excluded_by_form_factor
 from src.storage.manager import StorageManager
 from src.utils.time import utcnow_stamp
 
 # Diamond Search agents (optional import)
 try:
     from src.agents import (
-        CoordinatorAgent, QueryExpansionAgent, SiteSelectionAgent, 
-        MarketIntelAgent, DomainExpertAgent, LatestTechTrackerAgent,
-        PriceHunterAgent, RecommendationAgent
+        CoordinatorAgent,
+        DomainExpertAgent,
+        LatestTechTrackerAgent,
+        MarketIntelAgent,
+        PriceHunterAgent,
+        QueryExpansionAgent,
+        RecommendationAgent,
+        SiteSelectionAgent,
     )
     DIAMOND_SEARCH_AVAILABLE = True
 except ImportError:
@@ -118,12 +124,12 @@ class PlaywrightSearcher:
         # OCuLink, DDR5 RAM 32GB/64GB, AMD Ryzen") makes every site return
         # zero even though "mini pc ryzen" finds the right products.
         attempts: list[str] = []
-        for candidate in (
+        for raw_candidate in (
             await self.llm._generate_search_query_async(prompt),
             self.llm.keyword_query(prompt, max_words=5),
             self.llm.keyword_query(prompt, max_words=2),
         ):
-            candidate = (candidate or "").strip()
+            candidate = (raw_candidate or "").strip()
             if candidate and candidate not in attempts:
                 attempts.append(candidate)
 
@@ -155,12 +161,31 @@ class PlaywrightSearcher:
 
         # Judge once at the end: fewer LLM calls than per-round judging.
         if all_deals:
+            # Deterministic form-factor gate before the LLM sees the list.
+            # A keyword match on "mini pc" also returns laptops (ZenBook etc.),
+            # and the judge kept them often enough to pollute the report.
+            before = len(all_deals)
+            all_deals = [
+                deal
+                for deal in all_deals
+                if not excluded_by_form_factor(prompt, deal.title)
+            ]
+            if len(all_deals) != before:
+                logger.info(
+                    "Dropped %d laptop/notebook listing(s) for a mini-PC request",
+                    before - len(all_deals),
+                )
+
             judged = await self.llm.judge_results(prompt, all_deals)
             all_deals = [d for d in all_deals if d.url in judged["keep"]]
 
-        # Final LLM ranking → top N
-        winners_count = getattr(self.config.search, 'winners_count', 3)
-        final_ranked = await self.llm.rank_results(prompt, all_deals, winners_count)
+        # Rank the whole list. winners_count is the number of highlighted
+        # picks, not a cut-off: the report shows every judged deal with a
+        # score, so a used classifieds listing is not hidden behind three
+        # retailer results.
+        final_ranked = await self.llm.rank_results(
+            prompt, all_deals, max(len(all_deals), 1)
+        )
         return final_ranked
 
     async def _execute_round(self, query: str, condition: str, category: str, seen_urls: set) -> list[Deal]:
@@ -241,9 +266,8 @@ class PlaywrightSearcher:
         # We need to also run the actual searches to get real deals
         # The agent pipeline provides intelligence, but we still need to fetch deals
         
-        # For now, run standard search but with enhanced queries from the pipeline
-        # The recommendation agent's output can guide which results to prioritize
-        recommendation = result.payload.get("final_recommendation", {})
+        # For now, run standard search with the enhanced queries from the pipeline.
+        # The recommendation agent's output can guide which results to prioritize.
 
         # Re-run the pipeline now that real deals exist, so the expertise,
         # price and synthesis agents actually receive something to score.

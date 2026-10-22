@@ -166,7 +166,11 @@ class LLMClient:
                 probe_busy=coord.probe_busy if coord else False,
             )
         except ValueError as e:
-            logger.error("Invalid local coordination policy %r: %s; defaulting to 'never'", policy, e)
+            logger.warning(
+                "Invalid local coordination policy %r: %s; defaulting to 'never'",
+                policy,
+                e,
+            )
             return LocalModelCoordinator(policy="never")
 
     def describe_local_state(self) -> str:
@@ -211,7 +215,7 @@ class LLMClient:
         """Unified chat method with fallback chain."""
         # Try local LLMs first
         # Try local LLMs first, but only when the backend is free.
-        our_models = {getattr(l, "model", "") for l in self.llm_config.local}
+        our_models = {getattr(model, "model", "") for model in self.llm_config.local}
         if self._coordinator is not None:
             safe, reason = self._coordinator.acquire(our_models)
             if not safe:
@@ -440,9 +444,14 @@ class LLMClient:
                 "You are a strict product-matching judge. Check requirements in this order:\n"
                 "1. PRODUCT TYPE first. If the listing is not the product the user asked "
                 "for (a full-size desktop, a laptop, a part, an accessory or a different "
-                "kind of item), reply DISCARD even when its specs look impressive.\n"
-                "2. Then price, condition and the requested specs.\n"
-                "3. If the price is implausibly low for that product, DISCARD it as a "
+                "kind of item), reply DISCARD even when its specs look impressive. "
+                "A laptop/notebook is always DISCARD when the request is for a mini PC, "
+                "barebone, NUC or small form factor machine.\n"
+                "2. Then price and the requested specs.\n"
+                "3. Condition is only a reason to DISCARD when the user explicitly asked "
+                "for new/refurbished. Otherwise keep used listings: they are often the "
+                "best value and the report explains the risks.\n"
+                "4. If the price is implausibly low for that product, DISCARD it as a "
                 "likely accessory, part or pricing error.\n"
                 "For each item reply with exactly one line containing KEEP or DISCARD "
                 "and nothing else. No commentary."
@@ -470,20 +479,34 @@ class LLMClient:
         return {"keep": keep_urls}
 
     async def rank_results(self, prompt: str, deals: list[Deal], top_n: int) -> list[Deal]:
-        """Rank deals by relevance to prompt, return top N."""
-        if len(deals) <= top_n:
+        """Rank deals by relevance to prompt, return top N.
+
+        When ``top_n`` covers the whole input, any deal the model forgot to
+        mention is appended in its original order instead of being dropped.
+        """
+        if len(deals) <= 1:
             return deals
-        
+
         items = "\n".join([f"{i}. {d.title} | {d.price_eur}€ | {d.condition} | {d.site_name}" for i, d in enumerate(deals)])
         system = f"Rank these deals 1-{len(deals)} by relevance to user request. Output ONLY the ranked indices (e.g., '3,1,5,2,4')."
         user = f"User wants: {prompt}\nDeals:\n{items}"
         response = await self._chat(system, user, max_tokens=200)
-        try:
-            indices = [int(x.strip()) - 1 for x in response.split(",")]
-            return [deals[i] for i in indices[:top_n] if 0 <= i < len(deals)]
-        except (ValueError, IndexError) as e:
-            logger.debug(f"Failed to parse LLM ranking, using input order: {e}")
+        indices: list[int] = []
+        for token in re.findall(r"\d+", response or ""):
+            index = int(token) - 1
+            if 0 <= index < len(deals) and index not in indices:
+                indices.append(index)
+
+        if not indices:
+            logger.debug("Failed to parse LLM ranking, using input order")
             return deals[:top_n]
+
+        ranked = [deals[index] for index in indices]
+        if top_n >= len(deals):
+            ranked.extend(
+                deal for index, deal in enumerate(deals) if index not in indices
+            )
+        return ranked[:top_n]
 
     # === Local LLM calls ===
     async def _call_local_llm_async(self, local_cfg, system: str, user: str,

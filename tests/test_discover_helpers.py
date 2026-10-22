@@ -17,7 +17,7 @@ from src.searcher.site_registry import seed_query
 
 def test_seed_query_uses_site_override():
     assert seed_query("sreality", "general") == "byt"
-    assert seed_query("sauto", "auto") == "auto"
+    assert seed_query("sauto", "auto") == "octavia"
     assert seed_query("mimibazar", "electronics") == "notebook"
 
 

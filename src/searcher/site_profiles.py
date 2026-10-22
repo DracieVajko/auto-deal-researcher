@@ -191,9 +191,12 @@ class SiteProfile(BaseModel):
 
     @property
     def is_runtime_ready(self) -> bool:
-        return self.status == "validated" and bool(
-            self.search.url_template or self.search.category_urls or self.extraction.item_selector
-        )
+        """True when a generic adapter can build a query URL and parse cards."""
+        has_query_url = bool(self.search.query_param) or any(
+            "{query}" in url
+            for url in (self.search.category_urls or {}).values()
+        ) or "{query}" in (self.search.url_template or "")
+        return self.status == "validated" and has_query_url and bool(self.extraction.item_selector)
 
 
 def _profile_path(site_id: str, directory: Path | None = None) -> Path:

@@ -148,7 +148,7 @@ SITES: list[SiteSpec] = [
              ("general",), ("new", "used"), "planned",
              seller_type="classifieds", has_warranty=False,
              warranty_note="n/a",
-             notes="CZ real estate; not a deal site but useful for the auto category."),
+             notes="CZ real estate; general category only."),
     SiteSpec("mimibazar", "Mimibazar.sk", "https://www.mimibazar.sk", "mimibazar",
              ("electronics", "appliances", "auto", "general"), ("used",), "planned",
              seller_type="classifieds", has_warranty=False,
@@ -170,7 +170,7 @@ DEFAULT_DISCOVERY_QUERIES = {
 
 SITE_DISCOVERY_OVERRIDES = {
     "sreality": {"general": "byt"},
-    "sauto": {"auto": "auto"},
+    "sauto": {"auto": "octavia"},
     "mimibazar": {"electronics": "notebook"},
 }
 

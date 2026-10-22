@@ -586,15 +586,20 @@ def discover_site(
             except PlaywrightError:
                 pass
 
+    search_spec = derive_search_spec(final_url, query)
+    has_query_url = bool(search_spec.query_param)
     if state == "blocked":
         status = "blocked"
         notes = "Anti-bot challenge prevented discovery."
     elif state == "needs_login":
         status = "needs_login"
         notes = "Login is required before discovery."
-    elif cards["count"] > 0 and extraction.item_selector:
+    elif cards["count"] > 0 and extraction.item_selector and has_query_url:
         status = "validated"
         notes = f"Found {cards['count']} result card(s) with {cards['selector']}."
+    elif cards["count"] > 0 and extraction.item_selector:
+        status = "draft"
+        notes = "Cards found, but the search query is not present in the URL."
     elif extraction.item_selector:
         status = "draft"
         notes = "Search page captured, but no result cards matched the selector."
@@ -633,6 +638,7 @@ def validate_profile(
     profile_dir: Path,
     user_data_dir: Path,
     headless: bool,
+    pause: bool = True,
 ) -> dict:
     query = seed_query(profile.site_id, category)
     url = FilterEngine.build_search_url(profile, query, category, SearchFilters())
@@ -657,6 +663,8 @@ def validate_profile(
             page.wait_for_timeout(2500)
             _accept_cookies(page)
             page_state = _page_state(page)
+            if page_state:
+                page_state = _intervene(page, page_state, pause)
             if page_state not in ("blocked", "needs_login") and selector:
                 try:
                     page.wait_for_selector(selector, timeout=15000)
@@ -774,6 +782,7 @@ def run_validate(args) -> int:
                 args.profile_dir,
                 args.user_data_dir,
                 headless=not args.headless,
+                pause=not args.no_pause,
             )
         except Exception as exc:  # noqa: BLE001 - one site must not abort the batch
             result = {"site_id": profile.site_id, "status": "failed", "error": str(exc)[:300]}

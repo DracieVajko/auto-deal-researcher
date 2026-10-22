@@ -133,6 +133,12 @@ def test_save_profile_does_not_write_secret_url_params(tmp_path):
     assert "auth=" not in text
 
 
+def test_runtime_ready_requires_query_url_and_item_selector():
+    assert _profile().is_runtime_ready
+    assert not _profile(search=SearchSpec(url_template="https://www.alza.sk/fixed")).is_runtime_ready
+    assert not _profile(extraction={}).is_runtime_ready
+
+
 def test_profile_accepts_category_urls():
     profile = _profile(
         search=SearchSpec(

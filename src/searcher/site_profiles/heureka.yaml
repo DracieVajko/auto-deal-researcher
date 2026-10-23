@@ -1,0 +1,16 @@
+version: 1
+site_id: heureka
+base_url: https://www.heureka.sk
+status: blocked
+search:
+  url_template: https://www.heureka.sk/
+  category_urls:
+    electronics: https://www.heureka.sk/
+filters:
+  extras: {}
+extraction:
+  item_selector: '[data-testid="product-card"], .product-card'
+  title_selector: '[data-testid="product-title"], .product-title'
+  price_selector: '[data-testid="product-price"], .price'
+  link_selector: a[href*="/p/"]
+notes: Anti-bot challenge prevented discovery.

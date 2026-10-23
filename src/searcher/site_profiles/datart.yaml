@@ -1,0 +1,31 @@
+version: 1
+site_id: datart
+base_url: https://www.datart.sk
+status: draft
+search:
+  url_template: https://www.nay.sk/notebooky
+  input_selector: input[data-qa="search-widget-input"]
+  category_urls:
+    electronics: https://www.nay.sk/notebooky
+filters:
+  condition:
+    url:
+      param: param[-8][]
+      value_map: {}
+    ui:
+      kind: checkbox
+      selector: input[name="param\[-8\]\[\]"]
+      value_map: {}
+    source: heuristic
+    confidence: 0.55
+    sample_value: param[-8][] Nové (1624)
+  extras: {}
+extraction:
+  item_selector: .product, .item, .product-card, .item-card, [data-product]
+  title_selector: h1, h2, h3, .title, .product-title, .name
+  price_selector: .price, .price-box__price, .product-price, [class*='price']
+  link_selector: a[href]
+  image_selector: img
+  condition_selector: .condition, .badge, .label
+  seller_selector: .seller, .shop, .merchant
+notes: Cards found, but the search query is not present in the URL.

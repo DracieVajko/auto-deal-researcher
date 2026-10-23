@@ -1,0 +1,42 @@
+version: 1
+site_id: bazos
+base_url: https://www.bazos.sk
+status: validated
+last_verified: '2026-10-23'
+search:
+  url_template: https://www.bazos.sk/search.php?hledat={query}&rubriky=www&hlokalita=&humkreis=25&cenaod=&cenado=&Submit=Hľadať&order=&kitx=ano
+  query_param: hledat
+  input_selector: '#hledat'
+  category_urls:
+    electronics: https://www.bazos.sk/search.php?hledat={query}&rubriky=www&hlokalita=&humkreis=25&cenaod=&cenado=&Submit=Hľadať&order=&kitx=ano
+filters:
+  price_min:
+    url:
+      param: cenaod
+      value_map: {}
+    ui:
+      kind: input
+      selector: input[name="cenaod"]
+      value_map: {}
+    source: heuristic
+    confidence: 0.55
+    sample_value: cenaod Cena od €
+  price_max:
+    url:
+      param: cenado
+      value_map: {}
+    ui:
+      kind: input
+      selector: input[name="cenado"]
+      value_map: {}
+    source: heuristic
+    confidence: 0.55
+    sample_value: cenado Cena do €
+  extras: {}
+extraction:
+  item_selector: .inzeraty > div
+  title_selector: .nadpis a, a[href*='inzerat']
+  price_selector: span, b, strong
+  link_selector: .nadpis a, a[href*='inzerat']
+  image_selector: img
+notes: Found 100 result card(s) with .inzeraty > div.

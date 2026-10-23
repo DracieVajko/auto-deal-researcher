@@ -1,0 +1,19 @@
+version: 1
+site_id: alza_cz
+base_url: https://www.alza.cz
+status: blocked
+search:
+  url_template: https://www.alza.cz/
+  category_urls:
+    electronics: https://www.alza.cz/
+filters:
+  extras: {}
+extraction:
+  item_selector: .browsingitem
+  title_selector: .name
+  price_selector: .price-box__price, .price-box__price--final
+  link_selector: .browsinglink, a[href*='/d']
+  image_selector: .browsingitem img
+  condition_selector: .badge--opened, .label--opened
+  seller_selector: .seller-name, .seller-info
+notes: Anti-bot challenge prevented discovery.

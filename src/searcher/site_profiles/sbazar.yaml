@@ -1,0 +1,19 @@
+version: 1
+site_id: sbazar
+base_url: https://www.sbazar.cz
+status: draft
+search:
+  url_template: https://www.sbazar.cz/
+  category_urls:
+    electronics: https://www.sbazar.cz/
+filters:
+  extras: {}
+extraction:
+  item_selector: .product, .item, .product-card, .item-card, [data-product]
+  title_selector: h1, h2, h3, .title, .product-title, .name
+  price_selector: .price, .price-box__price, .product-price, [class*='price']
+  link_selector: a[href]
+  image_selector: img
+  condition_selector: .condition, .badge, .label
+  seller_selector: .seller, .shop, .merchant
+notes: Search page captured, but no result cards matched the selector.

@@ -1,0 +1,28 @@
+version: 1
+site_id: aliexpress
+base_url: https://www.aliexpress.com
+status: draft
+search:
+  url_template: https://www.aliexpress.com/w/wholesale-notebook.html?spm=a2g0o.home.search.0
+  input_selector: '#search-words'
+  category_urls:
+    electronics: https://www.aliexpress.com/w/wholesale-notebook.html?spm=a2g0o.home.search.0
+filters:
+  shipping:
+    ui:
+      kind: checkbox
+      selector: '#filterCode\:freeshipping'
+      value_map: {}
+    source: heuristic
+    confidence: 0.4
+    sample_value: filterCode:freeshipping
+  extras: {}
+extraction:
+  item_selector: .product, .item, .product-card, .item-card, [data-product]
+  title_selector: h1, h2, h3, .title, .product-title, .name
+  price_selector: .price, .price-box__price, .product-price, [class*='price']
+  link_selector: a[href]
+  image_selector: img
+  condition_selector: .condition, .badge, .label
+  seller_selector: .seller, .shop, .merchant
+notes: Search page captured, but no result cards matched the selector.

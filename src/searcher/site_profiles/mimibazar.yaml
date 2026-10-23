@@ -1,0 +1,19 @@
+version: 1
+site_id: mimibazar
+base_url: https://www.mimibazar.sk
+status: draft
+search:
+  url_template: https://www.mimibazar.sk/
+  category_urls:
+    electronics: https://www.mimibazar.sk/
+filters:
+  extras: {}
+extraction:
+  item_selector: .product, .item, .product-card, .item-card, [data-product]
+  title_selector: h1, h2, h3, .title, .product-title, .name
+  price_selector: .price, .price-box__price, .product-price, [class*='price']
+  link_selector: a[href]
+  image_selector: img
+  condition_selector: .condition, .badge, .label
+  seller_selector: .seller, .shop, .merchant
+notes: Search page captured, but no result cards matched the selector.

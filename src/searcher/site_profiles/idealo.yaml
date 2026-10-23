@@ -1,0 +1,18 @@
+version: 1
+site_id: idealo
+base_url: https://www.idealo.de
+status: draft
+search:
+  url_template: https://www.idealo.de/preisvergleich/SearchProduct?query={query}
+  query_param: query
+  category_urls:
+    electronics: https://www.idealo.de/preisvergleich/SearchProduct?query={query}
+filters:
+  extras: {}
+extraction:
+  item_selector: .product-card, .product-item, .offer
+  title_selector: .product-title, .product-name, h3 a
+  price_selector: .price, .price-value, .offer-price
+  link_selector: a[href*='/angebot/'], a.product-link
+  condition_selector: .condition, .offer-condition
+notes: Search page captured, but no result cards matched the selector.

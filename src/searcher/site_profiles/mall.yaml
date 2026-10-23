@@ -1,0 +1,18 @@
+version: 1
+site_id: mall
+base_url: https://www.mall.sk
+status: draft
+search:
+  url_template: https://www.mall.sk/search?q={query}
+  query_param: q
+  category_urls:
+    electronics: https://www.mall.sk/search?q={query}
+filters:
+  extras: {}
+extraction:
+  item_selector: .product-item, .product-card
+  title_selector: .product-title, .product-name
+  price_selector: .price, .price-final
+  link_selector: a.product-link, h3 a
+  condition_selector: .condition
+notes: Search page captured, but no result cards matched the selector.

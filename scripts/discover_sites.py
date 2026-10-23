@@ -338,6 +338,7 @@ def build_profile(
     status: str,
     input_selector: str | None = None,
     notes: str = "",
+    currency: str = "EUR",
 ) -> SiteProfile:
     search = derive_search_spec(final_url, query)
     search.input_selector = input_selector
@@ -358,6 +359,7 @@ def build_profile(
         base_url=base_url.rstrip("/"),
         status=status,
         last_verified=_today() if status == "validated" else None,
+        currency=currency.upper(),
         search=search,
         filters=ProfileFilters(**filters),
         extraction=extraction,
@@ -618,6 +620,7 @@ def discover_site(
         status,
         input_selector=input_selector,
         notes=notes,
+        currency=site.currency,
     )
     save_profile(profile, profile_dir)
     return {
@@ -686,7 +689,7 @@ def validate_profile(
 
 
 def _default_category(site: SiteSpec) -> str:
-    for category in ("electronics", "appliances", "auto", "general"):
+    for category in ("electronics", "appliances", "auto", "home", "hobby", "general"):
         if category in site.categories:
             return category
     return "general"
@@ -738,7 +741,7 @@ def run_discover(args) -> int:
                 args.profile_dir,
                 args.flows_dir,
                 args.user_data_dir,
-                headless=not args.headless,
+                headless=args.headless,
                 pause=not args.no_pause,
                 save_html=not args.no_html,
                 screenshots=args.screenshots,
@@ -781,7 +784,7 @@ def run_validate(args) -> int:
                 category,
                 args.profile_dir,
                 args.user_data_dir,
-                headless=not args.headless,
+                headless=args.headless,
                 pause=not args.no_pause,
             )
         except Exception as exc:  # noqa: BLE001 - one site must not abort the batch
@@ -798,7 +801,7 @@ def main() -> int:
     def common(target):
         target.add_argument("--site", action="append", help="Site id; repeat for multiple sites")
         target.add_argument("--all", action="store_true", help="Every registered site")
-        target.add_argument("--category", default="any", help="electronics, appliances, auto, general, any")
+        target.add_argument("--category", default="any", help="electronics, appliances, auto, home, hobby, general, any")
         target.add_argument("--profile-dir", type=Path, default=PROFILE_DIR)
         target.add_argument("--user-data-dir", type=Path, default=DEFAULT_USER_DATA)
         display = target.add_mutually_exclusive_group()

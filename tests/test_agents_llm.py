@@ -105,7 +105,7 @@ async def test_site_selection_reads_the_registry():
     assert "autobazar_sk" in caps
     assert "mironet_cz" in caps
     assert caps["autobazar_sk"]["country"] == "SK"
-    assert caps["garaz_cz"]["currency"] == "CZK"
+    assert caps["mironet_cz"]["currency"] == "CZK"
 
 
 # --- domain expert ---------------------------------------------------------

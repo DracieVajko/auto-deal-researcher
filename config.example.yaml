@@ -203,14 +203,6 @@ search:
       conditions: ["used", "new"]
       country: "CZ"
       currency: "EUR"
-    - name: "garaz_cz"
-      base_url: "https://www.garaz.cz"
-      enabled: false
-      adapter_class: "garaz"
-      categories: ["auto"]
-      conditions: ["used", "new"]
-      country: "CZ"
-      currency: "CZK"
     - name: "tipcars_cz"
       base_url: "https://www.tipcars.com"
       enabled: false

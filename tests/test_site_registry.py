@@ -57,7 +57,7 @@ def test_summary_counts():
     assert s["working"] == 2
     assert s["blocked"] == 4
     assert s["needs_auth"] == 1
-    assert s["planned"] == 33
+    assert s["planned"] == 32
     assert sum(s.values()) == len(SITES)
 
 
@@ -104,7 +104,7 @@ def test_czech_sites_quote_in_the_right_currency():
 
 def test_new_site_groups_are_registered():
     ids = {s.id for s in SITES}
-    auto = {"autobazar_sk", "autobazar_eu", "autobazar_cz", "garaz_cz",
+    auto = {"autobazar_sk", "autobazar_eu", "autobazar_cz",
             "tipcars_cz", "auto_cz", "mobile_de"}
     home = {"obi_sk", "merkurymarket_sk", "dek_sk", "bauhaus_sk", "hornbach_sk",
             "jysk_sk", "favi_sk", "ikea_sk", "herman_sk", "hobbyshop_cz",

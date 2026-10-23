@@ -5,7 +5,7 @@ An intelligent deal searching application that automates finding the best deals 
 ## Features
 
 - **Multi-platform support**: Works on Windows, Linux, and macOS
-- **Site Adapters + Auto-Mapping**: 40 registered marketplaces, profile-driven discovery and a generic profile adapter; Alza and Bazos adapters verified working
+- **Site Adapters + Auto-Mapping**: 39 registered marketplaces, profile-driven discovery and a generic profile adapter; Alza and Bazos adapters verified working
 - **Location-Aware Shop Selection**: the AI picks which shops to visit, ranked by your market (`user_country`), so local shops come first and cross-border ones only when they make sense
 - **Runtime Filters**: canonical price/condition/brand/location/shipping/seller/sort filters applied through URL parameters, UI controls, then a Python post-filter
 - **Currency Normalisation**: CZK, USD and GBP prices are converted to EUR, with the original amount kept alongside
@@ -107,7 +107,7 @@ search:
       conditions: ["used"]
       country: "SK"
       currency: "EUR"
-    # ... more sites (all 40 registered sites are listed in config.example.yaml)
+    # ... more sites (all 39 registered sites are listed in config.example.yaml)
   # Optional baseline filters. Precedence: CLI > prompt/LLM > these defaults.
   default_filters: {}
   # Where you shop. Local shops are preferred, neighbouring markets next.
@@ -211,7 +211,7 @@ in `search.currency_rates`; adjust them there when they drift.
 
 ### Site discovery and profiles
 
-All 40 registered sites are listed in `config.example.yaml`. Sites without an
+All 39 registered sites are listed in `config.example.yaml`. Sites without an
 adapter need a validated profile before they participate in a search.
 
 ```bash
@@ -466,7 +466,7 @@ src/
 │   ├── filters.py                # Canonical filters, CLI/prompt parsing
 │   ├── filter_engine.py          # URL → UI → post-filter application
 │   ├── site_profiles.py          # Profile schema, loader, sanitizer
-│   ├── site_registry.py          # 40 sites, categories, markets and discovery seeds
+│   ├── site_registry.py          # 39 sites, categories, markets and discovery seeds
 │   ├── site_selection.py         # Location-aware ranking + LLM shop selection
 │   ├── currency.py               # Currency detection and EUR conversion
 │   ├── site_profiles/            # Sanitized committed profile YAML maps
@@ -523,7 +523,6 @@ src/
 | Autobazar.sk | `autobazar` | 🧭 planned | Ringier SK auto portal; prices in EUR |
 | Autobazar.EU | `autobazar` | 🧭 planned | 310k+ listings across SK/CZ/PL |
 | Autobazar.cz | `autobazar` | 🧭 planned | Redirects to Autobazar.EU |
-| Garáž.cz | `garaz` | 🧭 planned | Seznam's garage; prices in CZK |
 | TipCars.com | `tipcars` | 🧭 planned | Largest CZ auto ad aggregator; prices in CZK |
 | Auto.cz | `auto_cz` | 🧭 planned | Seznam's auto portal; prices in CZK |
 | mobile.de | `mobile_de` | 🧭 planned | Germany's largest vehicle marketplace |

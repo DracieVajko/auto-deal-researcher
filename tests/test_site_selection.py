@@ -37,12 +37,12 @@ def test_market_distance_far_market():
 
 def test_rank_by_location_puts_local_market_first():
     candidates = [
-        _candidate("garaz_cz", "CZ"),
+        _candidate("shop_cz", "CZ"),
         _candidate("autobazar_sk", "SK"),
         _candidate("mobile_de", "DE"),
     ]
     ranked = rank_by_location(candidates, "SK")
-    assert [c.id for c in ranked] == ["autobazar_sk", "garaz_cz", "mobile_de"]
+    assert [c.id for c in ranked] == ["autobazar_sk", "mobile_de", "shop_cz"]
 
 
 def test_rank_by_location_is_stable_within_a_market():

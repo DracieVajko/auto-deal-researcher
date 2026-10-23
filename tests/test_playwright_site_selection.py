@@ -45,7 +45,7 @@ async def test_local_market_is_searched_first():
     config = AppConfig(
         search=SearchConfig(
             websites=[
-                _site("garaz_cz", "CZ"),
+                _site("shop_cz", "CZ"),
                 _site("autobazar_sk", "SK"),
                 _site("mobile_de", "DE"),
             ],
@@ -55,10 +55,10 @@ async def test_local_market_is_searched_first():
     )
     config.search.diamond_search.enabled = False
     searcher = _searcher(config)
-    _profiles(searcher, "garaz_cz", "autobazar_sk", "mobile_de")
+    _profiles(searcher, "shop_cz", "autobazar_sk", "mobile_de")
 
     selected = await searcher._select_sites("used", "auto", "octavia")
-    assert [s.name for s in selected] == ["autobazar_sk", "garaz_cz", "mobile_de"]
+    assert [s.name for s in selected] == ["autobazar_sk", "mobile_de", "shop_cz"]
 
 
 @pytest.mark.asyncio
@@ -132,10 +132,10 @@ def test_site_market_falls_back_to_the_registry():
         search=SearchConfig(
             websites=[
                 WebsiteConfig(
-                    name="garaz_cz",
-                    base_url="https://www.garaz.cz",
-                    adapter_class="garaz",
-                    categories=[Category.AUTO],
+                    name="mironet_cz",
+                    base_url="https://www.mironet.cz",
+                    adapter_class="mironet",
+                    categories=[Category.ELECTRONICS],
                 )
             ]
         )

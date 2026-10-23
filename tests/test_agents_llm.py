@@ -103,9 +103,9 @@ async def test_site_selection_reads_the_registry():
     """The agent must know every registered site, not a hardcoded table."""
     caps = SiteSelectionAgent.capabilities()
     assert "autobazar_sk" in caps
-    assert "mironet_cz" in caps
+    assert "aukro" in caps
     assert caps["autobazar_sk"]["country"] == "SK"
-    assert caps["mironet_cz"]["currency"] == "CZK"
+    assert caps["aukro"]["currency"] == "CZK"
 
 
 # --- domain expert ---------------------------------------------------------

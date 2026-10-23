@@ -17,9 +17,8 @@
 - Currency normalisation (`src/searcher/currency.py`): CZK, USD and GBP
   prices are converted to EUR, with the original amount kept on the deal.
 - New `home` and `hobby` categories for furniture, DIY, garden and sport.
-- 18 new registered sites: Autobazar.sk/.EU/.cz, TipCars, Auto.cz, mobile.de,
-  OBI, Merkury Market, Stavebniny DEK, BAUHAUS, Hornbach, JYSK, FAVI.sk, IKEA,
-  HERMAN, Hobbyshop.cz, Decathlon, Mironet.cz.
+- 10 new registered sites: Autobazar.sk/.EU/.cz, mobile.de, OBI, Merkury
+  Market, BAUHAUS, Hornbach, JYSK, FAVI.sk, IKEA, Decathlon.
 - CLI flags `--country` and `--max-sites` for `run`, `diamond-search` and
   `search`.
 

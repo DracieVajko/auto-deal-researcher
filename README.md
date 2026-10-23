@@ -5,7 +5,7 @@ An intelligent deal searching application that automates finding the best deals 
 ## Features
 
 - **Multi-platform support**: Works on Windows, Linux, and macOS
-- **Site Adapters + Auto-Mapping**: 39 registered marketplaces, profile-driven discovery and a generic profile adapter; Alza and Bazos adapters verified working
+- **Site Adapters + Auto-Mapping**: 31 registered marketplaces, profile-driven discovery and a generic profile adapter; Alza and Bazos adapters verified working
 - **Location-Aware Shop Selection**: the AI picks which shops to visit, ranked by your market (`user_country`), so local shops come first and cross-border ones only when they make sense
 - **Runtime Filters**: canonical price/condition/brand/location/shipping/seller/sort filters applied through URL parameters, UI controls, then a Python post-filter
 - **Currency Normalisation**: CZK, USD and GBP prices are converted to EUR, with the original amount kept alongside
@@ -107,7 +107,7 @@ search:
       conditions: ["used"]
       country: "SK"
       currency: "EUR"
-    # ... more sites (all 39 registered sites are listed in config.example.yaml)
+    # ... more sites (all 31 registered sites are listed in config.example.yaml)
   # Optional baseline filters. Precedence: CLI > prompt/LLM > these defaults.
   default_filters: {}
   # Where you shop. Local shops are preferred, neighbouring markets next.
@@ -211,7 +211,7 @@ in `search.currency_rates`; adjust them there when they drift.
 
 ### Site discovery and profiles
 
-All 39 registered sites are listed in `config.example.yaml`. Sites without an
+All 31 registered sites are listed in `config.example.yaml`. Sites without an
 adapter need a validated profile before they participate in a search.
 
 ```bash
@@ -466,7 +466,7 @@ src/
 │   ├── filters.py                # Canonical filters, CLI/prompt parsing
 │   ├── filter_engine.py          # URL → UI → post-filter application
 │   ├── site_profiles.py          # Profile schema, loader, sanitizer
-│   ├── site_registry.py          # 39 sites, categories, markets and discovery seeds
+│   ├── site_registry.py          # 31 sites, categories, markets and discovery seeds
 │   ├── site_selection.py         # Location-aware ranking + LLM shop selection
 │   ├── currency.py               # Currency detection and EUR conversion
 │   ├── site_profiles/            # Sanitized committed profile YAML maps
@@ -510,34 +510,26 @@ src/
 | Heureka.sk | `heureka` | 🧭 planned | Price comparison; discovery profile needed |
 | Idealo.de | `idealo` | 🧭 planned | German price comparison; discovery profile needed |
 | Aukro.cz | `aukro` | 🧭 planned | Auction marketplace; bid logic not implemented |
-| Sbazar.cz | `sbazar` | 🧭 planned | CZ classifieds; discovery profile needed |
 | Bazos.cz | `bazos` | 🧭 planned | Reuses the Bazos adapter with `base_url: https://www.bazos.cz` |
 | Amazon.de | `amazon` | 🧭 planned | Official Product Advertising API is the supported route |
 | Alza.cz | `alza` | 🧭 planned | Reuses the Alza adapter with `base_url: https://www.alza.cz` |
 | AliExpress | `aliexpress` | 🧭 planned | Official Affiliate API is the supported route |
 | Prisiel.sk | `prisiel` | 🧭 planned | SK classifieds; discovery profile needed |
 | Bazar.sk | `bazar_sk` | 🧭 planned | SK classifieds; discovery profile needed |
-| Sauto.cz | `sauto` | 🧭 planned | CZ auto classifieds; auto category only |
 | Sreality.cz | `sreality` | 🧭 planned | CZ real estate; general category only |
 | Mimibazar.sk | `mimibazar` | 🧭 planned | SK classifieds; lots of used electronics |
 | Autobazar.sk | `autobazar` | 🧭 planned | Ringier SK auto portal; prices in EUR |
 | Autobazar.EU | `autobazar` | 🧭 planned | 310k+ listings across SK/CZ/PL |
 | Autobazar.cz | `autobazar` | 🧭 planned | Redirects to Autobazar.EU |
-| TipCars.com | `tipcars` | 🧭 planned | Largest CZ auto ad aggregator; prices in CZK |
-| Auto.cz | `auto_cz` | 🧭 planned | Seznam's auto portal; prices in CZK |
 | mobile.de | `mobile_de` | 🧭 planned | Germany's largest vehicle marketplace |
 | OBI Slovensko | `obi` | 🧭 planned | Home, flat, garden and building supplies |
 | Merkury Market | `merkurymarket` | 🧭 planned | Building materials, furniture and garden |
-| Stavebniny DEK | `dek` | 🧭 planned | Building materials chain |
 | BAUHAUS Slovensko | `bauhaus` | 🧭 planned | Workshop, house and garden |
 | Hornbach Slovensko | `hornbach` | ⛔ blocked | Serves a bot wall to automated sessions |
 | JYSK Slovensko | `jysk` | 🧭 planned | Furniture, mattresses and textiles |
 | FAVI.sk | `favi` | 🧭 planned | Furniture search engine that links out to shops |
 | IKEA Slovensko | `ikea` | 🧭 planned | Furniture and home accessories |
-| HERMAN Professional | `herman` | 🧭 planned | Professional tools and machinery |
-| Hobbyshop.cz | `hobbyshop` | 🧭 planned | Models, RC and hobby supplies; prices in CZK |
 | Decathlon Slovensko | `decathlon` | ⛔ blocked | Cloudflare wall |
-| Mironet.cz | `mironet` | 🧭 planned | CZ electronics and appliances; prices in CZK |
 
 Enable a site by setting `enabled: true` under its entry in `config.yaml`.
 Planned sites need a validated profile from `scripts/discover_sites.py` unless

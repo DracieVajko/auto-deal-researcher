@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-23
 - **Status:** Approved for implementation
-- **Scope:** 18 new sites on top of the existing 21; new `home`/`hobby` categories; currency normalisation; AI-driven site selection based on the user's country
+- **Scope:** 10 new sites on top of the existing 21; new `home`/`hobby` categories; currency normalisation; AI-driven site selection based on the user's country
 - **Related code:** `src/searcher/site_registry.py`, `src/searcher/site_selection.py` (new), `src/searcher/currency.py` (new), `src/searcher/playwright_searcher.py`, `src/agents/research/site_selection.py`, `src/config/models.py`, `config.example.yaml`
 
 ## 1. Problem
@@ -13,14 +13,14 @@ Three separate gaps block the project from being useful for the actual user need
 
 **Gap 2 — the AI does not choose the sites.** `SiteSelectionAgent` exists but carries a hardcoded five-entry `SITE_CAPABILITIES` dict, and its result is not used by the normal search path: `PlaywrightSearcher._filter_sites` filters deterministically on `enabled` + adapter capabilities + profile readiness, and `search_with_diamond` calls `self.search()` which re-filters the same way. The agent's `selected_sites` never reaches the browser.
 
-**Gap 3 — prices outside EUR are wrong.** `parse_price_eur` returns the first number it finds and treats it as EUR. Czech portals (bazos.cz, tipcars.com, auto.cz, hobbyshop.cz, mironet.cz) and Czech Alza quote in Kč. A 242 000 Kč car would be recorded as €242 000 — roughly 25× too high. The Bazos adapter is worse: its regex requires a literal `€`, so on bazos.cz it extracts nothing at all.
+**Gap 3 — prices outside EUR are wrong.** `parse_price_eur` returns the first number it finds and treats it as EUR. Czech portals (bazos.cz, aukro.cz) and Czech Alza quote in Kč. A 242 000 Kč car would be recorded as €242 000 — roughly 25× too high. The Bazos adapter is worse: its regex requires a literal `€`, so on bazos.cz it extracts nothing at all.
 
 **Gap 4 — there is no notion of the user's location.** Neither the registry nor the config knows where the user is, so nothing can prefer domestic shops over cross-border ones.
 
 ## 2. Goals
 
 - Add `home` and `hobby` categories so furniture/DIY/sport sites can be targeted precisely.
-- Register 18 verified, reachable sites across auto markets, electronics, home/DIY, furniture and hobby.
+- Register 10 verified, reachable sites across auto markets, home/DIY, furniture and hobby.
 - Normalise every price to EUR, keeping the original amount and currency.
 - Let the LLM choose which candidate shops to visit, informed by the user's country and the site's market, with a deterministic fallback.
 - Keep the existing 21 sites, adapters, filters and profiles working unchanged.
@@ -41,23 +41,19 @@ All URLs were checked with HTTP HEAD/GET plus `<title>` parsing. Only reachable 
 | `autobazar_sk` | https://www.autobazar.sk | SK | EUR | auto |
 | `autobazar_eu` | https://www.autobazar.eu | EU | EUR | auto |
 | `autobazar_cz` | https://www.autobazar.cz | CZ | CZK | auto |
-| `tipcars_cz` | https://www.tipcars.com | CZ | CZK | auto |
-| `auto_cz` | https://www.auto.cz | CZ | CZK | auto |
 | `mobile_de` | https://www.mobile.de | DE | EUR | auto |
 | `obi_sk` | https://www.obi.sk | SK | EUR | home, hobby |
 | `merkurymarket_sk` | https://www.merkurymarket.sk | SK | EUR | home, hobby |
-| `dek_sk` | https://dek.sk | SK | EUR | home, hobby |
 | `bauhaus_sk` | https://www.bauhaus.sk | SK | EUR | home, hobby |
 | `hornbach_sk` | https://www.hornbach.sk | SK | EUR | home, hobby (bot wall) |
 | `jysk_sk` | https://jysk.sk | SK | EUR | home |
 | `favi_sk` | https://favi.sk | SK | EUR | home (comparator) |
 | `ikea_sk` | https://www.ikea.com/sk/sk/ | SK | EUR | home |
-| `herman_sk` | https://www.herman.sk | SK | EUR | hobby |
-| `hobbyshop_cz` | https://www.hobbyshop.cz | CZ | CZK | hobby |
 | `decathlon_sk` | https://www.decathlon.sk | SK | EUR | hobby (bot wall) |
-| `mironet_cz` | https://www.mironet.cz | CZ | CZK | electronics |
 
 Rejected after verification: `fovi.sk` (does not resolve), `kika.sk` (connection timeout), `mall.cz` (redirects to allegro.cz), `electroworld.cz` (redirects to datart.cz), `auto.cz` without `www` (404), `autovitry.cz` (DNS failure), `gastroart.sk` / `vavc.sk` / `konzoleshop.sk` / `digitalstore.sk` / `gigafabrik.sk` / `nabytokonline.sk` / `skladme.sk` / `interio.sk` / `betreten.sk` (DNS failure), `sportisimo.sk` and `tsbohemia.cz` (Cloudflare wall → not registered).
+
+Dropped after the first discovery pass, at the user's request: `garaz_cz` (Seznam routes the search through search.seznam.cz, so the result grid does not match the extraction selector), `tipcars_cz`, `auto_cz`, `mironet_cz`, `sbazar`, `sauto`, `hobbyshop_cz`, `dek_sk` and `herman_sk`.
 
 ## 5. Design
 
@@ -119,7 +115,7 @@ search:
     CZK: 0.0265
 ```
 
-`max_sites` caps how many shops are opened per run. With 39 registered sites, opening all of them per round is not viable.
+`max_sites` caps how many shops are opened per run. With 31 registered sites, opening all of them per round is not viable.
 
 ## 6. Testing
 
@@ -131,4 +127,4 @@ search:
 
 ## 7. Rollout
 
-All 18 new sites are registered as `planned` and disabled in `config.example.yaml`. They become usable exactly like the existing planned sites: run `scripts/discover_sites.py discover --site <id> --headed`, validate the profile, then set `enabled: true`.
+All 10 new sites are registered as `planned` and disabled in `config.example.yaml`. They become usable exactly like the existing planned sites: run `scripts/discover_sites.py discover --site <id> --headed`, validate the profile, then set `enabled: true`.

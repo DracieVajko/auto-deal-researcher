@@ -95,14 +95,6 @@ search:
       conditions: ["new", "used", "refurbished", "open_box"]
       country: "CZ"
       currency: "CZK"
-    - name: "sbazar"
-      base_url: "https://www.sbazar.cz"
-      enabled: false
-      adapter_class: "sbazar"
-      categories: ["electronics", "appliances", "auto", "general"]
-      conditions: ["used"]
-      country: "CZ"
-      currency: "CZK"
     - name: "bazos_cz"
       base_url: "https://www.bazos.cz"
       enabled: false
@@ -151,14 +143,6 @@ search:
       conditions: ["used"]
       country: "SK"
       currency: "EUR"
-    - name: "sauto"
-      base_url: "https://www.sauto.cz"
-      enabled: false
-      adapter_class: "sauto"
-      categories: ["auto"]
-      conditions: ["used", "new"]
-      country: "CZ"
-      currency: "CZK"
     - name: "sreality"
       base_url: "https://www.sreality.cz"
       enabled: false
@@ -203,22 +187,6 @@ search:
       conditions: ["used", "new"]
       country: "CZ"
       currency: "EUR"
-    - name: "tipcars_cz"
-      base_url: "https://www.tipcars.com"
-      enabled: false
-      adapter_class: "tipcars"
-      categories: ["auto"]
-      conditions: ["used", "new"]
-      country: "CZ"
-      currency: "CZK"
-    - name: "auto_cz"
-      base_url: "https://www.auto.cz"
-      enabled: false
-      adapter_class: "auto_cz"
-      categories: ["auto"]
-      conditions: ["used", "new"]
-      country: "CZ"
-      currency: "CZK"
 
     # --- auto markets: Germany -------------------------------------------
     - name: "mobile_de"
@@ -245,14 +213,6 @@ search:
       adapter_class: "merkurymarket"
       categories: ["home", "hobby"]
       conditions: ["new", "open_box"]
-      country: "SK"
-      currency: "EUR"
-    - name: "dek_sk"
-      base_url: "https://dek.sk"
-      enabled: false
-      adapter_class: "dek"
-      categories: ["home", "hobby"]
-      conditions: ["new"]
       country: "SK"
       currency: "EUR"
     - name: "bauhaus_sk"
@@ -295,24 +255,8 @@ search:
       conditions: ["new"]
       country: "SK"
       currency: "EUR"
-    - name: "herman_sk"
-      base_url: "https://www.herman.sk"
-      enabled: false
-      adapter_class: "herman"
-      categories: ["hobby"]
-      conditions: ["new"]
-      country: "SK"
-      currency: "EUR"
 
-    # --- home and hobby: Czech Republic ---------------------------------
-    - name: "hobbyshop_cz"
-      base_url: "https://www.hobbyshop.cz"
-      enabled: false
-      adapter_class: "hobbyshop"
-      categories: ["hobby"]
-      conditions: ["new"]
-      country: "CZ"
-      currency: "CZK"
+    # --- sport and outdoor -----------------------------------------------
     - name: "decathlon_sk"
       base_url: "https://www.decathlon.sk"
       enabled: false
@@ -321,16 +265,6 @@ search:
       conditions: ["new"]
       country: "SK"
       currency: "EUR"
-
-    # --- electronics: Czech Republic -------------------------------------
-    - name: "mironet_cz"
-      base_url: "https://www.mironet.cz"
-      enabled: false
-      adapter_class: "mironet"
-      categories: ["electronics", "appliances"]
-      conditions: ["new", "open_box"]
-      country: "CZ"
-      currency: "CZK"
 
   # Optional baseline filters. Precedence: CLI > prompt/LLM > these defaults.
   # Canonical keys: min_price, max_price, condition, brand, location,

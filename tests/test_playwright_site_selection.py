@@ -132,9 +132,9 @@ def test_site_market_falls_back_to_the_registry():
         search=SearchConfig(
             websites=[
                 WebsiteConfig(
-                    name="mironet_cz",
-                    base_url="https://www.mironet.cz",
-                    adapter_class="mironet",
+                    name="aukro",
+                    base_url="https://aukro.cz",
+                    adapter_class="aukro",
                     categories=[Category.ELECTRONICS],
                 )
             ]

@@ -55,7 +55,7 @@ def test_rank_by_location_is_stable_within_a_market():
 
 
 def test_candidate_carries_checks_category_and_condition():
-    candidate = _candidate("sauto", "CZ", ("auto",), ("used",))
+    candidate = _candidate("car_portal", "CZ", ("auto",), ("used",))
     assert candidate.carries("auto", "used")
     assert candidate.carries("any", "any")
     assert not candidate.carries("electronics", "used")

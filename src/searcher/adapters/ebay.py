@@ -167,9 +167,10 @@ class EbayAdapter(BaseAdapter):
             if title.lower().startswith("shop on ebay"):
                 return None
 
-            price_eur = self.parse_price_eur(await price_el.inner_text())
-            if price_eur is None:
+            parsed = self.parse_price_with_currency(await price_el.inner_text())
+            if parsed is None:
                 return None
+            price_eur, original_price, original_currency = parsed
 
             subtitle = " ".join((await subtitle_el.inner_text()).split()) if subtitle_el else ""
             condition = self._detect_condition(f"{title} {subtitle}")
@@ -181,7 +182,14 @@ class EbayAdapter(BaseAdapter):
                 condition=condition,
                 category="electronics",
                 site_name=self.name,
-                metadata={"source": "ebay", "subtitle": subtitle[:120]},
+                metadata={
+                    "source": "ebay",
+                    "subtitle": subtitle[:120],
+                    "original_price": original_price,
+                    "original_currency": original_currency,
+                },
+                original_price=original_price,
+                original_currency=original_currency,
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
             logger.debug(f"[{self.name}] Extract error: {e}")

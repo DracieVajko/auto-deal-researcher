@@ -5,10 +5,12 @@ An intelligent deal searching application that automates finding the best deals 
 ## Features
 
 - **Multi-platform support**: Works on Windows, Linux, and macOS
-- **Site Adapters + Auto-Mapping**: 21 registered marketplaces, profile-driven discovery and a generic profile adapter; Alza and Bazos adapters verified working
+- **Site Adapters + Auto-Mapping**: 40 registered marketplaces, profile-driven discovery and a generic profile adapter; Alza and Bazos adapters verified working
+- **Location-Aware Shop Selection**: the AI picks which shops to visit, ranked by your market (`user_country`), so local shops come first and cross-border ones only when they make sense
 - **Runtime Filters**: canonical price/condition/brand/location/shipping/seller/sort filters applied through URL parameters, UI controls, then a Python post-filter
+- **Currency Normalisation**: CZK, USD and GBP prices are converted to EUR, with the original amount kept alongside
 - **Diamond Search**: optional 7-agent pipeline (query expansion, site selection, market intel, domain expert, latest tech, price hunter, recommendation) with LLM budget tracking
-- **Condition & Category Filtering**: Filter by `new`, `used`, `refurbished`, `open_box` × `electronics`, `appliances`, `auto`, `general`
+- **Condition & Category Filtering**: Filter by `new`, `used`, `refurbished`, `open_box` × `electronics`, `appliances`, `auto`, `home`, `hobby`, `general`
 - **LLM Integration**: Local LLMs (LM Studio/Ollama) with cloud API fallbacks (OpenRouter, Gemini, Mistral)
 - **Browser Automation**: Playwright with CDP connection to existing browser or persistent context fallback
 - **Multi-Round Search**: LLM generates query → searches all sites → judges results → refines query for next round
@@ -95,15 +97,28 @@ search:
       adapter_class: "alza"
       categories: ["electronics", "appliances"]
       conditions: ["new", "open_box"]
+      country: "SK"
+      currency: "EUR"
     - name: "bazos"
       base_url: "https://www.bazos.sk"
       enabled: true
       adapter_class: "bazos"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used"]
-    # ... more sites (all 21 registered sites are listed in config.example.yaml)
+      country: "SK"
+      currency: "EUR"
+    # ... more sites (all 40 registered sites are listed in config.example.yaml)
   # Optional baseline filters. Precedence: CLI > prompt/LLM > these defaults.
   default_filters: {}
+  # Where you shop. Local shops are preferred, neighbouring markets next.
+  user_country: "SK"
+  user_city: ""
+  # How many shops may be opened per search round.
+  max_sites: 8
+  # Static EUR rates; adjust when they drift.
+  currency_rates:
+    EUR: 1.0
+    CZK: 0.0265
   winners_count: 3
   max_rounds: 3
   retry_on_empty: true
@@ -165,9 +180,38 @@ anything still outside the requested range/condition in Python. Unknown
 prices are kept (the site did not expose a price), while known metadata is
 enforced.
 
+### Which shops get searched
+
+The searcher does not open every registered shop. It works in three steps:
+
+1. **Deterministic filter** — enabled sites that carry the requested
+   category and condition, and that have an adapter or a validated profile.
+2. **Location ranking** — sites in your market (`search.user_country`) come
+   first, neighbouring EU markets second, the rest last.
+3. **AI selection** — the LLM narrows the ranked list down to the shops worth
+   visiting for this prompt. It can only narrow the list, never widen it, and
+   it falls back to the ranking when it fails.
+
+```bash
+# Prefer Slovak shops, open at most 5 of them.
+python -m src.cli run --prompt "stol" --category home --country SK --max-sites 5
+
+# Prefer Czech shops and look at cars.
+python -m src.cli run --prompt "octavia" --category auto --country CZ
+```
+
+`--country` overrides `search.user_country` for a single run.
+
+### Currency
+
+Prices are converted to EUR, so `--max-price` means the same thing on every
+site. A car at `242 000 Kč` is stored as `€6 413` with the original amount
+kept in `original_price` / `original_currency`. The rates are static and live
+in `search.currency_rates`; adjust them there when they drift.
+
 ### Site discovery and profiles
 
-All 21 registered sites are listed in `config.example.yaml`. Sites without an
+All 40 registered sites are listed in `config.example.yaml`. Sites without an
 adapter need a validated profile before they participate in a search.
 
 ```bash
@@ -176,6 +220,7 @@ python scripts/discover_sites.py discover --all --headed
 
 # One site/category, or resume only unfinished work.
 python scripts/discover_sites.py discover --site mall --category electronics
+python scripts/discover_sites.py discover --site jysk_sk --category home --headed
 python scripts/discover_sites.py discover --all --resume
 
 # Replay saved profiles and update their status.
@@ -421,7 +466,9 @@ src/
 │   ├── filters.py                # Canonical filters, CLI/prompt parsing
 │   ├── filter_engine.py          # URL → UI → post-filter application
 │   ├── site_profiles.py          # Profile schema, loader, sanitizer
-│   ├── site_registry.py          # 21 sites, categories and discovery seeds
+│   ├── site_registry.py          # 40 sites, categories, markets and discovery seeds
+│   ├── site_selection.py         # Location-aware ranking + LLM shop selection
+│   ├── currency.py               # Currency detection and EUR conversion
 │   ├── site_profiles/            # Sanitized committed profile YAML maps
 │   └── adapters/                 # Site-specific adapters
 │       ├── base.py               # BaseAdapter, Deal, SiteBlockedError, parse_price_eur
@@ -473,6 +520,25 @@ src/
 | Sauto.cz | `sauto` | 🧭 planned | CZ auto classifieds; auto category only |
 | Sreality.cz | `sreality` | 🧭 planned | CZ real estate; general category only |
 | Mimibazar.sk | `mimibazar` | 🧭 planned | SK classifieds; lots of used electronics |
+| Autobazar.sk | `autobazar` | 🧭 planned | Ringier SK auto portal; prices in EUR |
+| Autobazar.EU | `autobazar` | 🧭 planned | 310k+ listings across SK/CZ/PL |
+| Autobazar.cz | `autobazar` | 🧭 planned | Redirects to Autobazar.EU |
+| Garáž.cz | `garaz` | 🧭 planned | Seznam's garage; prices in CZK |
+| TipCars.com | `tipcars` | 🧭 planned | Largest CZ auto ad aggregator; prices in CZK |
+| Auto.cz | `auto_cz` | 🧭 planned | Seznam's auto portal; prices in CZK |
+| mobile.de | `mobile_de` | 🧭 planned | Germany's largest vehicle marketplace |
+| OBI Slovensko | `obi` | 🧭 planned | Home, flat, garden and building supplies |
+| Merkury Market | `merkurymarket` | 🧭 planned | Building materials, furniture and garden |
+| Stavebniny DEK | `dek` | 🧭 planned | Building materials chain |
+| BAUHAUS Slovensko | `bauhaus` | 🧭 planned | Workshop, house and garden |
+| Hornbach Slovensko | `hornbach` | ⛔ blocked | Serves a bot wall to automated sessions |
+| JYSK Slovensko | `jysk` | 🧭 planned | Furniture, mattresses and textiles |
+| FAVI.sk | `favi` | 🧭 planned | Furniture search engine that links out to shops |
+| IKEA Slovensko | `ikea` | 🧭 planned | Furniture and home accessories |
+| HERMAN Professional | `herman` | 🧭 planned | Professional tools and machinery |
+| Hobbyshop.cz | `hobbyshop` | 🧭 planned | Models, RC and hobby supplies; prices in CZK |
+| Decathlon Slovensko | `decathlon` | ⛔ blocked | Cloudflare wall |
+| Mironet.cz | `mironet` | 🧭 planned | CZ electronics and appliances; prices in CZK |
 
 Enable a site by setting `enabled: true` under its entry in `config.yaml`.
 Planned sites need a validated profile from `scripts/discover_sites.py` unless

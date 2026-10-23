@@ -18,6 +18,8 @@ from src.searcher.filter_engine import FilterEngine
 from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
 from src.searcher.site_profiles import SiteProfile, load_profiles
+from src.searcher.site_registry import by_id
+from src.searcher.site_selection import SiteCandidate, SiteSelector
 from src.storage.manager import StorageManager
 from src.utils.time import utcnow_stamp
 
@@ -72,6 +74,9 @@ class PlaywrightSearcher:
         )
         self.health = SelectorHealthTracker()
         self._diamond_coordinator = None
+        self._site_selector = SiteSelector(llm=llm)
+        self._site_selection_cache: dict[tuple[str, str], list[WebsiteConfig]] = {}
+        self._site_selection_reason = ""
         if self.diamond_search_enabled:
             self._init_diamond_agents()
     
@@ -149,6 +154,77 @@ class PlaywrightSearcher:
             if adapter.matches_condition(user_condition) and adapter.matches_category(user_category):
                 sites.append(site)
         return sites
+
+    def _site_market(self, site: WebsiteConfig) -> tuple[str, str]:
+        """Country and currency of *site*, from the config or the registry."""
+        country = (site.country or "").upper()
+        currency = (site.currency or "").upper()
+        if not country or not currency:
+            spec = by_id(site.name)
+            if spec is not None:
+                country = country or spec.country
+                currency = currency or spec.currency
+        return country or "SK", currency or "EUR"
+
+    async def _select_sites(
+        self,
+        user_condition: str,
+        user_category: str,
+        prompt: str = "",
+    ) -> list[WebsiteConfig]:
+        """Pick the shops to visit for this search.
+
+        The deterministic filter decides what is *possible*; the location-aware
+        ranking and the LLM decide what is *worth* visiting. The result is
+        cached per (condition, category) so it is computed once per run.
+        """
+        cache_key = (user_condition, user_category)
+        cached = self._site_selection_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        base = self._filter_sites(user_condition, user_category)
+        if not base:
+            self._site_selection_cache[cache_key] = []
+            return []
+
+        candidates = []
+        for site in base:
+            country, currency = self._site_market(site)
+            candidates.append(
+                SiteCandidate(
+                    id=site.name,
+                    name=site.name,
+                    country=country,
+                    currency=currency,
+                    categories=tuple(
+                        getattr(c, "value", str(c)) for c in site.categories
+                    ),
+                    conditions=tuple(
+                        getattr(c, "value", str(c)) for c in site.conditions
+                    ),
+                    adapter_class=site.adapter_class,
+                )
+            )
+
+        user_country = getattr(self.config.search, "user_country", "SK") or "SK"
+        max_sites = getattr(self.config.search, "max_sites", 8) or 8
+        picked, reasoning = await self._site_selector.select(
+            candidates, prompt=prompt, user_country=user_country, max_sites=max_sites
+        )
+        self._site_selection_reason = reasoning
+
+        by_name = {site.name: site for site in base}
+        selected = [by_name[c.id] for c in picked if c.id in by_name]
+        logger.info(
+            "Site selection: %s of %d candidate(s) -> %s (%s)",
+            len(selected),
+            len(base),
+            ", ".join(s.name for s in selected) or "none",
+            reasoning,
+        )
+        self._site_selection_cache[cache_key] = selected
+        return selected
 
     async def search(
         self,
@@ -252,7 +328,7 @@ class PlaywrightSearcher:
         seen_urls: set,
         filters: SearchFilters | None = None,
     ) -> list[Deal]:
-        sites = self._filter_sites(condition, category)
+        sites = await self._select_sites(condition, category, prompt=query)
         all_deals = []
 
         for site in sites:
@@ -266,15 +342,18 @@ class PlaywrightSearcher:
                 page.set_default_navigation_timeout(30000)
 
                 profile = self._profile_for(site)
+                _, currency = self._site_market(site)
                 try:
                     adapter_cls = get_adapter(site.adapter_class)
-                    adapter = adapter_cls(base_url=site.base_url)
+                    adapter = adapter_cls(base_url=site.base_url, currency=currency)
                 except ValueError:
                     if profile is None or not profile.is_runtime_ready:
                         continue
                     from src.searcher.adapters.profile_adapter import ProfileAdapter
 
-                    adapter = ProfileAdapter(base_url=site.base_url, profile=profile)
+                    adapter = ProfileAdapter(
+                        base_url=site.base_url, profile=profile, currency=currency
+                    )
                 deals = await adapter.search(
                     page,
                     query,

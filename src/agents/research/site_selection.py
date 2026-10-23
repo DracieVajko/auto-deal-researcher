@@ -1,7 +1,15 @@
-"""Site selection agent."""
+"""Site selection agent.
+
+The agent no longer carries a hardcoded capability table. It reads the site
+registry, so a newly registered site is known to it immediately, and it can
+hand the LLM the candidate list to narrow down.
+"""
 
 import logging
 from typing import ClassVar
+
+from src.searcher.site_registry import SITES, SiteSpec
+from src.searcher.site_selection import SiteCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -12,20 +20,47 @@ class SiteSelectionAgent:
     name = "site_selection"
     role = "site_selection"
 
-    SITE_CAPABILITIES: ClassVar[dict] = {
-        "alza": {"conditions": ["new", "open_box"], "categories": ["electronics", "appliances"], "priority": 1},
-        "bazos": {"conditions": ["used"], "categories": ["electronics", "appliances", "auto", "general"], "priority": 2},
-        "backmarket": {"conditions": ["refurbished"], "categories": ["electronics"], "priority": 1},
-        "ebay": {"conditions": ["used", "refurbished", "new", "open_box"], "categories": ["electronics", "appliances", "auto"], "priority": 2},
-        "facebook": {"conditions": ["used", "marketplace"], "categories": ["all"], "priority": 3, "requires_login": True},
-    }
+    SITE_CAPABILITIES: ClassVar[dict] = {}
 
-    def __init__(self):
+    def __init__(self, llm=None):
         self.name = "site_selection"
         self.role = "site_selection"
+        self.llm = llm
+
+    @staticmethod
+    def capabilities() -> dict:
+        """Site capabilities derived from the registry, not hardcoded."""
+        if not SiteSelectionAgent.SITE_CAPABILITIES:
+            SiteSelectionAgent.SITE_CAPABILITIES = {
+                spec.id: {
+                    "conditions": list(spec.conditions),
+                    "categories": list(spec.categories),
+                    "priority": 1 if spec.status == "working" else 2,
+                    "country": spec.country,
+                    "currency": spec.currency,
+                }
+                for spec in SITES
+            }
+        return SiteSelectionAgent.SITE_CAPABILITIES
+
+    @staticmethod
+    def candidates(specs: list[SiteSpec] | None = None) -> list[SiteCandidate]:
+        """Turn registry entries into selection candidates."""
+        return [
+            SiteCandidate(
+                id=spec.id,
+                name=spec.name,
+                country=spec.country,
+                currency=spec.currency,
+                categories=spec.categories,
+                conditions=spec.conditions,
+                status=spec.status,
+                adapter_class=spec.adapter_class,
+            )
+            for spec in (specs if specs is not None else SITES)
+        ]
 
     async def run(self, input_data: dict) -> dict:
-        prompt = input_data.get("prompt", "")
         condition = input_data.get("condition", "any")
         category = input_data.get("category", "any")
         selected_sites = self._select_sites(condition, category)
@@ -37,12 +72,12 @@ class SiteSelectionAgent:
     def _select_sites(self, condition: str, category: str) -> list[str]:
         """Select sites matching condition and category."""
         selected = []
-        for site, caps in self.SITE_CAPABILITIES.items():
+        for site, caps in self.capabilities().items():
             cond_match = condition == "any" or condition in caps["conditions"]
             cat_match = category == "any" or category in caps["categories"]
             if cond_match and cat_match:
                 selected.append(site)
-        return sorted(selected, key=lambda s: self.SITE_CAPABILITIES[s]["priority"])
+        return sorted(selected, key=lambda s: self.capabilities()[s]["priority"])
 
     def _explain_selection(self, sites: list[str], condition: str, category: str) -> str:
         if not sites:

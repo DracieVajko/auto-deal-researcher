@@ -50,6 +50,18 @@ async def test_detect_block_flags_cloudflare():
 
 
 @pytest.mark.asyncio
+async def test_detect_block_flags_aliexpress_punish_page():
+    adapter = get_adapter("bazos")()
+    reason = await adapter.detect_block(
+        FakePage(
+            url="https://www.aliexpress.com/_____tmd_____/punish?x5secdata=abc&x5step=1",
+            title="",
+        )
+    )
+    assert reason == "aliExpress anti-bot challenge"
+
+
+@pytest.mark.asyncio
 async def test_detect_block_passes_clean_page():
     adapter = get_adapter("bazos")()
     assert await adapter.detect_block(FakePage(url="https://www.bazos.sk", title="Bazos")) is None

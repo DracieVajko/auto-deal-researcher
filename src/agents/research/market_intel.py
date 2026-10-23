@@ -34,5 +34,20 @@ class MarketIntelAgent:
                 "seasonal": {"best_months": [1, 9], "avoid_months": [11, 12]},
                 "issues": ["scale buildup", "grinder wear", "pump failure"],
             },
+            "auto": {
+                "benchmarks": {"octavia": {"low": 8000, "mid": 18000, "high": 30000}},
+                "seasonal": {"best_months": [3, 4, 9, 10], "avoid_months": [12, 1]},
+                "issues": ["service history", "hidden chassis damage", "winter tyres"],
+            },
+            "home": {
+                "benchmarks": {"dining_table": {"low": 150, "mid": 450, "high": 1200}},
+                "seasonal": {"best_months": [1, 2, 9], "avoid_months": [11, 12]},
+                "issues": ["flat-pack assembly", "scratches on delivery", "missing parts"],
+            },
+            "hobby": {
+                "benchmarks": {"cordless_drill": {"low": 60, "mid": 140, "high": 350}},
+                "seasonal": {"best_months": [1, 2, 9, 10], "avoid_months": [12]},
+                "issues": ["battery wear", "missing accessories", "warranty on used tools"],
+            },
         }
         return intel_db.get(category, intel_db["electronics"])

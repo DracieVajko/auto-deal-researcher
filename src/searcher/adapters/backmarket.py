@@ -87,9 +87,10 @@ class BackMarketAdapter(BaseAdapter):
                 return None
 
             title = " ".join((await title_el.inner_text()).split())
-            price_eur = self.parse_price_eur(await price_el.inner_text())
-            if not title or price_eur is None:
+            parsed = self.parse_price_with_currency(await price_el.inner_text())
+            if not title or parsed is None:
                 return None
+            price_eur, original_price, original_currency = parsed
 
             url = await link_el.get_attribute("href")
             if not url:
@@ -104,7 +105,13 @@ class BackMarketAdapter(BaseAdapter):
                 condition="refurbished",
                 category="electronics",
                 site_name=self.name,
-                metadata={"source": "backmarket"},
+                metadata={
+                    "source": "backmarket",
+                    "original_price": original_price,
+                    "original_currency": original_currency,
+                },
+                original_price=original_price,
+                original_currency=original_currency,
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
             logger.debug(f"[{self.name}] Extract error: {e}")

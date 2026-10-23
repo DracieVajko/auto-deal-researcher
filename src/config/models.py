@@ -19,6 +19,8 @@ class Category(StrEnum):
     ELECTRONICS = "electronics"
     APPLIANCES = "appliances"
     AUTO = "auto"
+    HOME = "home"          # furniture, interior, DIY, garden
+    HOBBY = "hobby"        # sport, outdoor, tools, models
     GENERAL = "general"
     ANY = "any"
 
@@ -32,6 +34,11 @@ class WebsiteConfig(BaseModel):
     conditions: list[Condition] = [Condition.ANY]
     requires_login: bool = False
     extra_params: dict = {}
+    # Market the site belongs to (SK, CZ, DE, EU) and the currency it lists
+    # prices in. Used to rank sites by the user's location and to convert
+    # prices to EUR. Empty means "take it from the site registry".
+    country: str = ""
+    currency: str = ""
 
 
 class LLMLocalConfig(BaseModel):
@@ -159,6 +166,14 @@ class SearchConfig(BaseModel):
     max_rounds: int = 3
     retry_on_empty: bool = True
     prune_after_days: int = 30
+    # Where the user shops. Sites in this market rank first, neighbouring
+    # markets second, the rest last.
+    user_country: str = "SK"
+    user_city: str = ""
+    # Upper bound on how many shops are opened per search round.
+    max_sites: int = 8
+    # Static EUR rates for the currencies the sites list prices in.
+    currency_rates: dict[str, float] = Field(default_factory=dict)
     diamond_search: DiamondSearchConfig = DiamondSearchConfig()
 
 

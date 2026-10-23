@@ -80,9 +80,10 @@ class AlzaAdapter(BaseAdapter):
                 return None
 
             title = " ".join((await name_el.inner_text()).split())
-            price_eur = self.parse_price_eur(await price_el.inner_text())
-            if not title or price_eur is None:
+            parsed = self.parse_price_with_currency(await price_el.inner_text())
+            if not title or parsed is None:
                 return None
+            price_eur, original_price, original_currency = parsed
 
             url = await link_el.get_attribute("href")
             if not url:
@@ -123,7 +124,11 @@ class AlzaAdapter(BaseAdapter):
                     "description": description,
                     "rating": rating,
                     "reviews": reviews,
+                    "original_price": original_price,
+                    "original_currency": original_currency,
                 },
+                original_price=original_price,
+                original_currency=original_currency,
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
             logger.debug(f"[{self.name}] Extract error: {e}")

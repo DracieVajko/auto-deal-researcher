@@ -7,12 +7,16 @@ search:
       adapter_class: "alza"
       categories: ["electronics", "appliances"]
       conditions: ["new", "open_box"]
+      country: "SK"
+      currency: "EUR"
     - name: "bazos"
       base_url: "https://www.bazos.sk"
       enabled: true
       adapter_class: "bazos"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used"]
+      country: "SK"
+      currency: "EUR"
 
     # --- blocked / login-only ------------------------------------------
     - name: "backmarket"
@@ -21,12 +25,16 @@ search:
       adapter_class: "backmarket"
       categories: ["electronics"]
       conditions: ["refurbished"]
+      country: "SK"
+      currency: "EUR"
     - name: "ebay"
       base_url: "https://www.ebay.de"
       enabled: false
       adapter_class: "ebay"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used", "refurbished", "new", "open_box"]
+      country: "DE"
+      currency: "EUR"
     - name: "facebook"
       base_url: "https://www.facebook.com/marketplace"
       enabled: false
@@ -34,6 +42,8 @@ search:
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used", "marketplace"]
       requires_login: true
+      country: "EU"
+      currency: "EUR"
 
     # --- planned: enable after `discover_sites.py` writes a validated
     # --- profile, or after an adapter is registered --------------------
@@ -43,101 +53,308 @@ search:
       adapter_class: "mall"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["new", "open_box"]
+      country: "SK"
+      currency: "EUR"
     - name: "nay"
       base_url: "https://www.nay.sk"
       enabled: false
       adapter_class: "nay"
       categories: ["electronics", "appliances"]
       conditions: ["new", "open_box"]
+      country: "SK"
+      currency: "EUR"
     - name: "datart"
       base_url: "https://www.datart.sk"
       enabled: false
       adapter_class: "datart"
       categories: ["electronics", "appliances"]
       conditions: ["new", "open_box"]
+      country: "SK"
+      currency: "EUR"
     - name: "heureka"
       base_url: "https://www.heureka.sk"
       enabled: false
       adapter_class: "heureka"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["new", "used", "refurbished"]
+      country: "SK"
+      currency: "EUR"
     - name: "idealo"
       base_url: "https://www.idealo.de"
       enabled: false
       adapter_class: "idealo"
       categories: ["electronics", "appliances", "auto"]
       conditions: ["new", "used", "refurbished"]
+      country: "DE"
+      currency: "EUR"
     - name: "aukro"
       base_url: "https://aukro.cz"
       enabled: false
       adapter_class: "aukro"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["new", "used", "refurbished", "open_box"]
+      country: "CZ"
+      currency: "CZK"
     - name: "sbazar"
       base_url: "https://www.sbazar.cz"
       enabled: false
       adapter_class: "sbazar"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used"]
+      country: "CZ"
+      currency: "CZK"
     - name: "bazos_cz"
       base_url: "https://www.bazos.cz"
       enabled: false
       adapter_class: "bazos"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used"]
+      country: "CZ"
+      currency: "CZK"
     - name: "amazon_de"
       base_url: "https://www.amazon.de"
       enabled: false
       adapter_class: "amazon"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["new", "used", "refurbished", "open_box"]
+      country: "DE"
+      currency: "EUR"
     - name: "alza_cz"
       base_url: "https://www.alza.cz"
       enabled: false
       adapter_class: "alza"
       categories: ["electronics", "appliances"]
       conditions: ["new", "open_box"]
+      country: "CZ"
+      currency: "CZK"
     - name: "aliexpress"
       base_url: "https://www.aliexpress.com"
       enabled: false
       adapter_class: "aliexpress"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["new"]
+      country: "EU"
+      currency: "EUR"
     - name: "prisiel"
       base_url: "https://www.prisiel.sk"
       enabled: false
       adapter_class: "prisiel"
       categories: ["electronics"]
       conditions: ["new", "used"]
+      country: "SK"
+      currency: "EUR"
     - name: "bazar_sk"
       base_url: "https://www.bazar.sk"
       enabled: false
       adapter_class: "bazar_sk"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used"]
+      country: "SK"
+      currency: "EUR"
     - name: "sauto"
       base_url: "https://www.sauto.cz"
       enabled: false
       adapter_class: "sauto"
       categories: ["auto"]
       conditions: ["used", "new"]
+      country: "CZ"
+      currency: "CZK"
     - name: "sreality"
       base_url: "https://www.sreality.cz"
       enabled: false
       adapter_class: "sreality"
       categories: ["general"]
       conditions: ["new", "used"]
+      country: "CZ"
+      currency: "CZK"
     - name: "mimibazar"
       base_url: "https://www.mimibazar.sk"
       enabled: false
       adapter_class: "mimibazar"
       categories: ["electronics", "appliances", "auto", "general"]
       conditions: ["used"]
+      country: "SK"
+      currency: "EUR"
+
+    # --- auto markets: Slovakia ------------------------------------------
+    - name: "autobazar_sk"
+      base_url: "https://www.autobazar.sk"
+      enabled: false
+      adapter_class: "autobazar"
+      categories: ["auto"]
+      conditions: ["used", "new"]
+      country: "SK"
+      currency: "EUR"
+    - name: "autobazar_eu"
+      base_url: "https://www.autobazar.eu"
+      enabled: false
+      adapter_class: "autobazar"
+      categories: ["auto"]
+      conditions: ["used", "new"]
+      country: "EU"
+      currency: "EUR"
+
+    # --- auto markets: Czech Republic ------------------------------------
+    - name: "autobazar_cz"
+      base_url: "https://www.autobazar.cz"
+      enabled: false
+      adapter_class: "autobazar"
+      categories: ["auto"]
+      conditions: ["used", "new"]
+      country: "CZ"
+      currency: "EUR"
+    - name: "garaz_cz"
+      base_url: "https://www.garaz.cz"
+      enabled: false
+      adapter_class: "garaz"
+      categories: ["auto"]
+      conditions: ["used", "new"]
+      country: "CZ"
+      currency: "CZK"
+    - name: "tipcars_cz"
+      base_url: "https://www.tipcars.com"
+      enabled: false
+      adapter_class: "tipcars"
+      categories: ["auto"]
+      conditions: ["used", "new"]
+      country: "CZ"
+      currency: "CZK"
+    - name: "auto_cz"
+      base_url: "https://www.auto.cz"
+      enabled: false
+      adapter_class: "auto_cz"
+      categories: ["auto"]
+      conditions: ["used", "new"]
+      country: "CZ"
+      currency: "CZK"
+
+    # --- auto markets: Germany -------------------------------------------
+    - name: "mobile_de"
+      base_url: "https://www.mobile.de"
+      enabled: false
+      adapter_class: "mobile_de"
+      categories: ["auto"]
+      conditions: ["used", "new"]
+      country: "DE"
+      currency: "EUR"
+
+    # --- home, furniture, DIY: Slovakia ----------------------------------
+    - name: "obi_sk"
+      base_url: "https://www.obi.sk"
+      enabled: false
+      adapter_class: "obi"
+      categories: ["home", "hobby"]
+      conditions: ["new", "open_box"]
+      country: "SK"
+      currency: "EUR"
+    - name: "merkurymarket_sk"
+      base_url: "https://www.merkurymarket.sk"
+      enabled: false
+      adapter_class: "merkurymarket"
+      categories: ["home", "hobby"]
+      conditions: ["new", "open_box"]
+      country: "SK"
+      currency: "EUR"
+    - name: "dek_sk"
+      base_url: "https://dek.sk"
+      enabled: false
+      adapter_class: "dek"
+      categories: ["home", "hobby"]
+      conditions: ["new"]
+      country: "SK"
+      currency: "EUR"
+    - name: "bauhaus_sk"
+      base_url: "https://www.bauhaus.sk"
+      enabled: false
+      adapter_class: "bauhaus"
+      categories: ["home", "hobby"]
+      conditions: ["new", "open_box"]
+      country: "SK"
+      currency: "EUR"
+    - name: "hornbach_sk"
+      base_url: "https://www.hornbach.sk"
+      enabled: false
+      adapter_class: "hornbach"
+      categories: ["home", "hobby"]
+      conditions: ["new", "open_box"]
+      country: "SK"
+      currency: "EUR"
+    - name: "jysk_sk"
+      base_url: "https://jysk.sk"
+      enabled: false
+      adapter_class: "jysk"
+      categories: ["home"]
+      conditions: ["new"]
+      country: "SK"
+      currency: "EUR"
+    - name: "favi_sk"
+      base_url: "https://favi.sk"
+      enabled: false
+      adapter_class: "favi"
+      categories: ["home"]
+      conditions: ["new"]
+      country: "SK"
+      currency: "EUR"
+    - name: "ikea_sk"
+      base_url: "https://www.ikea.com/sk/sk/"
+      enabled: false
+      adapter_class: "ikea"
+      categories: ["home"]
+      conditions: ["new"]
+      country: "SK"
+      currency: "EUR"
+    - name: "herman_sk"
+      base_url: "https://www.herman.sk"
+      enabled: false
+      adapter_class: "herman"
+      categories: ["hobby"]
+      conditions: ["new"]
+      country: "SK"
+      currency: "EUR"
+
+    # --- home and hobby: Czech Republic ---------------------------------
+    - name: "hobbyshop_cz"
+      base_url: "https://www.hobbyshop.cz"
+      enabled: false
+      adapter_class: "hobbyshop"
+      categories: ["hobby"]
+      conditions: ["new"]
+      country: "CZ"
+      currency: "CZK"
+    - name: "decathlon_sk"
+      base_url: "https://www.decathlon.sk"
+      enabled: false
+      adapter_class: "decathlon"
+      categories: ["hobby"]
+      conditions: ["new"]
+      country: "SK"
+      currency: "EUR"
+
+    # --- electronics: Czech Republic -------------------------------------
+    - name: "mironet_cz"
+      base_url: "https://www.mironet.cz"
+      enabled: false
+      adapter_class: "mironet"
+      categories: ["electronics", "appliances"]
+      conditions: ["new", "open_box"]
+      country: "CZ"
+      currency: "CZK"
 
   # Optional baseline filters. Precedence: CLI > prompt/LLM > these defaults.
   # Canonical keys: min_price, max_price, condition, brand, location,
   # shipping, seller_type, sort, plus arbitrary extras (e.g. socket: AM5).
   default_filters: {}
+
+  # Where you shop. Sites in this market are preferred, neighbouring EU
+  # markets come next, the rest last.
+  user_country: "SK"
+  user_city: ""
+  # How many shops may be opened per search round.
+  max_sites: 8
+  # Static EUR rates for the currencies the sites list prices in.
+  currency_rates:
+    EUR: 1.0
+    CZK: 0.0265
 
   winners_count: 3
   max_rounds: 3

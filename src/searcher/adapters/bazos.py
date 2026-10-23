@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 from typing import ClassVar
 from urllib.parse import quote_plus
 
@@ -139,12 +138,11 @@ class BazosAdapter(BaseAdapter):
                 price_el = price_container
             price_text = await price_el.inner_text()
 
-            # Parse price: "26 €" → 26.0
-            price_clean = price_text.replace(" ", "").replace(",", ".")
-            price_match = re.search(r"([\d.]+)\s*€", price_clean)
-            if not price_match:
+            # "26 €" on bazos.sk, "8 900 Kč" on bazos.cz.
+            parsed = self.parse_price_with_currency(price_text)
+            if parsed is None:
                 return None
-            price_eur = float(price_match.group(1))
+            price_eur, original_price, original_currency = parsed
 
             condition = "used"
 
@@ -159,7 +157,13 @@ class BazosAdapter(BaseAdapter):
                 condition=condition,
                 category="general",
                 site_name=self.name,
-                metadata={"source": "bazos"}
+                metadata={
+                    "source": "bazos",
+                    "original_price": original_price,
+                    "original_currency": original_currency,
+                },
+                original_price=original_price,
+                original_currency=original_currency,
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
             logger.debug(f"[{self.name}] Extract error: {e}")

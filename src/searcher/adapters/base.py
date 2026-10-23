@@ -4,6 +4,7 @@ from typing import ClassVar
 
 from playwright.async_api import Page
 
+from src.searcher.currency import parse_price_detail
 from src.searcher.filters import SearchFilters
 from src.searcher.site_profiles import SiteProfile
 
@@ -23,6 +24,8 @@ BLOCK_MARKERS = (
     ("something went wrong on our end", "ebay bot block"),
     ("pardon our interruption", "bot block"),
     ("unusual traffic", "rate limited"),
+    ("_____tmd_____", "aliExpress anti-bot challenge"),
+    ("x5secdata", "aliExpress anti-bot challenge"),
 )
 
 
@@ -37,6 +40,8 @@ class Deal:
     category: str = "general"           # electronics | appliances | auto | etc.
     site_name: str = ""
     metadata: dict = field(default_factory=dict)  # extra: shipping, seller, location, etc.
+    original_price: float | None = None  # amount as listed, in original_currency
+    original_currency: str = "EUR"
 
 
 class BaseAdapter(ABC):
@@ -45,6 +50,9 @@ class BaseAdapter(ABC):
     name: str = ""           # e.g., "alza"
     base_url: str = ""       # e.g., "https://www.alza.sk"
     requires_login: bool = False
+    # Currency the shop lists prices in. Overridden per site when the same
+    # adapter serves several markets (Alza SK vs. Alza CZ).
+    currency: str = "EUR"
     supported_conditions: ClassVar[list[str]] = ["new", "used", "refurbished", "open_box"]
     supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
 
@@ -59,9 +67,14 @@ class BaseAdapter(ABC):
     results_selector: str = ""      # Main results container selector
     item_selector: str = ""         # Individual item selector
 
-    def __init__(self, base_url: str | None = None):
-        """Allow a site entry to override the adapter's default country domain."""
+    def __init__(self, base_url: str | None = None, currency: str | None = None):
+        """Allow a site entry to override the adapter's default country domain.
+
+        The currency can be overridden too, because one adapter can serve
+        several markets (Alza SK quotes in EUR, Alza CZ in CZK).
+        """
         self.base_url = (base_url or type(self).base_url).rstrip("/")
+        self.currency = (currency or type(self).currency or "EUR").upper()
 
     @abstractmethod
     async def search(
@@ -148,6 +161,18 @@ class BaseAdapter(ABC):
             if marker in title or marker in url:
                 return reason
         return None
+
+    def parse_price_with_currency(self, text: str) -> tuple[float, float, str] | None:
+        """Parse *text* into ``(price_eur, original_amount, currency)``.
+
+        The adapter's own currency is used when the price text carries no
+        symbol, which is the normal case on Czech portals.
+        """
+        detail = parse_price_detail(text, self.currency)
+        if detail is None:
+            return None
+        original, eur, currency = detail
+        return eur, original, currency
 
     @staticmethod
     def parse_price_eur(text: str) -> float | None:

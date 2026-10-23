@@ -20,7 +20,7 @@ class FakeLLM:
     async def chat(self, system, user, max_tokens=400):
         self.calls.append((system, user, max_tokens))
         if self.raises:
-            raise RuntimeError("llm down")
+            raise RuntimeError("llm down")  # noqa: TRY003 - simulating a dead LLM
         return self.reply
 
 
@@ -86,9 +86,26 @@ async def test_site_selection_filters_by_condition():
     out = await SiteSelectionAgent().run(
         {"prompt": "x", "condition": "refurbished", "category": "electronics"}
     )
-    assert set(out["selected_sites"]) == {"backmarket", "ebay"}
+    assert set(out["selected_sites"]) == {
+        "backmarket",
+        "ebay",
+        "heureka",
+        "idealo",
+        "amazon_de",
+        "aukro",
+    }
     assert "alza" not in out["selected_sites"]
     assert "reasoning" in out
+
+
+@pytest.mark.asyncio
+async def test_site_selection_reads_the_registry():
+    """The agent must know every registered site, not a hardcoded table."""
+    caps = SiteSelectionAgent.capabilities()
+    assert "autobazar_sk" in caps
+    assert "mironet_cz" in caps
+    assert caps["autobazar_sk"]["country"] == "SK"
+    assert caps["garaz_cz"]["currency"] == "CZK"
 
 
 # --- domain expert ---------------------------------------------------------

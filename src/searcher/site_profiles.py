@@ -184,6 +184,9 @@ class SiteProfile(BaseModel):
     base_url: str = Field(min_length=1)
     status: ProfileStatus = "draft"
     last_verified: date | None = None
+    # Currency the shop lists prices in (EUR, CZK, ...). Used to convert
+    # prices that carry no symbol in the listing text.
+    currency: str = "EUR"
     search: SearchSpec = Field(default_factory=SearchSpec)
     filters: ProfileFilters = Field(default_factory=ProfileFilters)
     extraction: ExtractionSpec = Field(default_factory=ExtractionSpec)

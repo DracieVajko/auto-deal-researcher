@@ -30,8 +30,13 @@ class ProfileAdapter(BaseAdapter):
     supported_conditions: ClassVar[list[str]] = ["new", "used", "refurbished", "open_box", "marketplace"]
     supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
 
-    def __init__(self, base_url: str | None = None, profile: SiteProfile | None = None):
-        super().__init__(base_url)
+    def __init__(
+        self,
+        base_url: str | None = None,
+        profile: SiteProfile | None = None,
+        currency: str | None = None,
+    ):
+        super().__init__(base_url, currency)
         self.profile = profile
         if profile is not None:
             self.name = profile.site_id
@@ -39,6 +44,8 @@ class ProfileAdapter(BaseAdapter):
                 self.item_selector = profile.extraction.item_selector
             if profile.base_url:
                 self.base_url = profile.base_url.rstrip("/")
+            if profile.currency:
+                self.currency = profile.currency.upper()
 
     def default_search_url(self, query: str) -> str:
         if self.profile and self.profile.search.url_template:
@@ -118,9 +125,10 @@ class ProfileAdapter(BaseAdapter):
             price_text = await self._text(element, extraction.price_selector)
             if not price_text:
                 price_text = " ".join((await element.inner_text()).split())
-            price_eur = self.parse_price_eur(price_text)
-            if not title or price_eur is None:
+            parsed = self.parse_price_with_currency(price_text)
+            if not title or parsed is None:
                 return None
+            price_eur, original_price, original_currency = parsed
 
             link_el = None
             if extraction.link_selector:
@@ -137,7 +145,11 @@ class ProfileAdapter(BaseAdapter):
             condition_text = await self._text(element, extraction.condition_selector)
             condition = self._detect_condition(condition_text or title)
 
-            metadata: dict[str, str] = {"source": "profile"}
+            metadata: dict[str, str] = {
+                "source": "profile",
+                "original_price": original_price,
+                "original_currency": original_currency,
+            }
             for key, selector in (
                 ("brand", extraction.brand_selector),
                 ("seller", extraction.seller_selector),
@@ -160,6 +172,8 @@ class ProfileAdapter(BaseAdapter):
                 category="general",
                 site_name=self.profile.site_id,
                 metadata=metadata,
+                original_price=original_price,
+                original_currency=original_currency,
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as exc:
             logger.debug("[%s] extract error: %s", self.profile.site_id, exc)

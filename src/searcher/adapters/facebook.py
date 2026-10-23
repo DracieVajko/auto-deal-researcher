@@ -1,5 +1,4 @@
 import logging
-import re
 from typing import ClassVar
 from urllib.parse import quote_plus
 
@@ -81,10 +80,8 @@ class FacebookAdapter(BaseAdapter):
             title = await title_el.inner_text()
             price_text = await price_el.inner_text() if price_el else "0 €"
 
-            # Parse price
-            price_clean = price_text.replace(" ", "").replace(",", ".")
-            price_match = re.search(r"([\d.]+)\s*€", price_clean)
-            price_eur = float(price_match.group(1)) if price_match else 0.0
+            parsed = self.parse_price_with_currency(price_text)
+            price_eur, original_price, original_currency = parsed or (0.0, 0.0, "EUR")
 
             condition = "used"
 
@@ -99,7 +96,13 @@ class FacebookAdapter(BaseAdapter):
                 condition=condition,
                 category="general",
                 site_name=self.name,
-                metadata={"source": "facebook"}
+                metadata={
+                    "source": "facebook",
+                    "original_price": original_price,
+                    "original_currency": original_currency,
+                },
+                original_price=original_price,
+                original_currency=original_currency,
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
             logger.debug(f"[{self.name}] Extract error: {e}")

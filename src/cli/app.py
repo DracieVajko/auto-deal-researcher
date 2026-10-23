@@ -62,7 +62,7 @@ def run(
     prompt: str | None = typer.Option(None, "--prompt", "-p", help="Search prompt (single-run mode)"),
     prompt_file: str | None = typer.Option(None, "--prompt-file", "-f", help="YAML file with prompt (auto mode)"),
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
-    category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, any"),
+    category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, home, hobby, any"),
     winners: int | None = typer.Option(None, "--winners", "-w", help="Override winners_count from config"),
     output_format: str | None = typer.Option(None, "--format", help="Override output format: json, markdown, both"),
     min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
@@ -73,6 +73,8 @@ def run(
     seller_type: str | None = typer.Option(None, "--seller-type", help="retailer, marketplace, classifieds, auction, private"),
     sort: str | None = typer.Option(None, "--sort", help="relevance, price_asc, price_desc, newest"),
     extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
+    country: str | None = typer.Option(None, "--country", help="Market to prefer, e.g. SK, CZ, DE"),
+    max_sites: int | None = typer.Option(None, "--max-sites", help="How many shops to open per round"),
 ):
     """Run a single search cycle."""
     asyncio.run(
@@ -91,6 +93,8 @@ def run(
             seller_type,
             sort,
             extra_filters,
+            country,
+            max_sites,
         )
     )
 
@@ -110,6 +114,8 @@ async def _run_async(
     seller_type=None,
     sort=None,
     extra_filters=None,
+    country=None,
+    max_sites=None,
 ):
     config = load_config()
 
@@ -128,6 +134,10 @@ async def _run_async(
         config.search.winners_count = winners
     if output_format:
         config.output.format = output_format
+    if country:
+        config.search.user_country = country.upper()
+    if max_sites:
+        config.search.max_sites = max_sites
 
     llm = LLMClient(config)
     try:
@@ -177,7 +187,7 @@ async def _run_async(
 def diamond_search(
     prompt: str = typer.Option(..., "--prompt", "-p", help="Search prompt"),
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
-    category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, any"),
+    category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, home, hobby, any"),
     winners: int = typer.Option(3, "--winners", "-w", help="How many ranked deals to keep"),
     output_dir: str = typer.Option("./results", "--output-dir", help="Where to write the ranking"),
     min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
@@ -188,6 +198,8 @@ def diamond_search(
     seller_type: str | None = typer.Option(None, "--seller-type", help="retailer, marketplace, classifieds, auction, private"),
     sort: str | None = typer.Option(None, "--sort", help="relevance, price_asc, price_desc, newest"),
     extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
+    country: str | None = typer.Option(None, "--country", help="Market to prefer, e.g. SK, CZ, DE"),
+    max_sites: int | None = typer.Option(None, "--max-sites", help="How many shops to open per round"),
 ):
     """Run the full 7-agent Diamond Search pipeline."""
     asyncio.run(
@@ -205,6 +217,8 @@ def diamond_search(
             seller_type,
             sort,
             extra_filters,
+            country,
+            max_sites,
         )
     )
 
@@ -223,11 +237,17 @@ async def _diamond_search_async(
     seller_type=None,
     sort=None,
     extra_filters=None,
+    country=None,
+    max_sites=None,
 ):
     config = load_config()
     if not config.search.diamond_search.enabled:
         typer.echo("Error: diamond_search.enabled is false in config.yaml", err=True)
         raise typer.Exit(1)
+    if country:
+        config.search.user_country = country.upper()
+    if max_sites:
+        config.search.max_sites = max_sites
 
     llm = LLMClient(config)
     try:
@@ -443,7 +463,7 @@ async def _doctor_async(site: str | None, offline: bool):
 def search(
     prompt: str = typer.Option(..., "--prompt", "-p", help="Search prompt (e.g., 'DJI drone under 350 euros')"),
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
-    category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, any"),
+    category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, home, hobby, any"),
     winners: int = typer.Option(3, "--winners", "-w", help="How many ranked deals to keep"),
     output_dir: str = typer.Option("./results", "--output-dir", help="Output directory for results"),
     max_pages: int = typer.Option(5, "--max-pages", help="Max pages per site"),
@@ -456,6 +476,8 @@ def search(
     seller_type: str | None = typer.Option(None, "--seller-type", help="retailer, marketplace, classifieds, auction, private"),
     sort: str | None = typer.Option(None, "--sort", help="relevance, price_asc, price_desc, newest"),
     extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
+    country: str | None = typer.Option(None, "--country", help="Market to prefer, e.g. SK, CZ, DE"),
+    max_sites: int | None = typer.Option(None, "--max-sites", help="How many shops to open per round"),
 ):
     """AI-powered search across multiple sites with LLM judgment."""
     asyncio.run(
@@ -475,6 +497,8 @@ def search(
             seller_type,
             sort,
             extra_filters,
+            country,
+            max_sites,
         )
     )
 
@@ -495,9 +519,15 @@ async def _search_async(
     seller_type=None,
     sort=None,
     extra_filters=None,
+    country=None,
+    max_sites=None,
 ):
     config = load_config()
     config.search.winners_count = winners
+    if country:
+        config.search.user_country = country.upper()
+    if max_sites:
+        config.search.max_sites = max_sites
 
     llm = LLMClient(config)
     try:

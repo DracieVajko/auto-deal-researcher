@@ -55,9 +55,9 @@ def test_by_id_returns_spec():
 def test_summary_counts():
     s = summary()
     assert s["working"] == 2
-    assert s["blocked"] == 2
+    assert s["blocked"] == 4
     assert s["needs_auth"] == 1
-    assert s["planned"] == 16
+    assert s["planned"] == 33
     assert sum(s.values()) == len(SITES)
 
 
@@ -78,8 +78,38 @@ def test_planned_sites_have_adapter_class():
 
 
 def test_categories_are_known():
-    known = {"electronics", "appliances", "auto", "general"}
+    known = {"electronics", "appliances", "auto", "home", "hobby", "general"}
     for s in SITES:
         assert set(s.categories) <= known, f"{s.id}: unknown category"
         assert set(s.conditions) <= {"new", "used", "refurbished", "open_box",
                                       "marketplace", "any"}, f"{s.id}: unknown condition"
+
+
+def test_every_site_has_a_country_and_currency():
+    for s in SITES:
+        assert s.country, f"{s.id}: no country"
+        assert s.currency in {"EUR", "CZK", "USD", "GBP"}, f"{s.id}: unknown currency"
+
+
+def test_czech_sites_quote_in_the_right_currency():
+    # The Autobazar family bills in EUR even on its CZ domain, the rest of
+    # the CZ market bills in CZK.
+    eur_cz = {"autobazar_cz"}
+    for s in SITES:
+        if s.country != "CZ":
+            continue
+        expected = "EUR" if s.id in eur_cz else "CZK"
+        assert s.currency == expected, f"{s.id}: expected {expected}"
+
+
+def test_new_site_groups_are_registered():
+    ids = {s.id for s in SITES}
+    auto = {"autobazar_sk", "autobazar_eu", "autobazar_cz", "garaz_cz",
+            "tipcars_cz", "auto_cz", "mobile_de"}
+    home = {"obi_sk", "merkurymarket_sk", "dek_sk", "bauhaus_sk", "hornbach_sk",
+            "jysk_sk", "favi_sk", "ikea_sk", "herman_sk", "hobbyshop_cz",
+            "decathlon_sk", "mironet_cz"}
+    assert auto <= ids
+    assert home <= ids
+    for site_id in auto:
+        assert "auto" in next(s for s in SITES if s.id == site_id).categories

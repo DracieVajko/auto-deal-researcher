@@ -1,0 +1,20 @@
+version: 1
+site_id: mobile_de
+base_url: https://www.mobile.de
+status: draft
+currency: EUR
+search:
+  url_template: https://www.mobile.de/
+  category_urls:
+    auto: https://www.mobile.de/
+filters:
+  extras: {}
+extraction:
+  item_selector: .product, .item, .product-card, .item-card, [data-product]
+  title_selector: h1, h2, h3, .title, .product-title, .name
+  price_selector: .price, .price-box__price, .product-price, [class*='price']
+  link_selector: a[href]
+  image_selector: img
+  condition_selector: .condition, .badge, .label
+  seller_selector: .seller, .shop, .merchant
+notes: Search page captured, but no result cards matched the selector.

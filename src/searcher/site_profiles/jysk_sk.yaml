@@ -1,0 +1,30 @@
+version: 1
+site_id: jysk_sk
+base_url: https://jysk.sk
+status: draft
+currency: EUR
+search:
+  url_template: https://jysk.sk/search?query={query}
+  query_param: query
+  input_selector: input[name="query"]
+  category_urls:
+    home: https://jysk.sk/search?query={query}
+filters:
+  condition:
+    ui:
+      kind: button
+      selector: button[aria-label="Zavrieť\ Menu"]
+      value_map: {}
+    source: heuristic
+    confidence: 0.4
+    sample_value: Zavrieť Menu Penové matrace
+  extras: {}
+extraction:
+  item_selector: .product, .item, .product-card, .item-card, [data-product]
+  title_selector: h1, h2, h3, .title, .product-title, .name
+  price_selector: .price, .price-box__price, .product-price, [class*='price']
+  link_selector: a[href]
+  image_selector: img
+  condition_selector: .condition, .badge, .label
+  seller_selector: .seller, .shop, .merchant
+notes: Search page captured, but no result cards matched the selector.

@@ -1,0 +1,39 @@
+version: 1
+site_id: obi_sk
+base_url: https://www.obi.sk
+status: draft
+currency: EUR
+search:
+  url_template: https://www.obi.sk/search/vrtak/
+  input_selector: '#find-suchfeld'
+  category_urls:
+    home: https://www.obi.sk/search/vrtak/
+filters:
+  condition:
+    ui:
+      kind: button
+      selector: div.find-quick-filter-root.tw-relative > div.find-quick-filter-container.tw-flex
+        > div.tw-flex.tw-gap-2 > button.tw-bg-white.tw-text-gray-900:nth-of-type(4)
+      value_map: {}
+    source: heuristic
+    confidence: 0.4
+    sample_value: Technika Kúpeľňa Záhrada a voľný čas Bývanie Stavba Kuchyňa
+  brand:
+    ui:
+      kind: button
+      selector: div.find-quick-filter-root.tw-relative > div.find-quick-filter-container.tw-flex
+        > div.tw-flex.tw-gap-2 > button.tw-bg-white.tw-text-gray-900:nth-of-type(5)
+      value_map: {}
+    source: heuristic
+    confidence: 0.4
+    sample_value: Značka
+  extras: {}
+extraction:
+  item_selector: .product, .item, .product-card, .item-card, [data-product]
+  title_selector: h1, h2, h3, .title, .product-title, .name
+  price_selector: .price, .price-box__price, .product-price, [class*='price']
+  link_selector: a[href]
+  image_selector: img
+  condition_selector: .condition, .badge, .label
+  seller_selector: .seller, .shop, .merchant
+notes: Search page captured, but no result cards matched the selector.

@@ -1,12 +1,15 @@
 version: 1
 site_id: nay
 base_url: https://www.nay.sk
-status: draft
+status: validated
+last_verified: '2026-10-24'
+currency: EUR
 search:
-  url_template: https://www.nay.sk/notebooky
+  url_template: https://www.nay.sk/vyhladavanie?q={query}
+  query_param: q
   input_selector: input[data-qa="search-widget-input"]
   category_urls:
-    electronics: https://www.nay.sk/notebooky
+    electronics: https://www.nay.sk/vyhladavanie?q={query}
 filters:
   condition:
     url:
@@ -18,14 +21,14 @@ filters:
       value_map: {}
     source: heuristic
     confidence: 0.55
-    sample_value: param[-8][] Nové (1624)
+    sample_value: param[-8][] Nové (1634)
   extras: {}
 extraction:
-  item_selector: .product, .item, .product-card, .item-card, [data-product]
-  title_selector: h1, h2, h3, .title, .product-title, .name
-  price_selector: .price, .price-box__price, .product-price, [class*='price']
-  link_selector: a[href]
+  item_selector: .product-box, .product-item, [data-product-id]
+  title_selector: .product-box__name, .product-item__name, h2 a, h3 a
+  price_selector: .item-price .actual, .item-price
+  link_selector: h2 a, h3 a, a[href*='/p/']
   image_selector: img
-  condition_selector: .condition, .badge, .label
-  seller_selector: .seller, .shop, .merchant
-notes: Cards found, but the search query is not present in the URL.
+  condition_selector: .badge, .label
+  seller_selector: .seller, .shop
+notes: Found 24 result card(s) with .product-box, .product-item, [data-product-id].

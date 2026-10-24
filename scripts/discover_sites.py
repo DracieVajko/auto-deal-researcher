@@ -19,7 +19,7 @@ import sys
 import unicodedata
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import parse_qsl, quote_plus, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote_plus, urljoin, urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -345,8 +345,15 @@ def build_profile(
     input_selector: str | None = None,
     notes: str = "",
     currency: str = "EUR",
+    requested_url: str | None = None,
 ) -> SiteProfile:
     search = derive_search_spec(final_url, query)
+    if not search.query_param and requested_url:
+        # The site may redirect a search to a category page and drop the
+        # query from the URL; the URL we asked for is the replayable one.
+        requested = derive_search_spec(requested_url, query)
+        if requested.query_param:
+            search = requested
     search.input_selector = input_selector
     if category != "any" and search.url_template:
         search.category_urls[category] = search.url_template
@@ -408,6 +415,51 @@ def _element_selector(element) -> str:
         return str(element.evaluate(CSS_PATH_JS))
     except PlaywrightError:
         return ""
+
+
+# Path fragments that mark a form as the site's real search endpoint.
+_SEARCH_ACTIONS = ("search", "hled", "hľad", "vyhlad", "suche", "vyhľad", "hledat")
+
+
+def _search_form_target(element, query: str, page_url: str) -> str | None:
+    """Build the search URL from the form the input belongs to.
+
+    Header autocomplete widgets (Nay, JYSK) jump to a category page when
+    Enter is pressed, so the recorded URL is not replayable. The form action
+    is the real search endpoint, so it is preferred when it looks like one.
+    """
+    try:
+        info = element.evaluate(
+            """
+            el => {
+              const form = el.closest('form');
+              if (!form) return null;
+              const action = form.getAttribute('action') || '';
+              if (!action || action === '#') return null;
+              return {
+                action: action,
+                name: el.getAttribute('name') || '',
+                type: (el.getAttribute('type') || '').toLowerCase(),
+              };
+            }
+            """
+        )
+    except PlaywrightError:
+        return None
+    if not info:
+        return None
+
+    action = str(info.get("action") or "")
+    name = str(info.get("name") or "")
+    input_type = str(info.get("type") or "")
+    looks_like_search = any(token in action.lower() for token in _SEARCH_ACTIONS)
+    known_param = name.lower() in SEARCH_NAMES
+    if not name or not (looks_like_search or (known_param and input_type == "search")):
+        return None
+
+    base = action if action.startswith(("http://", "https://")) else urljoin(page_url, action)
+    separator = "&" if "?" in base else "?"
+    return f"{base}{separator}{quote_plus(name)}={quote_plus(query)}"
 
 
 def _page_state(page) -> str | None:
@@ -520,6 +572,7 @@ def discover_site(
 
     query = seed_query(site.id, category)
     final_url = site.base_url
+    requested_url: str | None = None
     controls: list[dict] = []
     cards = {"selector": None, "count": 0, "samples": []}
     state = None
@@ -547,19 +600,27 @@ def discover_site(
                 search_input, _matched = _find_search_input(page)
                 if search_input is not None:
                     input_selector = _element_selector(search_input) or _matched
-                    search_input.fill(query)
-                    search_input.press("Enter")
-                    try:
-                        page.wait_for_load_state("domcontentloaded", timeout=30000)
-                    except PlaywrightError:
-                        pass
+                    form_target = _search_form_target(search_input, query, page.url)
+                    if form_target:
+                        # Go straight to the form's search endpoint instead of
+                        # pressing Enter in an autocomplete widget.
+                        page.goto(form_target, wait_until="domcontentloaded", timeout=45000)
+                        requested_url = form_target
+                    else:
+                        search_input.fill(query)
+                        search_input.press("Enter")
+                        try:
+                            page.wait_for_load_state("domcontentloaded", timeout=30000)
+                        except PlaywrightError:
+                            pass
                     page.wait_for_timeout(3000)
                     _accept_cookies(page)
                 else:
                     template = get_selectors(site.adapter_class or site.id).get("search_url_template")
                     if template:
-                        page.goto(template.replace("{query}", quote_plus(query)),
-                                  wait_until="domcontentloaded", timeout=45000)
+                        target = template.replace("{query}", quote_plus(query))
+                        page.goto(target, wait_until="domcontentloaded", timeout=45000)
+                        requested_url = target
                         page.wait_for_timeout(3000)
                         _accept_cookies(page)
                 state = _page_state(page)
@@ -595,6 +656,12 @@ def discover_site(
                 pass
 
     search_spec = derive_search_spec(final_url, query)
+    if not search_spec.query_param and requested_url:
+        # A redirect to a category page drops the query from the final URL;
+        # the URL we asked for is the replayable one.
+        requested = derive_search_spec(requested_url, query)
+        if requested.query_param:
+            search_spec = requested
     has_query_url = bool(search_spec.query_param)
     if state == "blocked":
         status = "blocked"
@@ -627,6 +694,7 @@ def discover_site(
         input_selector=input_selector,
         notes=notes,
         currency=registry_currency(site.id),
+        requested_url=requested_url,
     )
     save_profile(profile, profile_dir)
     return {

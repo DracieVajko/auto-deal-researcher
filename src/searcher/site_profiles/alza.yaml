@@ -2,6 +2,7 @@ version: 1
 site_id: alza
 base_url: https://www.alza.sk
 status: blocked
+currency: EUR
 search:
   url_template: https://www.alza.sk/
   category_urls:

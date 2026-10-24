@@ -63,3 +63,52 @@ def test_run_validate_forwards_headless_unchanged(monkeypatch, tmp_path):
     )
     assert ds.run_validate(args) == 0
     assert seen["headless"] is False
+
+
+def test_run_discover_prints_the_failure_reason(monkeypatch, tmp_path, capsys):
+    """A crashed site must say why, not just 'failed'."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("net::ERR_CONNECTION_RESET at https://www.autobazar.sk/")  # noqa: TRY003
+
+    monkeypatch.setattr(ds, "discover_site", boom)
+    assert ds.run_discover(_discover_args(tmp_path, True)) == 0
+    out = capsys.readouterr().out
+    assert "failed" in out
+    assert "ERR_CONNECTION_RESET" in out
+
+
+def test_run_validate_prints_the_failure_reason(monkeypatch, tmp_path, capsys):
+    profile = SimpleNamespace(
+        site_id="alza",
+        search=SimpleNamespace(category_urls={"electronics": "https://x.test/?q={query}"}),
+    )
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("selector timeout")  # noqa: TRY003
+
+    monkeypatch.setattr(ds, "load_profile", lambda site_id, directory: profile)
+    monkeypatch.setattr(ds, "validate_profile", boom)
+    args = SimpleNamespace(
+        all=False,
+        site=["alza"],
+        category="electronics",
+        profile_dir=tmp_path,
+        user_data_dir=tmp_path,
+        headless=False,
+        no_pause=True,
+    )
+    assert ds.run_validate(args) == 0
+    out = capsys.readouterr().out
+    assert "failed" in out
+    assert "selector timeout" in out
+
+
+def test_error_text_flattens_the_playwright_call_log():
+    class FakePlaywrightError(Exception):
+        message = "Page.goto: net::ERR_CONNECTION_RESET\nCall log:\n  - navigating to x"
+
+    text = ds._error_text(FakePlaywrightError("ignored"))
+    assert "\n" not in text
+    assert text.startswith("Page.goto: net::ERR_CONNECTION_RESET")
+    assert len(text) <= 300

@@ -177,6 +177,12 @@ def _today():
     return datetime.now().astimezone().date()
 
 
+def registry_currency(site_id: str) -> str:
+    """Currency the registry declares for a site (EUR when unknown)."""
+    spec = by_id(site_id)
+    return (spec.currency if spec else "EUR").upper()
+
+
 def derive_search_spec(final_url: str, query: str) -> SearchSpec:
     """Turn the URL reached by typing *query* into a reusable template."""
     parts = urlsplit(final_url)
@@ -620,7 +626,7 @@ def discover_site(
         status,
         input_selector=input_selector,
         notes=notes,
-        currency=site.currency,
+        currency=registry_currency(site.id),
     )
     save_profile(profile, profile_dir)
     return {
@@ -644,6 +650,9 @@ def validate_profile(
     pause: bool = True,
 ) -> dict:
     query = seed_query(profile.site_id, category)
+    # Keep the profile in sync with the registry: an older profile may still
+    # carry EUR for a site that lists in CZK.
+    profile.currency = registry_currency(profile.site_id)
     url = FilterEngine.build_search_url(profile, query, category, SearchFilters())
     if not url:
         profile.status = "needs_manual"
@@ -708,6 +717,26 @@ def _selected_sites(args) -> list[SiteSpec]:
     return specs
 
 
+def _error_text(exc: BaseException) -> str:
+    """One-line, bounded description of a failure.
+
+    Playwright puts the real reason in ``exc.message`` and keeps the call log
+    in newlines, so the message is preferred and everything is flattened.
+    """
+    text = str(getattr(exc, "message", "") or exc)
+    flat = " ".join(text.split())
+    return flat[:300] or type(exc).__name__
+
+
+def _result_detail(result: dict) -> str:
+    """Human-readable reason for a result, whatever kind it is."""
+    for key in ("notes", "reason", "error"):
+        value = result.get(key)
+        if value:
+            return " ".join(str(value).split())[:300]
+    return ""
+
+
 def _write_state(state_path: Path, result: dict) -> None:
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state = {}
@@ -749,10 +778,10 @@ def run_discover(args) -> int:
                 resume=args.resume,
             )
         except Exception as exc:  # noqa: BLE001 - one site must not abort the batch
-            result = {"site_id": site.id, "status": "failed", "error": str(exc)[:300]}
+            result = {"site_id": site.id, "status": "failed", "error": _error_text(exc)}
         results.append(result)
         _write_state(args.state, result)
-        print(f"  -> {result.get('status')}: {result.get('notes') or result.get('reason', '')}")
+        print(f"  -> {result.get('status')}: {_result_detail(result)}")
 
     if args.report_dir:
         args.report_dir.mkdir(parents=True, exist_ok=True)
@@ -788,9 +817,11 @@ def run_validate(args) -> int:
                 pause=not args.no_pause,
             )
         except Exception as exc:  # noqa: BLE001 - one site must not abort the batch
-            result = {"site_id": profile.site_id, "status": "failed", "error": str(exc)[:300]}
+            result = {"site_id": profile.site_id, "status": "failed", "error": _error_text(exc)}
         results.append(result)
-        print(f"  -> {result.get('status')} ({result.get('cards', 0)} cards)")
+        detail = _result_detail(result)
+        suffix = f" ({result.get('cards', 0)} cards)" if detail else ""
+        print(f"  -> {result.get('status')}{suffix}: {detail}".rstrip(": "))
     return 0
 
 

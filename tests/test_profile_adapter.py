@@ -102,6 +102,18 @@ def test_profile_adapter_uses_profile_base_url():
     assert adapter.base_url == "https://www.mall.sk"
 
 
+def test_profile_adapter_prefers_the_explicit_currency_over_the_profile():
+    """The registry is authoritative; an older profile may still say EUR."""
+    profile = _profile(currency="EUR")
+    adapter = ProfileAdapter(profile=profile, currency="CZK")
+    assert adapter.currency == "CZK"
+
+
+def test_profile_adapter_falls_back_to_the_profile_currency():
+    adapter = ProfileAdapter(profile=_profile(currency="CZK"))
+    assert adapter.currency == "CZK"
+
+
 def test_profile_adapter_default_search_url():
     adapter = ProfileAdapter(profile=_profile())
     assert adapter.default_search_url("mini pc") == "https://www.mall.sk/search?q=mini+pc"

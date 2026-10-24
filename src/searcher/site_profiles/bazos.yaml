@@ -3,6 +3,7 @@ site_id: bazos
 base_url: https://www.bazos.sk
 status: validated
 last_verified: '2026-10-23'
+currency: EUR
 search:
   url_template: https://www.bazos.sk/search.php?hledat={query}&rubriky=www&hlokalita=&humkreis=25&cenaod=&cenado=&Submit=Hľadať&order=&kitx=ano
   query_param: hledat

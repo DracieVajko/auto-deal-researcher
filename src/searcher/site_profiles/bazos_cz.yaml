@@ -3,6 +3,7 @@ site_id: bazos_cz
 base_url: https://www.bazos.cz
 status: validated
 last_verified: '2026-10-23'
+currency: CZK
 search:
   url_template: https://www.bazos.cz/search.php?hledat={query}&rubriky=www&hlokalita=&humkreis=25&cenaod=&cenado=&Submit=Hledat&order=&kitx=ano
   query_param: hledat

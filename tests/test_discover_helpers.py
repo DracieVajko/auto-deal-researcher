@@ -10,6 +10,7 @@ from scripts.discover_sites import (
     derive_extraction,
     derive_search_spec,
     option_value_map,
+    registry_currency,
 )
 from src.searcher.site_profiles import save_profile
 from src.searcher.site_registry import seed_query
@@ -168,6 +169,12 @@ def test_build_profile_sets_category_and_filters():
     assert profile.filters.condition is not None
     assert profile.filters.condition.ui is not None
     assert profile.filters.condition.ui.value_map == {"new": "1", "used": "2"}
+
+
+def test_registry_currency_follows_the_site_registry():
+    assert registry_currency("bazos_cz") == "CZK"
+    assert registry_currency("bazos") == "EUR"
+    assert registry_currency("does-not-exist") == "EUR"
 
 
 def test_build_profile_saved_yaml_has_no_secret_query_params(tmp_path: Path):

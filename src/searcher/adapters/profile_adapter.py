@@ -44,7 +44,9 @@ class ProfileAdapter(BaseAdapter):
                 self.item_selector = profile.extraction.item_selector
             if profile.base_url:
                 self.base_url = profile.base_url.rstrip("/")
-            if profile.currency:
+            # An explicitly passed currency (the registry) wins over the one
+            # stored in the profile, which may predate the currency layer.
+            if profile.currency and not currency:
                 self.currency = profile.currency.upper()
 
     def default_search_url(self, query: str) -> str:

@@ -17,6 +17,7 @@ from pathlib import Path
 
 from src.config.models import OutputConfig
 from src.searcher.adapters.base import Deal
+from src.searcher.currency import to_eur
 from src.searcher.listing_filter import is_laptop_title, wants_mini_pc_form_factor
 from src.utils.time import utcnow_stamp
 
@@ -72,6 +73,24 @@ class ResultProcessor:
         self.config: OutputConfig = config.output
         self.full_config = config
         self.llm = llm
+        # Determine user's preferred output currency
+        self.output_currency = (
+            getattr(getattr(self.full_config, "search", None), "default_currency", "") or ""
+        ).upper() or "EUR"
+
+    def _format_price(self, deal) -> tuple[float, str]:
+        """Convert deal price to user's preferred output currency."""
+        if deal.price_eur <= 0:
+            return 0.0, self.output_currency
+        if self.output_currency == "EUR":
+            return deal.price_eur, "EUR"
+        # Convert from EUR to target currency
+        from src.searcher.currency import to_eur
+        rates = getattr(getattr(self.full_config, "search", None), "currency_rates", {})
+        rate = rates.get(self.output_currency, 1.0)
+        if rate <= 0:
+            rate = 1.0
+        return deal.price_eur / rate, self.output_currency
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -939,13 +958,17 @@ class ResultProcessor:
         self, analysis: DealAnalysis, rank: int, is_top_pick: bool
     ) -> dict:
         deal = analysis.deal
+        price_out, currency_out = self._format_price(deal)
         return {
             "rank": rank,
             "is_top_pick": is_top_pick,
             "url": deal.url,
             "title": deal.title,
             "price_eur": deal.price_eur,
-            "currency": deal.currency,
+            "price": price_out,
+            "currency": currency_out,
+            "original_price": deal.original_price,
+            "original_currency": deal.original_currency,
             "condition": deal.condition,
             "condition_label": CONDITION_LABELS.get(deal.condition, deal.condition),
             "category": deal.category,
@@ -1001,11 +1024,12 @@ class ResultProcessor:
         lines.append("|---|------|---------|-------|-----------|------|-------|---------|")
         for index, analysis in enumerate(relevant, 1):
             deal = analysis.deal
+            price_out, currency_out = self._format_price(deal)
             pick = "⭐" if deal.url in top_picks else ""
             verdict = VERDICT_LABELS.get(analysis.verdict, analysis.verdict)
             lines.append(
                 f"| {index} | {pick} | {self._escape(deal.title)} | "
-                f"{deal.price_eur:.0f} € | "
+                f"{price_out:.2f} {currency_out} | "
                 f"{CONDITION_LABELS.get(deal.condition, deal.condition)} | "
                 f"{deal.site_name} | {analysis.score:.0f} | {verdict} |"
             )
@@ -1034,8 +1058,9 @@ class ResultProcessor:
         top_picks: set[str],
     ) -> list[str]:
         deal = analysis.deal
+        price_out, currency_out = self._format_price(deal)
         lines = [f"### {index}. {deal.title}", ""]
-        lines.append(f"- **Price:** {deal.price_eur:.2f} {deal.currency}")
+        lines.append(f"- **Price:** {price_out:.2f} {currency_out}")
         lines.append(
             f"- **Condition:** {CONDITION_LABELS.get(deal.condition, deal.condition)}"
         )

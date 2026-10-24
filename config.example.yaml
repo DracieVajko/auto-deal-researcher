@@ -274,6 +274,10 @@ search:
     EUR: 1.0
     CZK: 0.0265
 
+  # Currency in which the user wants to see prices (output currency).
+  # Defaults to the currency of the user's country if not specified.
+  default_currency: ""
+
   winners_count: 3
   max_rounds: 3
   retry_on_empty: true

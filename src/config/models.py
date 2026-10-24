@@ -172,6 +172,9 @@ class SearchConfig(BaseModel):
     user_city: str = ""
     # Upper bound on how many shops are opened per search round.
     max_sites: int = 8
+    # Currency in which the user wants to see prices (output currency).
+    # Defaults to the currency of the user's country if not specified.
+    default_currency: str = ""
     # Static EUR rates for the currencies the sites list prices in.
     currency_rates: dict[str, float] = Field(default_factory=dict)
     diamond_search: DiamondSearchConfig = DiamondSearchConfig()

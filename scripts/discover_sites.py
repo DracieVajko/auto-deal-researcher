@@ -613,8 +613,12 @@ def discover_site(
                             page.wait_for_load_state("domcontentloaded", timeout=30000)
                         except PlaywrightError:
                             pass
-                    page.wait_for_timeout(3000)
-                    _accept_cookies(page)
+                        page.wait_for_timeout(3000)
+                        _accept_cookies(page)
+                        # No form target, but we pressed Enter - use the search template as requested_url
+                        template = get_selectors(site.adapter_class or site.id).get("search_url_template")
+                        if template:
+                            requested_url = template.replace("{query}", quote_plus(query))
                 else:
                     template = get_selectors(site.adapter_class or site.id).get("search_url_template")
                     if template:

@@ -56,18 +56,14 @@ _CURRENCY_TOKENS: tuple[tuple[str, str], ...] = (
     ("GBP", "GBP"),
 )
 
-# Non-breaking space and narrow no-break space, the whitespace variants
-# Czech and Slovak price tags use. Built from code points to keep the source
-# free of invisible characters.
+# Space-like characters stripped from a captured number.
 _NBSP = chr(0x00A0)
 _NNBSP = chr(0x202F)
+_SPACES = (" ", _NBSP, _NNBSP)
 
 # Digits plus the whitespace variants Czech and Slovak price tags use.
 # \s already matches NBSP and NNBSP for str patterns.
 _NUMBER_RE = re.compile(r"\d[\d\s.,]*")
-
-# Space-like characters stripped from a captured number.
-_SPACES = (" ", _NBSP, _NNBSP)
 
 
 def _parse_number(text: str) -> float | None:
@@ -170,11 +166,37 @@ def parse_price_detail(
 
     The original amount is what the shop showed; the EUR value is what the
     rest of the system compares and filters on.
+
+    We look for a number associated with a currency symbol (Kč, €, etc.)
+    rather than just taking the first number in the text.
     """
+    # Try to find a number associated with a currency symbol
+    for token, code in _CURRENCY_TOKENS:
+        token_lower = token.lower()
+        idx = text.lower().find(token_lower)
+        if idx != -1:
+            # Found a currency symbol, look for a number near it
+            # Use negative lookbehind to avoid matching parts of model numbers
+            import re
+            token_escaped = re.escape(token)
+            # Negative lookbehind: not preceded by digit or letter
+            pattern = rf"(?<![0-9A-Za-z])(\d[\d\s.,]*)\s*{token_escaped}"
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                num = _parse_number(match.group(1))
+                if num is not None:
+                    return num, to_eur(num, code), code
+            # If no number before, try after the currency symbol
+            after = text[idx + len(token):]
+            num = _parse_number(after)
+            if num is not None:
+                return num, to_eur(num, code), code
+
+    # Fallback: no currency symbol found, use first number and default currency
     amount = _parse_number(text)
     if amount is None:
         return None
-    currency = detect_currency(text) or (default_currency or "EUR").upper()
+    currency = (default_currency or "EUR").upper()
     return amount, to_eur(amount, currency, rates), currency
 
 

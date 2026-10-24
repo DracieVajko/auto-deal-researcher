@@ -1,12 +1,15 @@
 version: 1
 site_id: aukro
 base_url: https://aukro.cz
-status: draft
+status: validated
+last_verified: '2026-10-24'
+currency: CZK
 search:
-  url_template: https://aukro.cz/notebooky-netbooky
+  url_template: https://aukro.cz/vysledky-vyhledavani?text={query}&searchAll=true&subbrand=BAZAAR
+  query_param: text
   input_selector: input[aria-label="Hledat"]
   category_urls:
-    electronics: https://aukro.cz/notebooky-netbooky
+    electronics: https://aukro.cz/vysledky-vyhledavani?text={query}&searchAll=true&subbrand=BAZAAR
 filters:
   condition:
     ui:
@@ -18,11 +21,11 @@ filters:
     sample_value: Vystaveno před
   extras: {}
 extraction:
-  item_selector: .product, .item, .product-card, .item-card, [data-product]
-  title_selector: h1, h2, h3, .title, .product-title, .name
-  price_selector: .price, .price-box__price, .product-price, [class*='price']
-  link_selector: a[href]
+  item_selector: .item-card
+  title_selector: .item-card__title, .item-box__title, h3 a, .title a
+  price_selector: .item-card__price, .price, .amount
+  link_selector: a[href*='/p/'], a[href*='/item/']
   image_selector: img
-  condition_selector: .condition, .badge, .label
-  seller_selector: .seller, .shop, .merchant
-notes: Cards found, but the search query is not present in the URL.
+  condition_selector: .item-card__condition, .condition, .status
+  seller_selector: .seller, .shop
+notes: Found 16 result card(s) with .item-card.

@@ -126,7 +126,9 @@ class ProfileAdapter(BaseAdapter):
 
             price_text = await self._text(element, extraction.price_selector)
             if not price_text:
-                price_text = " ".join((await element.inner_text()).split())
+                # Fallback: extract price from full card text using regex
+                full_text = " ".join((await element.inner_text()).split())
+                price_text = full_text
             parsed = self.parse_price_with_currency(price_text)
             if not title or parsed is None:
                 return None

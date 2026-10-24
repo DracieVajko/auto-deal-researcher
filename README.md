@@ -5,7 +5,7 @@ An intelligent deal searching application that automates finding the best deals 
 ## Features
 
 - **Multi-platform support**: Works on Windows, Linux, and macOS
-- **Site Adapters + Auto-Mapping**: 31 registered marketplaces, profile-driven discovery and a generic profile adapter; Alza and Bazos adapters verified working
+- **Site Adapters + Auto-Mapping**: 30 registered marketplaces, profile-driven discovery and a generic profile adapter; Alza, Bazos and Nay adapters verified working
 - **Location-Aware Shop Selection**: the AI picks which shops to visit, ranked by your market (`user_country`), so local shops come first and cross-border ones only when they make sense
 - **Runtime Filters**: canonical price/condition/brand/location/shipping/seller/sort filters applied through URL parameters, UI controls, then a Python post-filter
 - **Currency Normalisation**: CZK, USD and GBP prices are converted to EUR, with the original amount kept alongside
@@ -107,7 +107,7 @@ search:
       conditions: ["used"]
       country: "SK"
       currency: "EUR"
-    # ... more sites (all 31 registered sites are listed in config.example.yaml)
+    # ... more sites (all 30 registered sites are listed in config.example.yaml)
   # Optional baseline filters. Precedence: CLI > prompt/LLM > these defaults.
   default_filters: {}
   # Where you shop. Local shops are preferred, neighbouring markets next.
@@ -211,7 +211,7 @@ in `search.currency_rates`; adjust them there when they drift.
 
 ### Site discovery and profiles
 
-All 31 registered sites are listed in `config.example.yaml`. Sites without an
+All 30 registered sites are listed in `config.example.yaml`. Sites without an
 adapter need a validated profile before they participate in a search.
 
 ```bash
@@ -466,7 +466,7 @@ src/
 │   ├── filters.py                # Canonical filters, CLI/prompt parsing
 │   ├── filter_engine.py          # URL → UI → post-filter application
 │   ├── site_profiles.py          # Profile schema, loader, sanitizer
-│   ├── site_registry.py          # 31 sites, categories, markets and discovery seeds
+│   ├── site_registry.py          # 30 sites, categories, markets and discovery seeds
 │   ├── site_selection.py         # Location-aware ranking + LLM shop selection
 │   ├── currency.py               # Currency detection and EUR conversion
 │   ├── site_profiles/            # Sanitized committed profile YAML maps
@@ -506,7 +506,6 @@ src/
 | Facebook Marketplace | `facebook` | 🔐 needs auth | Requires an authenticated CDP session |
 | Mall.sk/cz | `mall` | 🧭 planned | Run discovery to create a validated profile |
 | Nay.sk | `nay` | 🧭 planned | Run discovery to create a validated profile |
-| Datart.sk/cz | `datart` | 🧭 planned | Run discovery to create a validated profile |
 | Heureka.sk | `heureka` | 🧭 planned | Price comparison; discovery profile needed |
 | Idealo.de | `idealo` | 🧭 planned | German price comparison; discovery profile needed |
 | Aukro.cz | `aukro` | 🧭 planned | Auction marketplace; bid logic not implemented |

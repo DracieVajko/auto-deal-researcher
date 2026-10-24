@@ -63,14 +63,6 @@ search:
       conditions: ["new", "open_box"]
       country: "SK"
       currency: "EUR"
-    - name: "datart"
-      base_url: "https://www.datart.sk"
-      enabled: false
-      adapter_class: "datart"
-      categories: ["electronics", "appliances"]
-      conditions: ["new", "open_box"]
-      country: "SK"
-      currency: "EUR"
     - name: "heureka"
       base_url: "https://www.heureka.sk"
       enabled: false

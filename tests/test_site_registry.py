@@ -57,7 +57,7 @@ def test_summary_counts():
     assert s["working"] == 2
     assert s["blocked"] == 4
     assert s["needs_auth"] == 1
-    assert s["planned"] == 24
+    assert s["planned"] == 23
     assert sum(s.values()) == len(SITES)
 
 

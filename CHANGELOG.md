@@ -31,10 +31,22 @@
   capability table.
 - The Bazos adapter no longer requires a literal `€`, so it also works on
   bazos.cz.
+- Discovery submits the search form's action instead of pressing Enter in an
+  autocomplete widget, and keeps the requested URL when the site redirects a
+  search to a category page. Nay.sk is mapped and validated this way.
+
+### Removed
+- `src/searcher/judge.py`: an unreferenced stub that could not even be
+  imported (duplicate argument, wrong import, undefined names).
+- The `datart` site: datart.sk redirects to nay.sk, so it duplicated Nay.
 
 ### Fixed
 - `discover_sites.py` honoured `--headless` and `--headed` backwards, so the
   browser never opened in headed mode.
+- The selector table had duplicate keys (`mall` three times, `heureka`,
+  `ebay` and `backmarket` twice), so the richer selector lists were silently
+  dropped. Every site now appears once.
+- A failed discovery printed `failed:` without the reason.
 
 ### Verification
 - Test suite: 333 passed, 11 skipped (live tests skipped by default).

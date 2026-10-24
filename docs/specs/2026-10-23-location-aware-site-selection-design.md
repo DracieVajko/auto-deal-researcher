@@ -23,7 +23,7 @@ Three separate gaps block the project from being useful for the actual user need
 - Register 10 verified, reachable sites across auto markets, home/DIY, furniture and hobby.
 - Normalise every price to EUR, keeping the original amount and currency.
 - Let the LLM choose which candidate shops to visit, informed by the user's country and the site's market, with a deterministic fallback.
-- Keep the existing 21 sites, adapters, filters and profiles working unchanged.
+- Keep the existing 20 sites, adapters, filters and profiles working unchanged.
 
 ## 3. Non-goals
 
@@ -115,7 +115,7 @@ search:
     CZK: 0.0265
 ```
 
-`max_sites` caps how many shops are opened per run. With 31 registered sites, opening all of them per round is not viable.
+`max_sites` caps how many shops are opened per run. With 30 registered sites, opening all of them per round is not viable.
 
 ## 6. Testing
 

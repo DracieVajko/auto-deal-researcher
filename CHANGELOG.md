@@ -21,6 +21,12 @@
   Market, BAUHAUS, Hornbach, JYSK, FAVI.sk, IKEA, Decathlon.
 - CLI flags `--country` and `--max-sites` for `run`, `diamond-search` and
   `search`.
+- `search.default_currency` (with `search.currency_rates`) lets reports show
+  prices in the user's currency; the JSON keeps the internal `price_eur` and
+  the original amount.
+- `python -m src.cli llm-check` probes every configured LLM provider on its own
+  and reports status, latency, provider error text and a fix hint (exit code 1
+  when nothing is healthy).
 
 ### Changed
 - Site profiles are loaded at runtime; unknown adapters participate only when
@@ -47,9 +53,17 @@
   `ebay` and `backmarket` twice), so the richer selector lists were silently
   dropped. Every site now appears once.
 - A failed discovery printed `failed:` without the reason.
+- A cloud provider was retried on every LLM call even after the provider
+  rejected the credential. HTTP 401/403 now disables that provider for the rest
+  of the run; other failures open the circuit breaker after two attempts.
+- Gemini thinking models answered `200 OK` with no text when the output budget
+  was small, which looked like a dead provider. Thinking parts are skipped when
+  parsing and the output budget has a floor (`ADS_GEMINI_MIN_OUTPUT_TOKENS`).
+- The legacy fallback used retired model IDs (`mistralai/mistral-7b-instruct`),
+  so that branch could only answer 404.
 
 ### Verification
-- Test suite: 333 passed, 11 skipped (live tests skipped by default).
+- Test suite: 352 passed, 11 skipped (live tests skipped by default).
 
 ## [1.0.0] - 2026-10-20
 

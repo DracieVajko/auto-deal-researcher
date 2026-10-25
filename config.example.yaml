@@ -306,7 +306,7 @@ llm:
       model: "poolside/laguna-s-2.1:free"
     - provider: "gemini"
       api_key_env: "GEMINI_API_KEY"
-      model: "gemini-3.7-flash"
+      model: "gemini-2.5-flash"
     - provider: "mistral"
       api_key_env: "MISTRAL_API_KEY"
       model: "ministral-14b-2512"

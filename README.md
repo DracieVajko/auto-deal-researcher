@@ -80,9 +80,47 @@ All secrets live in `.env` (git-ignored). See `.env.example` for the full list.
 | `GEMINI_API_KEY` | `src/llm/client.py` | https://aistudio.google.com/apikeys |
 | `MISTRAL_API_KEY` | `src/llm/client.py` | https://console.mistral.ai/api-keys |
 | `ADS_LOCAL_LLM_TIMEOUT` | `LLMClient` | Seconds, default `900` |
-| `ADS_CLOUD_LLM_TIMEOUT` | `LLMClient` | Seconds, default `60` |
+| `ADS_CLOUD_LLM_TIMEOUT` | `LLMClient` | Seconds, default `120` |
+| `ADS_GEMINI_MIN_OUTPUT_TOKENS` | `LLMClient` | Output-token floor for Gemini thinking models, default `512` |
 
 `config-check` fails loudly when a `${VAR}` has no value and no default.
+
+### Which LLM providers actually work?
+
+`run` logs a single line per failed provider, and a dead key otherwise shows up
+only as a slow run. Probe every provider on its own instead:
+
+```bash
+python -m src.cli llm-check
+```
+
+```
+provider     kind   status    latency  model
+------------------------------------------------------------
+lmstudio     local  http        6.37s  qwen/qwen3-coder-30b
+             HTTP 400: Failed to load model "qwen/qwen3-coder-30b". Error: Engine protocol startup was aborted.
+openrouter   cloud  auth        0.46s  poolside/laguna-s-2.1:free
+             HTTP 401: User not found.
+             hint: Create or rotate the key at https://openrouter.ai/keys.
+gemini       cloud  ok          0.71s  gemini-2.5-flash
+mistral      cloud  ok          0.88s  ministral-14b-2512
+
+2/5 providers healthy
+```
+
+Exit code is `1` when no provider is healthy, so it works as a pre-flight
+check. Useful flags: `--no-local`, `--no-cloud`, `--timeout`, `--local-timeout`.
+
+Runtime behaviour worth knowing:
+
+- A provider that answers **HTTP 401/403** is disabled for the rest of the run
+  instead of being retried on every LLM call.
+- Other provider failures open a circuit breaker after two attempts
+  (`ADS_LOCAL_BREAKER_THRESHOLD`, cooldown `ADS_LOCAL_BREAKER_COOLDOWN`).
+- Gemini thinking models spend the output budget on reasoning first; a tiny
+  `max_tokens` returns `200 OK` with no text. The client enforces a floor
+  (`ADS_GEMINI_MIN_OUTPUT_TOKENS`). Prefer `gemini-2.5-flash` over 3.x thinking
+  models for short queries — 3.x can take a minute per reply.
 
 ## Configuration
 
@@ -439,6 +477,9 @@ python -m src.cli schedule-uninstall
 # Validate config
 python -m src.cli config-check
 
+# Check which LLM providers are reachable and authorised
+python -m src.cli llm-check
+
 # Run via wrapper scripts
 # Windows:
 .\scripts\run_once.ps1 --Prompt "laptop under 1000€" --Condition new
@@ -455,7 +496,7 @@ python -m src.cli config-check
 src/
 ├── cli/
 │   ├── app.py                    # Typer CLI (run, monitor, doctor, diamond-search,
-│   │                             #   config-check, schedule-*, selector-health)
+│   │                             #   config-check, llm-check, schedule-*, selector-health)
 │   └── commands/                 # monitor, doctor, config_check, history
 ├── config/                       # Pydantic models + YAML loader with ${VAR} support
 ├── browser/                      # BrowserManager (CDP + persistent context) + fingerprint

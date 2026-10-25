@@ -1,6 +1,7 @@
 """Circuit breaker tests: a dead local endpoint must be skipped, not retried."""
 
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -38,12 +39,10 @@ def test_breaker_cooldown_expiry_allows_probe(monkeypatch):
 
 
 class Cfg:
-    class llm:
-        local = []
-        api_fallback = []
-        openrouter = None
-        gemini = None
-        mistral = None
+    def __init__(self):
+        self.llm = SimpleNamespace(
+            local=[], api_fallback=[], openrouter=None, gemini=None, mistral=None
+        )
 
 
 @pytest.mark.asyncio
@@ -61,7 +60,7 @@ async def test_dead_local_is_skipped_after_two_failures(monkeypatch):
 
     async def fake_local(local_cfg, system, user, max_tokens, temperature=0.3):
         local_calls.append(local_cfg.endpoint)
-        raise mod.requests.RequestException("connection refused")
+        raise mod.requests.RequestException("connection refused")  # noqa: TRY003
 
     async def fake_cloud(provider, key, model, system, user, max_tokens, temperature=0.3):
         return "answer"
@@ -73,3 +72,36 @@ async def test_dead_local_is_skipped_after_two_failures(monkeypatch):
         assert await llm._chat("s", "u", max_tokens=5) == "answer"
 
     assert len(local_calls) == 2, f"local should be probed twice, got {len(local_calls)}"
+
+
+@pytest.mark.asyncio
+async def test_rejected_cloud_key_is_blocked_for_the_run(monkeypatch):
+    """A 401 never heals: probe it once, then stop paying for it on every call."""
+    monkeypatch.setenv("BAD_KEY", "x")
+    monkeypatch.setenv("GOOD_KEY", "y")
+    cfg = Cfg()
+    cfg.llm.local = []
+    cfg.llm.api_fallback = [
+        LLMAPIConfig(provider="openrouter", api_key_env="BAD_KEY", model="m"),
+        LLMAPIConfig(provider="mistral", api_key_env="GOOD_KEY", model="m"),
+    ]
+    llm = LLMClient(cfg)
+
+    calls = []
+
+    async def fake_cloud(provider, key, model, system, user, max_tokens, temperature=0.3):
+        calls.append(provider)
+        if provider == "openrouter":
+            response = mod.requests.Response()
+            response.status_code = 401
+            response._content = b'{"error": {"message": "User not found."}}'
+            raise mod.requests.HTTPError("401 Client Error", response=response)  # noqa: TRY003
+        return "answer"
+
+    monkeypatch.setattr(llm, "_call_cloud_llm_async", fake_cloud)
+
+    for _ in range(4):
+        assert await llm._chat("s", "u", max_tokens=5) == "answer"
+
+    assert calls.count("openrouter") == 1, "a rejected key must not be retried"
+    assert calls.count("mistral") == 4

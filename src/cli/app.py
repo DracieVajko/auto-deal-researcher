@@ -10,6 +10,7 @@ from src.cli.commands.monitor import monitor as monitor_fn
 from src.config import load_config
 from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.llm.client import LLMClient
+from src.llm.health import run_checks as run_llm_checks
 from src.output.processor import ResultProcessor
 from src.scheduler.tasks import install_schedule, uninstall_schedule
 from src.searcher.filters import (
@@ -436,6 +437,54 @@ def config_check():
     typer.echo(f"  Sites enabled: {[s.name for s in config.search.websites if s.enabled]}")
     typer.echo(f"  LLM local: {config.llm.local[0].type if config.llm.local else 'none'}")
     typer.echo(f"  Winners: {config.search.winners_count}")
+
+
+@app.command("llm-check")
+def llm_check(
+    prompt: str = typer.Option("Reply with OK.", "--prompt", help="Probe prompt"),
+    timeout: float = typer.Option(20.0, "--timeout", help="Per cloud provider timeout (s)"),
+    local_timeout: float = typer.Option(
+        10.0, "--local-timeout", help="Per local provider timeout (s)"
+    ),
+    local: bool = typer.Option(True, "--local/--no-local", help="Probe local models"),
+    cloud: bool = typer.Option(True, "--cloud/--no-cloud", help="Probe cloud APIs"),
+):
+    """Probe every configured LLM provider and show which ones actually work."""
+    config = load_config()
+    statuses = asyncio.run(
+        run_llm_checks(
+            config,
+            local=local,
+            cloud=cloud,
+            request_timeout=timeout,
+            local_timeout=local_timeout,
+            prompt=prompt,
+        )
+    )
+    if not statuses:
+        typer.echo(
+            "No LLM providers configured (llm.local / llm.api_fallback in config.yaml)."
+        )
+        raise typer.Exit(code=1)
+
+    typer.echo(f"{'provider':<12} {'kind':<6} {'status':<8} {'latency':>8}  model")
+    typer.echo("-" * 60)
+    for status in statuses:
+        latency = f"{status.latency:.2f}s" if status.latency else "-"
+        typer.echo(
+            f"{status.provider:<12} {status.kind:<6} {status.status:<8} "
+            f"{latency:>8}  {status.model}"
+        )
+        if status.detail:
+            typer.echo(f"{'':<12} {status.detail}")
+        if status.hint:
+            typer.echo(f"{'':<12} hint: {status.hint}")
+
+    healthy = sum(1 for status in statuses if status.ok)
+    typer.echo("")
+    typer.echo(f"{healthy}/{len(statuses)} providers healthy")
+    if healthy == 0:
+        raise typer.Exit(code=1)
 
 
 @app.command()

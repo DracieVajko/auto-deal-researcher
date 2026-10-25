@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 LOCAL_TIMEOUT = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "900"))
 CLOUD_TIMEOUT = float(os.environ.get("ADS_CLOUD_LLM_TIMEOUT", "120"))
 
+# Gemini thinking models spend output tokens on reasoning before they emit any
+# text. With a 16-token budget the answer was cut off entirely and the provider
+# looked "empty" even though it answered 200 OK.
+GEMINI_MIN_OUTPUT_TOKENS = int(os.environ.get("ADS_GEMINI_MIN_OUTPUT_TOKENS", "512"))
+
+# HTTP statuses that mean "this credential will never work in this run".
+PERMANENT_AUTH_ERRORS = frozenset({401, 403})
+
 
 def _timeout_from_env(name: str = "ADS_LOCAL_LLM_TIMEOUT", default: float = LOCAL_TIMEOUT) -> float:
     """Read a timeout override from the environment, ignoring invalid values."""
@@ -33,11 +41,13 @@ def _timeout_from_env(name: str = "ADS_LOCAL_LLM_TIMEOUT", default: float = LOCA
 
 
 class LocalCircuitBreaker:
-    """Skip a local endpoint for a while after it fails.
+    """Skip a provider for a while after it fails.
 
     Without this, an unreachable or hung LM Studio is retried on *every*
     LLM call and each one burns the full local timeout, so a run that should
-    take seconds stalls for many minutes.
+    take seconds stalls for many minutes. The same applies to a cloud key that
+    the provider rejects: a 401 never heals, so retrying it on every call just
+    adds noise and latency.
     """
 
     def __init__(self, cooldown: float = 300.0, threshold: int = 2):
@@ -65,6 +75,16 @@ class LocalCircuitBreaker:
         self._failures[key] = n
         if n >= self.threshold:
             self._open_until[key] = time.time() + self.cooldown
+
+    def block(self, key: str) -> None:
+        """Disable a provider for the rest of the run.
+
+        Used for permanent failures such as a revoked API key (HTTP 401/403):
+        the provider cannot start working again without a config change, so a
+        timed cooldown would only waste one request per call in the meantime.
+        """
+        self._failures[key] = self.threshold
+        self._open_until[key] = float("inf")
 
     def reset(self) -> None:
         self._failures.clear()
@@ -108,6 +128,30 @@ def _content_from(payload: dict) -> str:
         if isinstance(value, str) and value.strip():
             return value
     return ""
+
+
+def _content_from_gemini(payload: dict) -> str:
+    """Extract answer text from a Gemini ``generateContent`` response.
+
+    Gemini thinking models stream their internal reasoning back as parts
+    flagged ``thought: true`` and may omit the answer part entirely when the
+    output budget runs out. The old inline indexing
+    ``["candidates"][0]["content"]["parts"][0]["text"]`` raised KeyError on
+    those replies, which the fallback chain logged as a provider failure with
+    no explanation. Thinking parts are dropped here so the caller only ever
+    sees the user-visible answer.
+    """
+    try:
+        candidate = payload["candidates"][0]
+    except (KeyError, IndexError, TypeError):
+        return ""
+    parts = candidate.get("content", {}).get("parts") or []
+    chunks = [
+        part.get("text", "")
+        for part in parts
+        if isinstance(part, dict) and part.get("text") and not part.get("thought")
+    ]
+    return "".join(chunks).strip()
 
 
 class LLMClient:
@@ -259,6 +303,10 @@ class LLMClient:
 
         # Try cloud APIs from new config
         for api in self.llm_config.api_fallback:
+            key = f"cloud:{api.provider}:{api.api_key_env}"
+            if self._breaker.is_open(key):
+                logger.info(f"Skipping cloud API {api.provider} (circuit open)")
+                continue
             api_key = self._get_api_key(api.api_key_env)
             if api_key:
                 try:
@@ -268,20 +316,43 @@ class LLMClient:
                         max_tokens, temperature
                     )
                     if reply.strip():
+                        self._breaker.record_success(key)
                         return reply
                     # An empty body is a failure; fall through to the next provider.
                     logger.warning(f"Cloud API ({api.provider}) returned an empty response")
+                    self._breaker.record_failure(key)
+                except requests.HTTPError as e:
+                    status = getattr(e.response, "status_code", None)
+                    if status in PERMANENT_AUTH_ERRORS:
+                        logger.warning(
+                            "Cloud API (%s) rejected the credential (HTTP %s: %s); "
+                            "disabling it for this run. Fix %s in .env or config.yaml.",
+                            api.provider, status, e, api.api_key_env,
+                        )
+                        self._breaker.block(key)
+                    else:
+                        logger.warning(f"Cloud API ({api.provider}) failed: {e}")
+                        self._breaker.record_failure(key)
                 except (requests.RequestException, ValueError, KeyError, IndexError) as e:
                     logger.warning(f"Cloud API ({api.provider}) failed: {e}")
+                    self._breaker.record_failure(key)
             else:
                 logger.warning(f"Cloud API ({api.provider}) skipped: no API key in env {api.api_key_env}")
 
-        # Legacy fallback with correct models per provider
+        # Legacy fallback with correct models per provider.
+        #
+        # Defaults must be model IDs that exist *today*: the old
+        # "mistralai/mistral-7b-instruct" was retired by OpenRouter, so that
+        # branch could only ever answer 404. Configured models win when present
+        # so the legacy path no longer drifts from config.yaml.
         legacy_models = {
-            "openrouter": "mistralai/mistral-7b-instruct",
-            "gemini": "gemini-1.5-flash",
+            "openrouter": "google/gemma-4-26b-a4b-it:free",
+            "gemini": "gemini-2.5-flash",
             "mistral": "mistral-small-latest",
         }
+        for api in self.llm_config.api_fallback:
+            if api.model:
+                legacy_models[api.provider] = api.model
         for provider in ["openrouter", "gemini", "mistral"]:
             api_key = getattr(self.llm_config, provider, None)
             if api_key:
@@ -526,7 +597,8 @@ class LLMClient:
 
     # === Local LLM calls ===
     async def _call_local_llm_async(self, local_cfg, system: str, user: str,
-                                    max_tokens: int, temperature: float = 0.3) -> str:
+                                    max_tokens: int, temperature: float = 0.3,
+                                    request_timeout: float | None = None) -> str:
         """Call local LLM (LM Studio / Ollama / llama.cpp) via OpenAI-compatible API."""
         endpoint = local_cfg.endpoint.rstrip("/")
         api_url = f"{endpoint}/v1/chat/completions"
@@ -542,25 +614,26 @@ class LLMClient:
         }
         # Local inference may need a long prefill/load window (see LOCAL_TIMEOUT).
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=LOCAL_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or LOCAL_TIMEOUT))
         response.raise_for_status()
         return _content_from(response.json())
 
     # === Cloud API calls ===
     async def _call_cloud_llm_async(self, provider: str, api_key: str, model: str,
                                     system: str, user: str, max_tokens: int,
-                                    temperature: float = 0.3) -> str:
+                                    temperature: float = 0.3,
+                                    request_timeout: float | None = None) -> str:
         if provider == "openrouter":
             return await self._call_openrouter_async(
-            api_key, model, system, user, max_tokens, temperature
+            api_key, model, system, user, max_tokens, temperature, request_timeout
         )
         elif provider == "gemini":
             return await self._call_gemini_async(
-            api_key, model, system, user, max_tokens, temperature
+            api_key, model, system, user, max_tokens, temperature, request_timeout
         )
         elif provider == "mistral":
             return await self._call_mistral_async(
-            api_key, model, system, user, max_tokens, temperature
+            api_key, model, system, user, max_tokens, temperature, request_timeout
         )
         else:
             msg = f"Unknown provider: {provider}"
@@ -568,7 +641,8 @@ class LLMClient:
 
     async def _call_openrouter_async(self, api_key: str, model: str, system: str,
                                      user: str, max_tokens: int,
-                                     temperature: float = 0.3) -> str:
+                                     temperature: float = 0.3,
+                                     request_timeout: float | None = None) -> str:
         api_url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -586,31 +660,36 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=CLOUD_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or CLOUD_TIMEOUT))
         response.raise_for_status()
         return _content_from(response.json())
 
     async def _call_gemini_async(self, api_key: str, model: str, system: str,
                                  user: str, max_tokens: int,
-                                 temperature: float = 0.3) -> str:
+                                 temperature: float = 0.3,
+                                 request_timeout: float | None = None) -> str:
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
-        # Gemini doesn't support system prompt separately, combine them
+        # Gemini doesn't support system prompt separately, combine them.
+        # Thinking models burn the output budget on internal reasoning first,
+        # so a small max_tokens returns finishReason=MAX_TOKENS with no answer.
+        budget = max(max_tokens, GEMINI_MIN_OUTPUT_TOKENS)
         payload = {
             "contents": [{"parts": [{"text": f"{system}\n\n{user}"}]}],
             "generationConfig": {
                 "temperature": temperature,
-                "maxOutputTokens": max_tokens
+                "maxOutputTokens": budget
             }
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=CLOUD_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or CLOUD_TIMEOUT))
         response.raise_for_status()
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return _content_from_gemini(response.json())
 
     async def _call_mistral_async(self, api_key: str, model: str, system: str,
                                   user: str, max_tokens: int,
-                                  temperature: float = 0.3) -> str:
+                                  temperature: float = 0.3,
+                                  request_timeout: float | None = None) -> str:
         api_url = "https://api.mistral.ai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -626,7 +705,7 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=CLOUD_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or CLOUD_TIMEOUT))
         response.raise_for_status()
         return _content_from(response.json())
 

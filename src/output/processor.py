@@ -17,7 +17,6 @@ from pathlib import Path
 
 from src.config.models import OutputConfig
 from src.searcher.adapters.base import Deal
-from src.searcher.currency import to_eur
 from src.searcher.listing_filter import is_laptop_title, wants_mini_pc_form_factor
 from src.utils.time import utcnow_stamp
 
@@ -85,7 +84,6 @@ class ResultProcessor:
         if self.output_currency == "EUR":
             return deal.price_eur, "EUR"
         # Convert from EUR to target currency
-        from src.searcher.currency import to_eur
         rates = getattr(getattr(self.full_config, "search", None), "currency_rates", {})
         rate = rates.get(self.output_currency, 1.0)
         if rate <= 0:

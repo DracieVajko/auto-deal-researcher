@@ -149,3 +149,68 @@ def test_bike_check_without_prompt_does_not_disqualify():
     messages, disqualify = get("bike").check({"frame_size": "XXS"}, None)
     assert disqualify is False
     assert messages == []
+
+
+def test_phone_extracts_specs_in_four_languages():
+    cases = [
+        "iphone 13 128gb, bateria 89%, 6.1 palca",        # sk
+        "iphone 13 128 gb, baterie 89 %, 6,1 palce",       # cs
+        "iphone 13 128 gb, akku 89 %, 6,1 zoll",           # de
+        "iphone 13 128gb, battery 89%, 6.1 inch",          # en
+    ]
+    for text in cases:
+        specs = get("phone").extract(text)
+        assert specs["storage"] == "128 GB", text
+        assert specs["battery_health"] == "89%", text
+        assert specs["screen_size"] == '6.1"', text
+
+
+def test_phone_does_not_match_on_the_word_telefon_alone():
+    assert detect("Kontakt: telefón 0900 000 000").name == "generic"
+    assert detect("Kontakt: Telefon 0900 000 000").name == "generic"
+
+
+def test_phone_aliases_map_llm_keys():
+    specs = get("phone").normalise_specs(
+        {"storage_gb": "128", "battery_percentage": "89", "price_eur": "219"}
+    )
+    assert specs == {"storage": "128", "battery_health": "89"}
+
+
+def test_car_needs_a_brand_or_two_regular_keywords():
+    assert detect("Predám kolesá, 18 palcov").name == "generic"
+    assert detect("Predám auto, 180 000 km").name == "generic"
+    assert detect("Predám auto, rok 2015, 180 000 km").name == "car"
+    assert detect("Škoda Octavia 2015, 180 000 km").name == "car"
+
+
+def test_car_detected_in_german_and_czech():
+    assert detect("Verkaufe VW Golf, Baujahr 2015, 180000 km").name == "car"
+    assert detect("Prodám Škoda Octavia, rok 2015, najeto 180 000 km").name == "car"
+
+
+def test_car_extracts_specs_in_german():
+    specs = get("car").extract(
+        "vw golf baujahr 2015, 180000 km, diesel, automatik"
+    )
+    assert specs["year"] == "2015"
+    assert specs["mileage"] == "180000 km"
+    assert specs["fuel"] == "Diesel"
+    assert specs["transmission"] == "Automatic"
+
+
+def test_furniture_extracts_specs_in_four_languages():
+    cases = [
+        "sedacia súprava, rozmery 250x180 cm, koža",
+        "sedací souprava, rozměry 250 x 180 cm, kůže",
+        "sofa, masse 250 x 180 cm, leder",
+        "couch, dimensions 250×180 cm, leather",  # noqa: RUF001 - multiplication sign is the point
+    ]
+    for text in cases:
+        specs = get("furniture").extract(text)
+        assert specs["dimensions"] == "250x180 cm", text
+        assert specs["material"] == "Leather", text
+
+
+def test_generic_is_not_selected_for_a_known_domain():
+    assert detect("Gauč, koža, 200x90 cm").name == "furniture"

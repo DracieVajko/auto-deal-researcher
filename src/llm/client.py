@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 # Adaptive HTTP timeouts (seconds) per provider class.
 #
-# Local models (LM Studio / Ollama / llama.cpp) need a long budget: the model
-# may not be loaded yet and a 30B load alone can take minutes on RAM-only
-# hardware, and slow models generate at ~1-2 tok/s. Cloud APIs answer quickly,
-# so they get a shorter budget to fail over fast.
-LOCAL_TIMEOUT = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "900"))
+# Local models (LM Studio / Ollama / llama.cpp) need a longer budget than cloud
+# APIs, but an unbounded wait lets a dead backend stall a whole run. 180 s
+# covers a warm model; a model that is not loaded should be started with
+# `llm-check` or LM Studio first. Override with ADS_LOCAL_LLM_TIMEOUT.
+LOCAL_TIMEOUT = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "180"))
 CLOUD_TIMEOUT = float(os.environ.get("ADS_CLOUD_LLM_TIMEOUT", "120"))
 
 # Gemini thinking models spend output tokens on reasoning before they emit any
@@ -283,7 +283,7 @@ class LLMClient:
                 self.llm_config.local = []
 
         for local in self.llm_config.local:
-            key = f"{local.type}:{local.endpoint}"
+            key = f"{local.type}:{local.endpoint}:{local.model}"
             if self._breaker.is_open(key):
                 logger.info(f"Skipping local LLM {local.type} (circuit open)")
                 continue

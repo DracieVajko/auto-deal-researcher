@@ -79,7 +79,7 @@ All secrets live in `.env` (git-ignored). See `.env.example` for the full list.
 | `OPENROUTER_API_KEY` | `src/llm/client.py` | https://openrouter.ai/keys |
 | `GEMINI_API_KEY` | `src/llm/client.py` | https://aistudio.google.com/apikeys |
 | `MISTRAL_API_KEY` | `src/llm/client.py` | https://console.mistral.ai/api-keys |
-| `ADS_LOCAL_LLM_TIMEOUT` | `LLMClient` | Seconds, default `900` |
+| `ADS_LOCAL_LLM_TIMEOUT` | `LLMClient` | Seconds, default `180` |
 | `ADS_CLOUD_LLM_TIMEOUT` | `LLMClient` | Seconds, default `120` |
 | `ADS_GEMINI_MIN_OUTPUT_TOKENS` | `LLMClient` | Output-token floor for Gemini thinking models, default `512` |
 
@@ -166,11 +166,14 @@ llm:
   local:
     - type: "lmstudio"
       endpoint: "http://localhost:1234"
-      model: "qwen/qwen3-coder-30b"   # must be a model id LM Studio actually serves
+      model: "qwen/qwen3-coder-30b"   # non-reasoning model; must be served by LM Studio
   api_fallback:
-    - provider: "openrouter"
-      api_key_env: "OPENROUTER_API_KEY"
-      model: "mistralai/mistral-7b-instruct"
+    - provider: "mistral"
+      api_key_env: "MISTRAL_API_KEY"
+      model: "ministral-14b-2512"
+    - provider: "gemini"
+      api_key_env: "GEMINI_API_KEY"
+      model: "gemini-2.5-flash"
 
 output:
   format: "both"

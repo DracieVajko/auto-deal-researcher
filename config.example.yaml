@@ -13,7 +13,7 @@ search:
       base_url: "https://www.bazos.sk"
       enabled: true
       adapter_class: "bazos"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["used"]
       country: "SK"
       currency: "EUR"
@@ -31,7 +31,7 @@ search:
       base_url: "https://www.ebay.de"
       enabled: false
       adapter_class: "ebay"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["used", "refurbished", "new", "open_box"]
       country: "DE"
       currency: "EUR"
@@ -39,7 +39,7 @@ search:
       base_url: "https://www.facebook.com/marketplace"
       enabled: false
       adapter_class: "facebook"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["used", "marketplace"]
       requires_login: true
       country: "EU"
@@ -51,7 +51,7 @@ search:
       base_url: "https://www.mall.sk"
       enabled: false
       adapter_class: "mall"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["new", "open_box"]
       country: "SK"
       currency: "EUR"
@@ -67,7 +67,7 @@ search:
       base_url: "https://www.heureka.sk"
       enabled: false
       adapter_class: "heureka"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["new", "used", "refurbished"]
       country: "SK"
       currency: "EUR"
@@ -83,7 +83,7 @@ search:
       base_url: "https://aukro.cz"
       enabled: false
       adapter_class: "aukro"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["new", "used", "refurbished", "open_box"]
       country: "CZ"
       currency: "CZK"
@@ -91,7 +91,7 @@ search:
       base_url: "https://www.bazos.cz"
       enabled: false
       adapter_class: "bazos"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["used"]
       country: "CZ"
       currency: "CZK"
@@ -99,7 +99,7 @@ search:
       base_url: "https://www.amazon.de"
       enabled: false
       adapter_class: "amazon"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["new", "used", "refurbished", "open_box"]
       country: "DE"
       currency: "EUR"
@@ -115,7 +115,7 @@ search:
       base_url: "https://www.aliexpress.com"
       enabled: false
       adapter_class: "aliexpress"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["new"]
       country: "EU"
       currency: "EUR"
@@ -131,7 +131,7 @@ search:
       base_url: "https://www.bazar.sk"
       enabled: false
       adapter_class: "bazar_sk"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["used"]
       country: "SK"
       currency: "EUR"
@@ -147,7 +147,7 @@ search:
       base_url: "https://www.mimibazar.sk"
       enabled: false
       adapter_class: "mimibazar"
-      categories: ["electronics", "appliances", "auto", "general"]
+      categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["used"]
       country: "SK"
       currency: "EUR"
@@ -294,6 +294,9 @@ search:
 
 llm:
   local:
+    # Non-reasoning model: returns strict JSON without spending the output
+    # budget on reasoning tokens. A small general instruct model (Llama 3.1 8B
+    # or Qwen2.5 7B Instruct) is the better long-term choice when available.
     - type: "lmstudio"
       endpoint: "http://localhost:1234"
       model: "qwen/qwen3-coder-30b"
@@ -301,15 +304,17 @@ llm:
       endpoint: "http://localhost:11434"
       model: "llama3.1:8b"
   api_fallback:
-    - provider: "openrouter"
-      api_key_env: "OPENROUTER_API_KEY"
-      model: "poolside/laguna-s-2.1:free"
-    - provider: "gemini"
-      api_key_env: "GEMINI_API_KEY"
-      model: "gemini-2.5-flash"
+    # General instruct models first; the free OpenRouter model is code-oriented
+    # and is kept only as a last resort.
     - provider: "mistral"
       api_key_env: "MISTRAL_API_KEY"
       model: "ministral-14b-2512"
+    - provider: "gemini"
+      api_key_env: "GEMINI_API_KEY"
+      model: "gemini-2.5-flash"
+    - provider: "openrouter"
+      api_key_env: "OPENROUTER_API_KEY"
+      model: "poolside/laguna-s-2.1:free"
   # Legacy fields (for backward compatibility)
   # Secrets are read from the environment — copy .env.example to .env and fill
   # in your own keys. Never commit real keys.

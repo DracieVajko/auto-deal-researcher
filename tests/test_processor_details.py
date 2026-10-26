@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from src.config import load_config
-from src.output.processor import ResultProcessor
+from src.output.processor import DealAnalysis, ResultProcessor
 from src.searcher.adapters.base import Deal
 
 PROMPT = (
@@ -141,6 +141,109 @@ def test_duplicate_ram_bullets_are_collapsed():
     )
 
     assert merged == ["Stated memory: 64 GB RAM"]
+
+
+BIKE_PROMPT = (
+    "horsky bicykel 26 palcove kolesa, odpruzeny ram, pre muza 180 cm, pouzite"
+)
+
+
+def test_non_pc_report_has_no_cpu_ram_advice(tmp_path):
+    """Bicycle/furniture reports must not inherit mini-PC checklist items."""
+    config = load_config()
+    processor = ResultProcessor(config)
+    bike = Deal(
+        url='https://sport.bazos.sk/inzerat/1/horsky-bicykel-giant-terrago.php',
+        title='Horský bicykel Giant Terrago - 26"',
+        price_eur=85.0,
+        condition="used",
+        site_name="bazos",
+        metadata={"source": "bazos"},
+    )
+
+    json_path, md_path = asyncio.run(
+        processor.save_results([bike], str(tmp_path), prompt=BIKE_PROMPT)
+    )
+
+    payload = json.loads(Path(json_path).read_text(encoding="utf-8"))
+    assert payload["count"] == 1
+    deal = payload["deals"][0]
+    bullets = " ".join(deal["pros"] + deal["cons"]).lower()
+    assert "cpu" not in bullets
+    assert "memory size" not in bullets
+    assert "ram" not in bullets
+    assert "ssd" not in bullets
+
+    markdown = Path(md_path).read_text(encoding="utf-8")
+    card = markdown.split("## Deal details", 1)[1]
+    assert "CPU" not in card
+    assert "RAM" not in card
+    assert "SSD" not in card
+    assert "screenshot of the memory" not in card
+    assert "Inspect the item in person" in card
+
+
+def test_pc_prompt_keeps_pc_details_but_bike_frame_does_not():
+    assert ResultProcessor._wants_pc_details({}, "mini pc with 32 GB RAM")
+    assert ResultProcessor._wants_pc_details({}, "laptop with Thunderbolt")
+    assert not ResultProcessor._wants_pc_details({}, "odpruzeny ram horskeho bicykla")
+    assert not ResultProcessor._wants_pc_details({"wheel_size": '26"'}, "bicykel")
+
+
+class CapturingLLM:
+    """Records the prompt and returns an empty batch."""
+
+    def __init__(self):
+        self.system = ""
+        self.user = ""
+
+    async def _chat(self, system, user, max_tokens=100, **kwargs):
+        self.system = system
+        self.user = user
+        return "[]"
+
+
+def _analysis(title: str, price: float = 85.0) -> DealAnalysis:
+    return DealAnalysis(
+        deal=Deal(
+            url="https://sport.bazos.sk/inzerat/1/item.php",
+            title=title,
+            price_eur=price,
+            condition="used",
+            site_name="bazos",
+        )
+    )
+
+
+def test_bike_analysis_prompt_is_not_pc_specific():
+    config = load_config()
+    llm = CapturingLLM()
+    processor = ResultProcessor(config, llm)
+
+    asyncio.run(
+        processor._llm_analyze_batch([_analysis('Horský bicykel 26"')], BIKE_PROMPT)
+    )
+
+    assert "PC hardware buyer" not in llm.system
+    assert "product buyer" in llm.system
+    assert "cpu" not in llm.user.lower()
+    assert "barebone" not in llm.user.lower()
+
+
+def test_pc_analysis_prompt_keeps_pc_rules():
+    config = load_config()
+    llm = CapturingLLM()
+    processor = ResultProcessor(config, llm)
+
+    asyncio.run(
+        processor._llm_analyze_batch(
+            [_analysis("Mini PC barebone Ryzen 7 32GB DDR5")],
+            "mini pc barebone with 32 GB RAM",
+        )
+    )
+
+    assert "cpu" in llm.user.lower()
+    assert "barebone" in llm.user.lower()
 
 
 def test_laptop_search_keeps_laptops(tmp_path):

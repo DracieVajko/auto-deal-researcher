@@ -28,7 +28,7 @@ class ProfileAdapter(BaseAdapter):
 
     name = "profile"
     supported_conditions: ClassVar[list[str]] = ["new", "used", "refurbished", "open_box", "marketplace"]
-    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general", "home", "hobby"]
 
     def __init__(
         self,

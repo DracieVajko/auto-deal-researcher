@@ -18,7 +18,7 @@ class FacebookAdapter(BaseAdapter):
     base_url = "https://www.facebook.com"
     requires_login = True
     supported_conditions: ClassVar[list[str]] = ["used", "marketplace"]
-    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general", "home", "hobby"]
     seller_type = "classifieds"
     has_warranty = False
     warranty_note = "Private sellers; warranty depends on the seller."

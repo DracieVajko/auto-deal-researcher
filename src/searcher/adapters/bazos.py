@@ -18,7 +18,7 @@ class BazosAdapter(BaseAdapter):
     name = "bazos"
     base_url = "https://www.bazos.sk"
     supported_conditions: ClassVar[list[str]] = ["used"]
-    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general", "home", "hobby"]
     seller_type = "classifieds"
     has_warranty = False
     warranty_note = "Private sellers; warranty only if they hand over the receipt."

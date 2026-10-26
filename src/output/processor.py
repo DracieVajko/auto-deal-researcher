@@ -274,42 +274,58 @@ class ResultProcessor:
                 f"specs: {json.dumps(analysis.specs, ensure_ascii=False)}"
             )
 
-        system = (
-            "You are a strict second-hand PC hardware buyer. Evaluate listings "
-            "against the user's request. Use ONLY the information in the listing: "
-            "never invent ports, CPU models, RAM size or warranty. Return exactly "
-            "one JSON object per listing, in the same order, wrapped in a JSON array. "
-            "No prose, no markdown fences."
+        pc_mode = any(
+            self._wants_pc_details(analysis.specs, prompt)
+            for analysis in analyses
         )
+        system = (
+            "You are a strict second-hand product buyer. Evaluate listings "
+            "against the user's request. Use ONLY the information in the listing: "
+            "never invent specifications, condition, warranty or defects. Return "
+            "exactly one JSON object per listing, in the same order, wrapped in a "
+            "JSON array. No prose, no markdown fences."
+        )
+        rules = [
+            '- Copy the listing id (L0, L1, ...) exactly into "id".',
+            "- Return one object for every listing, including ones you reject.",
+            "- If the listing is not the product the user asked for (a part, an "
+            "accessory, a different kind of item), verdict 'skip', score <= 25.",
+            "- A used listing is not a defect by itself; judge condition and seller.",
+            '- When the request says "A or B", either one satisfies it; never report '
+            "the missing one as a defect.",
+            "- If a specification is not stated, say 'not stated'. Never claim a "
+            "specification is wrong when the listing does not mention it.",
+            "- Use short snake_case keys in specs for facts stated in the listing; "
+            "do not invent values.",
+            "- price_eur is the asking price in EUR.",
+            "- Alternatives: at most 2 real, commonly available alternatives worth "
+            "considering instead of this listing.",
+            "- score is 0-100 for fit to the request, value for money and risk.",
+            "- Keep pros and cons to 2-4 short items each.",
+        ]
+        if pc_mode:
+            rules += [
+                "- Wrong product type (a laptop when a mini PC/barebone was "
+                "requested, a part, an accessory, a monitor) => verdict 'skip', "
+                "score <= 25.",
+                "- A barebone normally ships without RAM and SSD; treat that as a "
+                "cost to budget, not a disqualifier.",
+                "- For PC listings use specs keys such as cpu, ram, storage, gpu "
+                "and connectivity.",
+                "- The search already verified the product category. Do not claim "
+                "the listing is not a mini PC/barebone; judge the stated specs "
+                "instead.",
+            ]
         user = (
             f"User request: {prompt or 'find good deals'}\n\n"
             "Listings:\n" + "\n".join(lines) + "\n\n"
             "Schema per listing:\n"
             '{"id": "L0", "index": 0, "score": 0, "verdict": "buy|watch|skip", '
             '"matches_requirements": true, "pros": ["..."], "cons": ["..."], '
-            '"specs": {"cpu": "...", "ram": "...", "storage": "...", "gpu": "...", '
-            '"connectivity": "..."}, '
+            '"specs": {"key": "value"}, '
             '"alternatives": [{"title": "...", "approx_price_eur": 0, "why": "..."}], '
             '"notes": "one sentence"}\n\n'
-            "Rules:\n"
-            '- Copy the listing id (L0, L1, ...) exactly into "id".\n'
-            "- Return one object for every listing, including ones you reject.\n"
-            "- Wrong product type (a laptop when a mini PC/barebone was requested, "
-            "a part, an accessory, a monitor) => verdict 'skip', score <= 25.\n"
-            "- A used listing is not a defect by itself; judge condition and seller.\n"
-            "- When the request says \"A or B\", either one satisfies it; never report "
-            "the missing one as a defect.\n"
-            "- If a specification is not stated, say 'not stated'. Never claim a "
-            "specification is wrong when the listing does not mention it.\n"
-            "- A barebone normally ships without RAM and SSD; treat that as a cost "
-            "to budget, not a disqualifier.\n"
-            "- The search already verified the product category. Do not claim the "
-            "listing is not a mini PC/barebone; judge the stated specs instead.\n"
-            "- price_eur is the asking price in EUR.\n"
-            "- Alternatives: at most 2 real, commonly available alternatives worth "
-            "considering instead of this listing.\n"
-            "- score is 0-100 for fit to the request, value for money and risk.\n"
-            "- Keep pros and cons to 2-4 short items each."
+            "Rules:\n" + "\n".join(rules)
         )
         response = await self.llm._chat(
             system,
@@ -599,6 +615,20 @@ class ResultProcessor:
             return any(token in listing for token in hardware_tokens)
         return True
 
+    # Words that mark a request as being about computing hardware. Used to keep
+    # CPU/RAM/SSD advice out of bicycle, furniture and other non-PC reports.
+    _PC_TERMS = (
+        r"\b(pc|notebook|laptop|ultrabook|barebone|mini[ -]?pc|ssd|nvme|"
+        r"cpu|gpu|processor|server|workstation|motherboard)\b"
+    )
+
+    @staticmethod
+    def _wants_pc_details(specs: dict[str, str], prompt: str | None = None) -> bool:
+        """True when CPU/RAM/SSD advice is relevant to this deal."""
+        if any(key in specs for key in ("cpu", "ram", "storage", "connectivity")):
+            return True
+        return bool(re.search(ResultProcessor._PC_TERMS, (prompt or "").lower()))
+
     def _heuristic_pros_cons(
         self,
         deal: Deal,
@@ -622,38 +652,39 @@ class ResultProcessor:
         elif prompt and wants_mini_pc_form_factor(prompt):
             pros.append("Matches the requested mini PC / barebone form factor")
 
-        cpu = specs.get("cpu")
-        if cpu:
-            pros.append(f"Stated CPU: {cpu}")
-        else:
-            cons.append("Listing does not state the CPU")
-
-        ram = specs.get("ram")
-        if ram:
-            if ram.startswith("No RAM"):
-                cons.append("Barebone: RAM not included — budget for SO-DIMM modules")
-            elif "DDR5" in ram:
-                pros.append(f"DDR5 memory ({ram})")
+        if self._wants_pc_details(specs, prompt):
+            cpu = specs.get("cpu")
+            if cpu:
+                pros.append(f"Stated CPU: {cpu}")
             else:
-                pros.append(f"Stated memory: {ram}")
-        else:
-            cons.append("Listing does not state the memory size or type")
+                cons.append("Listing does not state the CPU")
 
-        storage = specs.get("storage")
-        if storage:
-            if storage.startswith("No storage"):
-                cons.append("Barebone: no SSD included — budget for an NVMe drive")
+            ram = specs.get("ram")
+            if ram:
+                if ram.startswith("No RAM"):
+                    cons.append("Barebone: RAM not included — budget for SO-DIMM modules")
+                elif "DDR5" in ram:
+                    pros.append(f"DDR5 memory ({ram})")
+                else:
+                    pros.append(f"Stated memory: {ram}")
             else:
-                pros.append(f"Included storage: {storage}")
+                cons.append("Listing does not state the memory size or type")
 
-        connectivity = specs.get("connectivity")
-        if connectivity:
-            if any(token in connectivity.lower() for token in ("thunderbolt", "usb4", "oculink")):
-                pros.append(f"High-speed port: {connectivity}")
-            else:
-                pros.append(f"Ports mentioned: {connectivity}")
-        elif any(token in text for token in ("thunderbolt", "usb4", "oculink")):
-            pros.append("Thunderbolt/USB4/OCuLink mentioned in the listing")
+            storage = specs.get("storage")
+            if storage:
+                if storage.startswith("No storage"):
+                    cons.append("Barebone: no SSD included — budget for an NVMe drive")
+                else:
+                    pros.append(f"Included storage: {storage}")
+
+            connectivity = specs.get("connectivity")
+            if connectivity:
+                if any(token in connectivity.lower() for token in ("thunderbolt", "usb4", "oculink")):
+                    pros.append(f"High-speed port: {connectivity}")
+                else:
+                    pros.append(f"Ports mentioned: {connectivity}")
+            elif any(token in text for token in ("thunderbolt", "usb4", "oculink")):
+                pros.append("Thunderbolt/USB4/OCuLink mentioned in the listing")
 
         if deal.condition == "new":
             pros.append("New item — manufacturer warranty applies")
@@ -1041,7 +1072,7 @@ class ResultProcessor:
         lines += ["---", "", "## Deal details", ""]
 
         for index, analysis in enumerate(relevant, 1):
-            lines += self._deal_card(analysis, index, top_picks)
+            lines += self._deal_card(analysis, index, top_picks, prompt)
 
         if filtered:
             lines += ["## Filtered out", ""]
@@ -1054,6 +1085,7 @@ class ResultProcessor:
         analysis: DealAnalysis,
         index: int,
         top_picks: set[str],
+        prompt: str | None = None,
     ) -> list[str]:
         deal = analysis.deal
         price_out, currency_out = self._format_price(deal)
@@ -1082,9 +1114,16 @@ class ResultProcessor:
         if analysis.specs:
             lines.append("**Specs found in the listing:**")
             for label, value in analysis.specs.items():
-                pretty_label = {"cpu": "CPU", "ram": "RAM", "gpu": "GPU"}.get(
-                    label, label.replace("_", " ").title()
-                )
+                pretty_label = {
+                    "cpu": "CPU",
+                    "ram": "RAM",
+                    "gpu": "GPU",
+                    "wheel_size": "Wheel size",
+                    "frame_size": "Frame size",
+                    "suspension": "Suspension",
+                    "brakes": "Brakes",
+                    "drivetrain": "Drivetrain",
+                }.get(label, label.replace("_", " ").title())
                 lines.append(f"- {pretty_label}: {value}")
             lines.append("")
 
@@ -1117,28 +1156,44 @@ class ResultProcessor:
             lines.append("")
 
         lines.append("**Before you buy**")
-        for item in self._checklist(deal, analysis):
+        for item in self._checklist(deal, analysis, prompt):
             lines.append(f"- {item}")
         lines += ["", "---", ""]
         return lines
 
     @staticmethod
-    def _checklist(deal: Deal, analysis: DealAnalysis) -> list[str]:
+    def _checklist(
+        deal: Deal, analysis: DealAnalysis, prompt: str | None = None
+    ) -> list[str]:
+        pc = ResultProcessor._wants_pc_details(analysis.specs, prompt)
         if deal.condition in ("new", "open_box"):
             items = [
                 "Confirm the warranty length and who honours it.",
                 "Check the return window and who pays return shipping.",
-                "Verify the box contains the power adapter and mounting kit.",
             ]
+            if pc:
+                items.append(
+                    "Verify the box contains the power adapter and mounting kit."
+                )
+            else:
+                items.append("Verify the box contains all listed accessories and parts.")
         else:
             items = [
-                "Test the device before paying (boot, ports, Wi-Fi, thermals).",
+                (
+                    "Test the device before paying (boot, ports, Wi-Fi, thermals)."
+                    if pc
+                    else "Inspect the item in person before paying — check for "
+                    "damage, wear and missing parts."
+                ),
                 "Ask for the purchase receipt and any remaining warranty.",
                 "Check the seller's history and prefer in-person pickup.",
-                "Confirm the exact RAM and SSD configuration in person.",
             ]
-        if not analysis.specs.get("ram"):
-            items.append("Ask for a screenshot of the memory configuration.")
+            if pc:
+                items.append("Confirm the exact RAM and SSD configuration in person.")
+                if not analysis.specs.get("ram"):
+                    items.append(
+                        "Ask for a screenshot of the memory configuration."
+                    )
         return items
 
     @staticmethod

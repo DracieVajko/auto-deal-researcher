@@ -75,6 +75,35 @@ async def test_dead_local_is_skipped_after_two_failures(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_breaker_key_includes_model(monkeypatch):
+    """A broken model must not disable a healthy model on the same endpoint."""
+    cfg = Cfg()
+    cfg.llm.local = [
+        LLMLocalConfig(type="lmstudio", endpoint="http://localhost:1234",
+                       model="broken"),
+        LLMLocalConfig(type="lmstudio", endpoint="http://localhost:1234",
+                       model="working"),
+    ]
+    llm = LLMClient(cfg)
+
+    calls = []
+
+    async def fake_local(local_cfg, system, user, max_tokens, temperature=0.3):
+        calls.append(local_cfg.model)
+        if local_cfg.model == "broken":
+            raise mod.requests.RequestException("connection refused")  # noqa: TRY003
+        return "local answer"
+
+    monkeypatch.setattr(llm, "_call_local_llm_async", fake_local)
+
+    for _ in range(4):
+        assert await llm._chat("s", "u", max_tokens=5) == "local answer"
+
+    assert calls.count("broken") == 2, "probe the broken model until its breaker opens"
+    assert calls.count("working") == 4, "the healthy model keeps answering"
+
+
+@pytest.mark.asyncio
 async def test_rejected_cloud_key_is_blocked_for_the_run(monkeypatch):
     """A 401 never heals: probe it once, then stop paying for it on every call."""
     monkeypatch.setenv("BAD_KEY", "x")

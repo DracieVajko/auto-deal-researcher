@@ -40,6 +40,17 @@
 - Discovery submits the search form's action instead of pressing Enter in an
   autocomplete widget, and keeps the requested URL when the site redirects a
   search to a category page. Nay.sk is mapped and validated this way.
+- The deal-analysis prompt is now a generic "product buyer" prompt. PC rules
+  (CPU/RAM/SSD keys, barebone cost, wrong form factor) are injected only when
+  the request or the listing is about computing hardware, so bicycle, furniture
+  and other reports no longer get CPU/RAM advice or a memory-screenshot
+  checklist item.
+- `ADS_LOCAL_LLM_TIMEOUT` default lowered from 900 s to 180 s: a warm local
+  model answers well inside that, and an unloaded or dead backend now fails
+  over instead of stalling the whole run. Start the model with `llm-check` or
+  LM Studio first, or raise the variable for slow hardware.
+- Cloud fallback order is Mistral → Gemini → OpenRouter. The free OpenRouter
+  model is code-oriented and is kept only as a last resort.
 
 ### Removed
 - `src/searcher/judge.py`: an unreferenced stub that could not even be
@@ -61,9 +72,12 @@
   parsing and the output budget has a floor (`ADS_GEMINI_MIN_OUTPUT_TOKENS`).
 - The legacy fallback used retired model IDs (`mistralai/mistral-7b-instruct`),
   so that branch could only answer 404.
+- The local circuit breaker was keyed by endpoint only. One model that timed
+  out or failed to load therefore disabled every other model on the same
+  endpoint for the rest of the run. The key now includes the model id.
 
 ### Verification
-- Test suite: 352 passed, 11 skipped (live tests skipped by default).
+- Test suite: 358 passed, 11 skipped (live tests skipped by default).
 
 ## [1.0.0] - 2026-10-20
 

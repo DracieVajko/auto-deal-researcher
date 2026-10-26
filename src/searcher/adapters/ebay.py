@@ -29,7 +29,7 @@ class EbayAdapter(BaseAdapter):
     results_selector = ".srp-results"
     item_selector = ".s-card"
     supported_conditions: ClassVar[list[str]] = ["used", "refurbished", "new", "open_box"]
-    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general", "home", "hobby"]
     seller_type = "marketplace"
     has_warranty = False
     warranty_note = "eBay Money Back Guarantee; manufacturer warranty only if the seller provides it."

@@ -54,7 +54,7 @@ class BaseAdapter(ABC):
     # adapter serves several markets (Alza SK vs. Alza CZ).
     currency: str = "EUR"
     supported_conditions: ClassVar[list[str]] = ["new", "used", "refurbished", "open_box"]
-    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general"]
+    supported_categories: ClassVar[list[str]] = ["electronics", "appliances", "auto", "general", "home", "hobby"]
 
     # Warranty / seller trust metadata. These are the deciding factors when
     # choosing between a cheap classifieds listing and a slightly dearer

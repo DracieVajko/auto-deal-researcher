@@ -95,6 +95,14 @@ class ResultProcessor:
         "Seller trust": 0.10,
     }
     CONNECTIVITY_WEIGHT: ClassVar[float] = 0.05
+    # A price judgement needs a sample; three listings are not a market.
+    MIN_PRICE_SAMPLE: ClassVar[int] = 4
+    # The report computes the Price row; the model must not invent one.
+    _PRICE_CLAIM_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r"\b(?:above|below|over|under)\s+(?:the\s+)?(?:market|reasonable)\b"
+        r"|\bmarket\s+value\b|\boverpriced\b|\bprice\s+far\s+exceeds\b",
+        re.IGNORECASE,
+    )
 
     def __init__(self, config, llm=None):
         self.config: OutputConfig = config.output
@@ -407,6 +415,8 @@ class ResultProcessor:
             "specification is wrong when the listing does not mention it.",
             "- When a listing says its description was not fetched, do not claim "
             "a specification is not stated; say it could not be checked.",
+            "- Do not say a price is above or below market; you do not know the "
+            "market. The report computes the price score itself.",
             "- Use only the spec keys listed for that listing and omit a key "
             "the listing does not state; when no keys are listed, use short "
             "snake_case keys for facts stated in the listing. Never invent values.",
@@ -516,6 +526,8 @@ class ResultProcessor:
                         marker in low
                         for marker in ("no warranty", "not included", "not specified")
                     ):
+                        continue
+                    if key == "cons" and self._PRICE_CLAIM_RE.search(low):
                         continue
                     cleaned.append(text)
                 if cleaned:
@@ -871,7 +883,12 @@ class ResultProcessor:
             if not analysis.wrong_form_factor and analysis.deal.price_eur > 0
         ]
         prices = [analysis.deal.price_eur for analysis in relevant]
-        median = statistics.median(prices) if prices else 0.0
+        distinct = {round(analysis.deal.price_eur, 2) for analysis in relevant}
+        median = (
+            statistics.median(prices)
+            if len(distinct) >= self.MIN_PRICE_SAMPLE
+            else 0.0
+        )
 
         for analysis in analyses:
             analysis.score_breakdown = self._score_breakdown(

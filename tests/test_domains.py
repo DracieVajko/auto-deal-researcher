@@ -503,3 +503,44 @@ def test_proposal_that_misses_its_own_listing_is_discarded(tmp_path):
     result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
     assert result["domain"] == "generic"
     assert list(tmp_path.glob("*.yaml")) == []
+
+
+def test_price_is_neutral_with_fewer_than_four_distinct_prices():
+    processor = ResultProcessor.__new__(ResultProcessor)
+    analyses = [_analysis_for(f"Deal {i}", "generic", {}) for i in range(3)]
+    for analysis, price in zip(analyses, (100.0, 200.0, 300.0), strict=True):
+        analysis.deal.price_eur = price
+
+    processor._add_cross_alternatives(analyses)
+
+    assert all(a.score_breakdown["Price"] == 50 for a in analyses)
+
+
+def test_price_uses_the_median_with_four_distinct_prices():
+    processor = ResultProcessor.__new__(ResultProcessor)
+    analyses = [_analysis_for(f"Deal {i}", "generic", {}) for i in range(4)]
+    for analysis, price in zip(analyses, (100.0, 200.0, 300.0, 400.0), strict=True):
+        analysis.deal.price_eur = price
+
+    processor._add_cross_alternatives(analyses)
+
+    assert analyses[0].score_breakdown["Price"] == 95
+    assert analyses[3].score_breakdown["Price"] == 25
+
+
+def test_price_claim_cons_are_dropped():
+    processor = ResultProcessor(load_config())
+    analysis = _analysis_for("iPhone 13", "phone", {})
+    processor._merge_llm_analysis(
+        analysis,
+        {
+            "id": "L0",
+            "cons": [
+                "price far exceeds reasonable used market value",
+                "storage not stated",
+            ],
+        },
+        "iphone 13",
+    )
+    assert not any("market" in con for con in analysis.cons)
+    assert any("storage" in con for con in analysis.cons)

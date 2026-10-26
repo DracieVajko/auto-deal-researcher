@@ -324,6 +324,9 @@ llm:
 output:
   format: "both"
   directory: "./results"
+  # Force a product domain (bike, computer, phone, car, furniture, generic).
+  # Empty means auto-detect from the listing text; --domain overrides this.
+  domain: ""
 
 schedule:
   tasks:

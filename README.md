@@ -180,6 +180,7 @@ llm:
 output:
   format: "both"
   directory: "./results"
+  domain: ""          # force a product domain; empty = auto-detect
 
 schedule:
   tasks:
@@ -244,6 +245,33 @@ python -m src.cli run --prompt "octavia" --category auto --country CZ
 ```
 
 `--country` overrides `search.user_country` for a single run.
+
+### Product domains
+
+Every listing is matched to a **product domain** from its own text (title and
+metadata), never from the shop or the search category. Each domain tracks the
+specs that matter for that product type and scores only the rows the domain
+enables.
+
+Built-in domains: `bike`, `computer`, `phone`, `car`, `furniture`. Anything
+unrecognised falls back to `generic`, which scores neutral on specs rather
+than guessing.
+
+```bash
+# Force the domain instead of auto-detecting it.
+python -m src.cli run --prompt "mini pc" --domain computer
+python -m src.cli run --prompt "kolo 26 palcove" --domain bike
+```
+
+`--domain` overrides `output.domain` in the config, and both override
+auto-detection. An unknown name is rejected with the list of valid domains.
+
+When an LLM is configured and a listing matches no built-in domain, the model
+may **propose** a new one — its keywords, the specs worth tracking and the
+values it found. The proposal is validated, applied only to listings that
+match its own keywords, and cached under `data/domains/ai/*.yaml` (git-ignored)
+for later runs. A cached draft is never written into `src/`; promoting it to a
+real domain with deterministic extractors is a human decision.
 
 ### Currency
 

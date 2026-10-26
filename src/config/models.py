@@ -114,6 +114,9 @@ class NotificationConfig(BaseModel):
 class OutputConfig(BaseModel):
     format: Literal["json", "markdown", "both"] = "both"
     directory: str = "./results"
+    # Force a product domain (bike, computer, phone, car, furniture, generic).
+    # Empty means auto-detect from the listing text.
+    domain: str = ""
 
 
 class ScheduleTaskConfig(BaseModel):

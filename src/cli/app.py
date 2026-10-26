@@ -11,6 +11,7 @@ from src.config import load_config
 from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.llm.client import LLMClient
 from src.llm.health import run_checks as run_llm_checks
+from src.output.domains import DOMAIN_REGISTRY, get
 from src.output.processor import ResultProcessor
 from src.scheduler.tasks import install_schedule, uninstall_schedule
 from src.searcher.filters import (
@@ -76,6 +77,7 @@ def run(
     extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
     country: str | None = typer.Option(None, "--country", help="Market to prefer, e.g. SK, CZ, DE"),
     max_sites: int | None = typer.Option(None, "--max-sites", help="How many shops to open per round"),
+    domain: str | None = typer.Option(None, "--domain", help="Force a product domain (bike, computer, phone, car, furniture, generic)"),
 ):
     """Run a single search cycle."""
     asyncio.run(
@@ -96,6 +98,7 @@ def run(
             extra_filters,
             country,
             max_sites,
+            domain=domain,
         )
     )
 
@@ -117,8 +120,20 @@ async def _run_async(
     extra_filters=None,
     country=None,
     max_sites=None,
+    domain=None,
 ):
     config = load_config()
+
+    if domain:
+        try:
+            get(domain)
+        except KeyError:
+            typer.echo(
+                f"Error: unknown domain '{domain}'. Known domains: "
+                f"{', '.join(sorted(DOMAIN_REGISTRY))}",
+                err=True,
+            )
+            raise typer.Exit(1) from None
 
     # Resolve prompt
     if prompt_file:
@@ -165,6 +180,9 @@ async def _run_async(
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
     processor = ResultProcessor(config, llm)
+    # --domain beats output.domain; the config value is already loaded in __init__.
+    if domain:
+        processor.domain_override = domain
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         try:

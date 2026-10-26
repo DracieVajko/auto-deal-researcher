@@ -452,3 +452,21 @@ def test_draft_with_an_invalid_shape_is_ignored(tmp_path):
         encoding="utf-8",
     )
     assert load_drafts(tmp_path) == {}
+
+
+def test_domain_override_reaches_the_report(tmp_path):
+    config = load_config()
+    config.output.domain = "computer"
+    processor = ResultProcessor(config)
+    deal = Deal(
+        url="https://bazos.sk/x",
+        title="Predám bicykel",
+        price_eur=90.0,
+        condition="used",
+        site_name="bazos",
+    )
+    json_path, _ = asyncio.run(
+        processor.save_results([deal], str(tmp_path), prompt="nieco")
+    )
+    result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
+    assert result["domain"] == "computer"

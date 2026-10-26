@@ -95,7 +95,8 @@ class ResultProcessor:
         self.full_config = config
         self.llm = llm
         # --domain / output.domain from the CLI; None means auto-detect.
-        self.domain_override: str | None = None
+        # The CLI value overrides this one when it is given.
+        self.domain_override = getattr(self.config, "domain", "") or None
         # Where AI drafts are cached; a test may point it at a temp dir.
         self.draft_dir = AI_DRAFT_DIR
         # Determine user's preferred output currency

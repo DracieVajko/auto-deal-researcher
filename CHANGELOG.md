@@ -37,8 +37,31 @@
   "kolesá" are not treated as bikes.
 - A stated frame size is compared with the rider height in the request, so an
   XXS frame is skipped for a 180 cm rider instead of scoring well.
+- Product domains (`src/output/domains/`): every listing is matched to a
+  domain from its own text — `bike`, `computer`, `phone`, `car`, `furniture`,
+  or `generic` when nothing matches. Each domain owns its keywords, spec
+  extractors, constraints and scoring rows. Detection order: `--domain` first,
+  then built-in keywords, then a cached AI draft, then one live AI proposal,
+  then `generic`.
+- AI domain proposals: when an LLM is configured and a listing matches no
+  built-in domain, the model may propose a new one; the proposal is validated,
+  cached under `data/domains/ai/*.yaml` (git-ignored) and applied only to
+  listings that match its own keywords. Drafts never write into `src/`.
+- One canonical text folding (`src/text/normalize.py`): keywords, aliases and
+  patterns are stored folded, so a listing matches regardless of case or
+  diacritics (`gauč` = `gauc`, `Straße` = `strasse`) in sk, cs, de, en and pl
+  without a single language branch.
+- CLI flag `--domain` and config key `output.domain` (empty means
+  auto-detect); the report JSON now carries `domain` and `spec_coverage`
+  (`stated`/`missing` per domain key specs), and the Markdown card shows
+  "Domain: <name> — n/m specs stated".
 
 ### Changed
+- Scores change on purpose: `Spec match` is now the share of a domain's
+  `key_specs` the listing states (a bike with 3 of 5 stated specs scores 60,
+  not the old fixed 95), and the final score normalises over only the rows the
+  domain enables, so a sofa is no longer capped by a Connectivity row it
+  cannot have.
 - Site profiles are loaded at runtime; unknown adapters participate only when
   a validated profile exists.
 - `search.default_filters` provides optional baseline filters below prompt and

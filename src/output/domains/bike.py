@@ -13,13 +13,13 @@ _WHEEL_FROM_KOLESA = re.compile(r"kolesa\s*(?:su\s*)?(2[46]|27[.,]5|28|29)")
 
 _FRAME_WORD = r"(?:ram|rahmen|frame|velkost\s+ramu|velikost\s+ramu)"
 _FRAME_LETTER = re.compile(
-    rf"\b{_FRAME_WORD}\s*(?:je\s*)?(?:velkosti\s*)?(xxs|xs|s|m|l|xl|xxl)\b"
+    rf"\b{_FRAME_WORD}\s*(?:je\s*)?(?:velkosti\s*)?[,:]?\s*(xxs|xs|s|m|l|xl|xxl)\b"
 )
 _FRAME_NUMBER = re.compile(
-    rf'\b{_FRAME_WORD}\s*(?:je\s*)?(?:velkosti\s*)?(\d{{2}})\s*'
+    rf'\b{_FRAME_WORD}\s*(?:je\s*)?(?:velkosti\s*)?[,:]?\s*(\d{{2}})\s*'
     r'(?:palc|zoll|inch|cala|cali|\\?"|\\?\u2033)'
 )
-_FRAME_NUMBER_BARE = re.compile(rf"\b{_FRAME_WORD}\s*(\d{{2}})\b")
+_FRAME_NUMBER_BARE = re.compile(rf"\b{_FRAME_WORD}\s*[,:]?\s*(\d{{2}})\b")
 _FRAME_IN_PARENS = re.compile(r"velkosti\s*(?:xxs|xs|s|m|l|xl|xxl)\s*\((\d{2})")
 
 # Approximate rider height ranges in cm. They only reject a frame that is
@@ -58,6 +58,11 @@ def extract_frame_size(text: str) -> str | None:
     number = _FRAME_NUMBER.search(text) or _FRAME_NUMBER_BARE.search(text)
     if not number:
         number = _FRAME_IN_PARENS.search(text)
+    if number:
+        wheel = extract_wheel_size(text)
+        if wheel and wheel.startswith(number.group(1)):
+            # "26" after "rám" is the wheel size, not the frame size.
+            number = None
 
     parts = []
     if letter:

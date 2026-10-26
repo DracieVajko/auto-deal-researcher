@@ -12,13 +12,12 @@ import json
 import logging
 import re
 import statistics
-import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar
 
 from src.config.models import OutputConfig
-from src.output.domains import DomainProfile, get
+from src.output.domains import DomainProfile, detect, get
 from src.searcher.adapters.base import Deal
 from src.searcher.listing_filter import is_laptop_title, wants_mini_pc_form_factor
 from src.text.normalize import fold
@@ -69,6 +68,7 @@ class DealAnalysis:
     score_breakdown: dict[str, float] = field(default_factory=dict)
     seller_type: str = ""
     warranty: str = ""
+    spec_coverage: dict[str, list[str]] = field(default_factory=dict)
     domain: str = "generic"
     # The exact profile that detected this domain, including an AI draft that
     # is not in DOMAIN_REGISTRY. Consumers resolve `profile or get(domain)`.
@@ -92,6 +92,8 @@ class ResultProcessor:
         self.config: OutputConfig = config.output
         self.full_config = config
         self.llm = llm
+        # --domain / output.domain from the CLI; None means auto-detect.
+        self.domain_override: str | None = None
         # Determine user's preferred output currency
         self.output_currency = (
             getattr(getattr(self.full_config, "search", None), "default_currency", "") or ""
@@ -302,10 +304,7 @@ class ResultProcessor:
                 line += f" | description: {description[:600]}"
             lines.append(line)
 
-        pc_mode = any(
-            self._wants_pc_details(analysis.specs, prompt)
-            for analysis in analyses
-        )
+        pc_mode = any(analysis.domain == "computer" for analysis in analyses)
         system = (
             "You are a strict second-hand product buyer. Evaluate listings "
             "against the user's request. Use ONLY the information in the listing: "
@@ -561,80 +560,31 @@ class ResultProcessor:
                 break
         return kept
 
-    @staticmethod
-    def _bike_size_note(
-        specs: dict[str, str], prompt: str | None
-    ) -> tuple[str | None, bool]:
-        """Compare a stated frame size with the rider height in the request.
-
-        Returns (message, too_small). The ranges are approximate on purpose:
-        they only reject a frame that is clearly wrong (an XXS frame for a
-        180 cm rider), and leave borderline sizes to the buyer.
-        """
-        height_match = re.search(r"\b(1[5-9]\d)\s*cm\b", (prompt or "").lower())
-        frame = (specs.get("frame_size") or "").upper()
-        if not height_match or not frame:
-            return None, False
-        height = int(height_match.group(1))
-
-        letter = re.match(r"(XXS|XS|S|M|L|XL|XXL)\b", frame)
-        number = re.search(r"(\d{2})", frame)
-        if letter:
-            ranges = {
-                "XXS": (145, 155),
-                "XS": (155, 165),
-                "S": (160, 170),
-                "M": (168, 178),
-                "L": (175, 185),
-                "XL": (182, 192),
-                "XXL": (188, 198),
-            }
-            low, high = ranges[letter.group(1)]
-        elif number:
-            ranges = {
-                14: (145, 155),
-                15: (150, 160),
-                16: (160, 170),
-                17: (165, 175),
-                18: (170, 180),
-                19: (175, 185),
-                20: (180, 190),
-                21: (185, 195),
-                22: (188, 198),
-            }
-            low, high = ranges.get(int(number.group(1)), (0, 250))
-        else:
-            return None, False
-
-        if height > high + 2:
-            return (
-                f"Frame size {frame} is too small for a {height} cm rider",
-                True,
-            )
-        if height < low - 5:
-            return (
-                f"Frame size {frame} is likely too large for a {height} cm rider",
-                False,
-            )
-        return None, False
-
     def _heuristic_analysis(self, deal: Deal, prompt: str | None) -> DealAnalysis:
         """Baseline analysis that works without any LLM."""
-        specs = self._extract_specs(deal)
         seller_type, warranty = self._site_trust(deal)
         laptop = is_laptop_title(deal.title)
-        wrong_form = laptop and wants_mini_pc_form_factor(prompt)
-        text = f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}".lower()
+        text = fold(f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}")
 
-        matches = self._matches_prompt(prompt, deal, specs, wrong_form)
-        size_warning, size_too_small = self._bike_size_note(specs, prompt)
-        if size_too_small:
+        profile = detect(text, override=self.domain_override)
+        if profile.name == "generic" and laptop:
+            # A laptop title is a computer even when it names no PC keyword.
+            profile = get("computer")
+        specs = profile.extract(text)
+        wrong_form = (
+            laptop
+            and profile.name == "computer"
+            and wants_mini_pc_form_factor(prompt)
+        )
+
+        matches = self._matches_prompt(prompt, deal, profile.name, specs, wrong_form)
+        messages, disqualify = profile.check(specs, prompt)
+        if disqualify:
             matches = False
         pros, cons = self._heuristic_pros_cons(
-            deal, prompt, specs, seller_type, wrong_form, laptop
+            deal, prompt, specs, seller_type, wrong_form, laptop, profile.name
         )
-        if size_warning:
-            cons.append(size_warning)
+        cons.extend(messages)
 
         score = 50.0
         if wrong_form:
@@ -667,29 +617,36 @@ class ResultProcessor:
             pros=pros,
             cons=cons,
             specs=specs,
+            notes="",
             is_laptop=laptop,
             wrong_form_factor=wrong_form,
             matches_requirements=matches,
             seller_type=seller_type,
             warranty=warranty,
+            domain=profile.name,
+            profile=profile,
         )
 
     @staticmethod
     def _matches_prompt(
-        prompt: str | None, deal: Deal, specs: dict[str, str], wrong_form: bool
+        prompt: str | None,
+        deal: Deal,
+        domain: str,
+        specs: dict[str, str],
+        wrong_form: bool,
     ) -> bool:
         if wrong_form:
             return False
         if not prompt:
             return True
 
-        request = prompt.lower()
+        request = fold(prompt)
         if wants_mini_pc_form_factor(request):
             return True
         # Only apply the hardware-token gate to hardware requests. "ram" in
         # "odpruzeny ram" is a bike frame, not memory, and used to mark every
         # bicycle as not matching the request.
-        if not ResultProcessor._wants_pc_details(specs, request):
+        if not ResultProcessor._wants_pc_details(domain, request):
             return True
         hardware_tokens = (
             "ryzen",
@@ -705,7 +662,7 @@ class ResultProcessor:
             "oculink",
             "ram",
         )
-        listing = f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}".lower()
+        listing = fold(f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}")
         return any(token in listing for token in hardware_tokens)
 
     # Words that mark a request as being about computing hardware. Used to keep
@@ -716,11 +673,11 @@ class ResultProcessor:
     )
 
     @staticmethod
-    def _wants_pc_details(specs: dict[str, str], prompt: str | None = None) -> bool:
+    def _wants_pc_details(domain: str, prompt: str | None = None) -> bool:
         """True when CPU/RAM/SSD advice is relevant to this deal."""
-        if any(key in specs for key in ("cpu", "ram", "storage", "connectivity")):
+        if domain == "computer":
             return True
-        return bool(re.search(ResultProcessor._PC_TERMS, (prompt or "").lower()))
+        return bool(re.search(ResultProcessor._PC_TERMS, fold(prompt or "")))
 
     def _heuristic_pros_cons(
         self,
@@ -730,12 +687,13 @@ class ResultProcessor:
         seller_type: str,
         wrong_form: bool,
         laptop: bool,
+        domain: str = "generic",
     ) -> tuple[list[str], list[str]]:
-        text = f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}".lower()
+        text = fold(f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}")
         pros: list[str] = []
         cons: list[str] = []
 
-        request = (prompt or "").lower()
+        request = fold(prompt or "")
         if wrong_form:
             cons.append("Laptop/notebook form factor — not a mini PC or barebone")
         elif laptop and any(
@@ -745,7 +703,7 @@ class ResultProcessor:
         elif prompt and wants_mini_pc_form_factor(prompt):
             pros.append("Matches the requested mini PC / barebone form factor")
 
-        if self._wants_pc_details(specs, prompt):
+        if self._wants_pc_details(domain, prompt):
             cpu = specs.get("cpu")
             if cpu:
                 pros.append(f"Stated CPU: {cpu}")
@@ -811,6 +769,16 @@ class ResultProcessor:
             analysis.score_breakdown = self._score_breakdown(
                 analysis, median, analyses
             )
+            profile = analysis.profile or get(analysis.domain)
+            stated = [
+                key
+                for key in profile.key_specs
+                if (analysis.specs.get(key) or "").strip()
+            ]
+            analysis.spec_coverage = {
+                "stated": stated,
+                "missing": [key for key in profile.key_specs if key not in stated],
+            }
             if analysis.wrong_form_factor:
                 analysis.score = min(analysis.score, 20.0)
             else:
@@ -987,177 +955,6 @@ class ResultProcessor:
         )
 
     @staticmethod
-    def _extract_specs(deal: Deal) -> dict[str, str]:
-        text = f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}"
-        lower = text.lower()
-        specs: dict[str, str] = {}
-
-        cpu_patterns = [
-            r"\b(ryzen\s*[3579]\s*\d{3,4}[a-z]{0,3})\b",
-            r"\b(ryzen\s*[3579])\b",
-            r"\b(intel\s+core\s+ultra\s*[579]\s*\d{3}[a-z]{0,2})\b",
-            r"\b(intel\s+core\s*[3579]\s*\d{3}[a-z]{0,2})\b",
-            r"\b(core\s*[3579]\s*\d{3}[a-z]{0,2})\b",
-            r"\b(i[3579][- ]?\d{3,5}[a-z]{0,4})\b",
-            r"\b(n100|n97|n305|n95|j4125)\b",
-            r"\b(celeron|pentium|athlon)\b",
-            r"\b(ultra\s*[579]\s*\d{3}[a-z]{0,2})\b",
-        ]
-        for pattern in cpu_patterns:
-            match = re.search(pattern, lower)
-            if match:
-                cpu = match.group(1).strip().upper()
-                if cpu.startswith("CORE "):
-                    cpu = f"INTEL {cpu}"
-                elif cpu.startswith("ULTRA "):
-                    cpu = f"INTEL CORE {cpu}"
-                specs["cpu"] = cpu
-                break
-
-        ram_match = re.search(r"(?:^|\s)(\d{1,3})\s*gb\s*(ddr[45])", lower)
-        if not ram_match:
-            ram_match = re.search(r"(ddr[45])\s*(\d{1,3})\s*gb", lower)
-            if ram_match:
-                specs["ram"] = f"{ram_match.group(2)} GB {ram_match.group(1).upper()}"
-        else:
-            specs["ram"] = f"{ram_match.group(1)} GB {ram_match.group(2).upper()}"
-        if "ram" not in specs:
-            size_ram = re.search(r"\b(\d{1,3})\s*gb\s*ram\b", lower)
-            bare_ram = re.search(r"\bram\s*(\d{1,3})\s*gb", lower)
-            if size_ram:
-                specs["ram"] = f"{size_ram.group(1)} GB RAM"
-            elif bare_ram and int(bare_ram.group(1)) == 0:
-                specs["ram"] = "No RAM included (barebone)"
-            elif re.search(r"bez\s+pam[aäeě]t[eiě]\s+ram|without\s+ram", lower):
-                specs["ram"] = "No RAM included (barebone)"
-
-        storage_match = re.search(
-            r"(\d{3,4}\s*gb|\d{1,2}\s*tb)\s*(ssd|nvme|hdd)", lower
-        )
-        if storage_match:
-            size = re.sub(
-                r"(\d)\s*(GB|TB)", r"\1 \2", storage_match.group(1).upper()
-            )
-            specs["storage"] = f"{size} {storage_match.group(2).upper()}"
-        elif re.search(
-            r"bez\s+[úu]lo[žz]i[šs][kt]|bez\s+disku|without\s+storage",
-            lower,
-        ):
-            specs["storage"] = "No storage included (barebone)"
-
-        if "radeon" in lower:
-            specs["gpu"] = "AMD Radeon integrated graphics"
-        elif "intel arc" in lower:
-            specs["gpu"] = "Intel Arc integrated graphics"
-        elif "iris xe" in lower:
-            specs["gpu"] = "Intel Iris Xe integrated graphics"
-        elif "intel graphics" in lower or "uhd graphics" in lower:
-            specs["gpu"] = "Intel integrated graphics"
-
-        ports = []
-        for label, pattern in (
-            ("Thunderbolt", r"thunderbolt\s*\d?"),
-            ("USB4", r"usb4"),
-            ("OCuLink", r"oculink"),
-            ("2.5GbE", r"2\.5\s*gb?e"),
-            ("HDMI", r"hdmi"),
-            ("DisplayPort", r"displayport"),
-        ):
-            if re.search(pattern, lower):
-                ports.append(label)
-        if ports:
-            specs["connectivity"] = ", ".join(ports)
-
-        ResultProcessor._extract_bike_specs(lower, specs)
-
-        return specs
-
-    _BIKE_TERMS = re.compile(r"\b(bicykel|bike|mtb)\b")
-
-    @staticmethod
-    def _looks_like_bike(lower: str) -> bool:
-        if ResultProcessor._BIKE_TERMS.search(lower):
-            return True
-        # Frame-only ads say "kolesá" and "rám" but not "bicykel". A car ad
-        # also says "kolesá", so require both words.
-        has_wheels = "koles" in lower
-        return has_wheels and ("rám" in lower or "ram" in lower)
-
-    @staticmethod
-    def _extract_bike_specs(lower: str, specs: dict[str, str]) -> None:
-        """Pull bike facts that sellers write in the description.
-
-        Only runs for bike listings, so PC reports keep their existing keys.
-        The LLM still adds detail; this is the offline fallback and makes the
-        JSON report useful when no provider answers.
-        """
-        if not ResultProcessor._looks_like_bike(lower):
-            return
-
-        wheel = re.search(
-            r'\b(2[46]|27[.,]5|28|29)\s*(?:palcov\w*|[x\u00d7]\s*\d|\\?"|\\?”|\\?″)',
-            lower,
-        ) or re.search(
-            r"koles[áa]\s*(?:s[uú]\s*)?(2[46]|27[.,]5|28|29)", lower
-        )
-        if wheel:
-            specs["wheel_size"] = f'{wheel.group(1).replace(",", ".")}"'
-
-        letter = re.search(
-            r"\br[áa]m\s*(?:je\s*)?(?:ve[ľl]kosti\s*)?"
-            r"(xxs|xs|s|m|l|xl|xxl)\b",
-            lower,
-        ) or re.search(
-            r"ve[ľl]kos[ťt]\s*r[áa]mu\s*:?\s*(xxs|xs|s|m|l|xl|xxl)\b", lower
-        )
-        number = re.search(
-            r"\br[áa]m\s*(?:je\s*)?(?:ve[ľl]kosti\s*)?(\d{2})\s*(?:palc|\\?\"|\\?”)",
-            lower,
-        ) or re.search(
-            r"\bve[ľl]kos[ťt]\s*r[áa]mu\s*(?:je\s*)?(\d{2})", lower
-        ) or re.search(r"\br[áa]m\s*(\d{2})\b", lower)
-        if not number:
-            number = re.search(
-                r"ve[ľl]kosti\s*(?:xxs|xs|s|m|l|xl|xxl)\s*\((\d{2})", lower
-            )
-        if number and specs.get("wheel_size", "").startswith(number.group(1)):
-            # "26" after "rám" is the wheel size, not the frame size.
-            number = None
-        frame_parts = []
-        if letter:
-            frame_parts.append(letter.group(1).upper())
-        if number:
-            frame_parts.append(f'{number.group(1)}"')
-        if frame_parts:
-            specs["frame_size"] = " ".join(frame_parts)
-
-        plain = (
-            unicodedata.normalize("NFKD", lower)
-            .encode("ascii", "ignore")
-            .decode("ascii")
-        )
-        if (
-            "celoodpru" in plain
-            or re.search(r"odpruzen\w*\s*ram", plain)
-            or re.search(r"zadn\w*\s*odpruzen", plain)
-        ):
-            specs["suspension"] = "Full suspension"
-        elif re.search(r"odpruzen\w*\s*vidlic", plain):
-            specs["suspension"] = "Front suspension"
-        elif re.search(r"pevn\w*\s*vidlic|bez\s*odpruzen", plain):
-            specs["suspension"] = "Rigid fork"
-
-        if re.search(r"kotucov|kotoucov|disc\s*brake", plain):
-            specs["brakes"] = "Disc brakes"
-        elif re.search(r"\bv[- ]?brzd|v[- ]?brake", plain):
-            specs["brakes"] = "V-brakes"
-
-        if "shimano" in plain:
-            specs["drivetrain"] = "Shimano"
-        elif "sram" in plain:
-            specs["drivetrain"] = "SRAM"
-
-    @staticmethod
     def _site_trust(deal: Deal) -> tuple[str, str]:
         """Resolve seller type and warranty note for a listing's site."""
         from src.searcher.site_registry import by_id
@@ -1189,6 +986,7 @@ class ResultProcessor:
             "condition_label": CONDITION_LABELS.get(deal.condition, deal.condition),
             "category": deal.category,
             "site_name": deal.site_name,
+            "domain": analysis.domain,
             "seller_type": analysis.seller_type,
             "warranty": analysis.warranty,
             "metadata": deal.metadata,
@@ -1202,6 +1000,7 @@ class ResultProcessor:
             "pros": analysis.pros,
             "cons": analysis.cons,
             "specs": analysis.specs,
+            "spec_coverage": analysis.spec_coverage,
             "alternatives": analysis.alternatives,
             "score_breakdown": analysis.score_breakdown,
         }
@@ -1282,6 +1081,15 @@ class ResultProcessor:
             f"- **Condition:** {CONDITION_LABELS.get(deal.condition, deal.condition)}"
         )
         lines.append(f"- **Site:** {deal.site_name}")
+        profile = analysis.profile or get(analysis.domain)
+        total = len(profile.key_specs)
+        if total:
+            stated = len(analysis.spec_coverage.get("stated", []))
+            lines.append(
+                f"- **Domain: {analysis.domain}** — {stated}/{total} specs stated"
+            )
+        else:
+            lines.append(f"- **Domain: {analysis.domain}**")
         if analysis.seller_type:
             seller_label = SELLER_LABELS.get(analysis.seller_type, analysis.seller_type)
             lines.append(f"- **Seller:** {seller_label}")
@@ -1352,7 +1160,7 @@ class ResultProcessor:
     def _checklist(
         deal: Deal, analysis: DealAnalysis, prompt: str | None = None
     ) -> list[str]:
-        pc = ResultProcessor._wants_pc_details(analysis.specs, prompt)
+        pc = ResultProcessor._wants_pc_details(analysis.domain, prompt)
         if deal.condition in ("new", "open_box"):
             items = [
                 "Confirm the warranty length and who honours it.",

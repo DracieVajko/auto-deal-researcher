@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from src.config import load_config
+from src.output.domains import detect, get
 from src.output.processor import DealAnalysis, ResultProcessor
 from src.searcher.adapters.base import Deal
 
@@ -12,6 +13,11 @@ PROMPT = (
     "mini pc barebone with Thunderbolt/OCuLink, DDR5, 32-64GB, "
     "AMD Ryzen 5+/i5+, AMD Radeon iGPU"
 )
+
+
+def _listing_text(deal: Deal) -> str:
+    """The same title+metadata string the processor feeds to a profile."""
+    return f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}"
 
 
 def sample_deals():
@@ -116,7 +122,7 @@ def test_alza_description_is_parsed_into_specs():
         },
     )
 
-    specs = ResultProcessor._extract_specs(deal)
+    specs = get("computer").extract(_listing_text(deal))
 
     assert specs["cpu"] == "INTEL CORE 3 100U"
     assert specs["ram"] == "No RAM included (barebone)"
@@ -184,10 +190,13 @@ def test_non_pc_report_has_no_cpu_ram_advice(tmp_path):
 
 
 def test_pc_prompt_keeps_pc_details_but_bike_frame_does_not():
-    assert ResultProcessor._wants_pc_details({}, "mini pc with 32 GB RAM")
-    assert ResultProcessor._wants_pc_details({}, "laptop with Thunderbolt")
-    assert not ResultProcessor._wants_pc_details({}, "odpruzeny ram horskeho bicykla")
-    assert not ResultProcessor._wants_pc_details({"wheel_size": '26"'}, "bicykel")
+    assert ResultProcessor._wants_pc_details("generic", "mini pc with 32 GB RAM")
+    assert ResultProcessor._wants_pc_details("generic", "laptop with Thunderbolt")
+    assert not ResultProcessor._wants_pc_details(
+        "generic", "odpruzeny ram horskeho bicykla"
+    )
+    assert not ResultProcessor._wants_pc_details("bike", "bicykel")
+    assert ResultProcessor._wants_pc_details("computer", "horsky bicykel")
 
 
 class CapturingLLM:
@@ -204,15 +213,15 @@ class CapturingLLM:
 
 
 def _analysis(title: str, price: float = 85.0) -> DealAnalysis:
-    return DealAnalysis(
-        deal=Deal(
-            url="https://sport.bazos.sk/inzerat/1/item.php",
-            title=title,
-            price_eur=price,
-            condition="used",
-            site_name="bazos",
-        )
+    deal = Deal(
+        url="https://sport.bazos.sk/inzerat/1/item.php",
+        title=title,
+        price_eur=price,
+        condition="used",
+        site_name="bazos",
     )
+    profile = detect(_listing_text(deal))
+    return DealAnalysis(deal=deal, domain=profile.name, profile=profile)
 
 
 def test_bike_analysis_prompt_is_not_pc_specific():
@@ -260,7 +269,7 @@ def test_bike_specs_are_extracted_from_description():
         },
     )
 
-    specs = ResultProcessor._extract_specs(deal)
+    specs = get("bike").extract(_listing_text(deal))
 
     assert specs["wheel_size"] == '26"'
     assert specs["frame_size"] == 'L 19"'
@@ -279,7 +288,7 @@ def test_bike_specs_handle_escaped_quotes():
         },
     )
 
-    specs = ResultProcessor._extract_specs(deal)
+    specs = get("bike").extract(_listing_text(deal))
 
     assert specs["wheel_size"] == '26"'
     assert specs["frame_size"] == '18"'
@@ -296,7 +305,7 @@ def test_pc_specs_do_not_get_bike_keys():
         metadata={"description": "Ryzen 7 32GB DDR5 RAM, 1TB SSD"},
     )
 
-    specs = ResultProcessor._extract_specs(deal)
+    specs = get("computer").extract(_listing_text(deal))
 
     assert "frame_size" not in specs
     assert "wheel_size" not in specs
@@ -312,7 +321,7 @@ def test_car_wheels_are_not_bike_specs():
         metadata={"description": 'Predám 18" kolesá, letné pneumatiky'},
     )
 
-    specs = ResultProcessor._extract_specs(deal)
+    specs = get("car").extract(_listing_text(deal))
 
     assert "wheel_size" not in specs
     assert "frame_size" not in specs
@@ -326,9 +335,9 @@ def test_bike_prompt_with_ram_is_not_gated_as_pc():
         price_eur=90.0,
         metadata={"description": 'rám 18"'},
     )
-    specs = ResultProcessor._extract_specs(deal)
+    specs = get("bike").extract(_listing_text(deal))
 
-    assert ResultProcessor._matches_prompt(BIKE_PROMPT, deal, specs, False)
+    assert ResultProcessor._matches_prompt(BIKE_PROMPT, deal, "bike", specs, False)
 
 
 def test_pc_prompt_still_rejects_unrelated_listing():
@@ -339,7 +348,7 @@ def test_pc_prompt_still_rejects_unrelated_listing():
     )
 
     assert not ResultProcessor._matches_prompt(
-        "laptop with 32 GB RAM", deal, {}, False
+        "laptop with 32 GB RAM", deal, "computer", {}, False
     )
 
 
@@ -356,37 +365,35 @@ def test_bike_frame_size_supports_xxs_and_prime_marks():
         },
     )
 
-    specs = ResultProcessor._extract_specs(deal)
+    specs = get("bike").extract(_listing_text(deal))
 
     assert specs["wheel_size"] == '26"'
     assert specs["frame_size"] == "XXS"
 
 
 def test_small_frame_is_flagged_for_tall_rider():
-    message, too_small = ResultProcessor._bike_size_note(
+    messages, disqualify = get("bike").check(
         {"wheel_size": '26"', "frame_size": "XXS"}, BIKE_PROMPT
     )
 
-    assert too_small
-    assert message and "too small" in message
+    assert disqualify
+    assert messages and "too small" in messages[0]
 
 
 def test_large_frame_is_fine_for_180_cm():
-    message, too_small = ResultProcessor._bike_size_note(
-        {"frame_size": 'L 19"'}, BIKE_PROMPT
-    )
+    messages, disqualify = get("bike").check({"frame_size": 'L 19"'}, BIKE_PROMPT)
 
-    assert message is None
-    assert not too_small
+    assert messages == []
+    assert not disqualify
 
 
 def test_size_note_needs_a_rider_height():
-    message, too_small = ResultProcessor._bike_size_note(
+    messages, disqualify = get("bike").check(
         {"frame_size": "XXS"}, "horsky bicykel 26"
     )
 
-    assert message is None
-    assert not too_small
+    assert messages == []
+    assert not disqualify
 
 
 def test_heuristic_skips_a_too_small_frame(tmp_path):
@@ -528,3 +535,86 @@ def test_llm_batches_are_merged_by_listing_id_not_row_order(tmp_path):
 
     assert by_site["alza"]["notes"] == "First listing note"
     assert by_site["bazos"]["notes"] == "Second listing note"
+
+
+def test_report_markdown_shows_domain_and_coverage(tmp_path):
+    config = load_config()
+    processor = ResultProcessor(config)
+    deal = Deal(
+        url="https://bazos.sk/iphone",
+        title="iPhone 13 128GB",
+        price_eur=350.0,
+        condition="used",
+        site_name="bazos",
+        metadata={"description": "Batéria 89%, 128 GB."},
+    )
+    _, md_path = asyncio.run(
+        processor.save_results([deal], str(tmp_path), prompt="iphone 13 pouzity")
+    )
+    markdown = Path(md_path).read_text(encoding="utf-8")
+    assert "Domain: phone" in markdown
+    assert "2/4 specs stated" in markdown
+
+
+def test_phone_report_has_no_bike_keys(tmp_path):
+    config = load_config()
+    processor = ResultProcessor(config)
+    deal = Deal(
+        url="https://bazos.sk/iphone",
+        title="iPhone 13 128GB",
+        price_eur=350.0,
+        condition="used",
+        site_name="bazos",
+        metadata={"description": "Batéria 89%, 128 GB, bez škrabancov."},
+    )
+    json_path, _ = asyncio.run(
+        processor.save_results([deal], str(tmp_path), prompt="iphone 13 pouzity")
+    )
+    result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
+    assert result["domain"] == "phone"
+    assert "wheel_size" not in result["specs"]
+    assert "frame_size" not in result["specs"]
+    assert result["spec_coverage"]["stated"]
+    # A phone has storage and ram keys, but it is not a computer: no CPU advice.
+    assert not any("CPU" in con for con in result["cons"])
+    assert not any("memory size" in con for con in result["cons"])
+
+
+def test_sofa_report_has_no_connectivity_row(tmp_path):
+    config = load_config()
+    processor = ResultProcessor(config)
+    deal = Deal(
+        url="https://bazos.sk/sedacka",
+        title="Sedacia súprava",
+        price_eur=200.0,
+        condition="used",
+        site_name="bazos",
+        metadata={"description": "Kožená, rozmery 250x180 cm."},
+    )
+    json_path, _ = asyncio.run(
+        processor.save_results([deal], str(tmp_path), prompt="sedacia supravy")
+    )
+    result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
+    assert result["domain"] == "furniture"
+    assert "Connectivity" not in result["score_breakdown"]
+
+
+def test_bike_report_still_skips_xxs_for_tall_rider(tmp_path):
+    config = load_config()
+    processor = ResultProcessor(config)
+    deal = Deal(
+        url="https://bazos.sk/kellys",
+        title="Kellys Madman 10 bicykel",
+        price_eur=280.0,
+        condition="used",
+        site_name="bazos",
+        metadata={"description": 'veľkosť rámu: XXS, 26" kolesá'},
+    )
+    json_path, _ = asyncio.run(
+        processor.save_results(
+            [deal], str(tmp_path), prompt="horsky bicykel pre muza 180 cm"
+        )
+    )
+    result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
+    assert result["verdict"] == "skip"
+    assert any("too small" in con for con in result["cons"])

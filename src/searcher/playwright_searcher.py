@@ -17,6 +17,7 @@ from src.searcher.adapters.base import SiteBlockedError
 from src.searcher.filter_engine import FilterEngine
 from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
+from src.searcher.query_language import language_for_country, localise_query
 from src.searcher.site_profiles import SiteProfile, load_profiles
 from src.searcher.site_registry import by_id
 from src.searcher.site_selection import SiteCandidate, SiteSelector
@@ -77,6 +78,7 @@ class PlaywrightSearcher:
         self._site_selector = SiteSelector(llm=llm)
         self._site_selection_cache: dict[tuple[str, str], list[WebsiteConfig]] = {}
         self._site_selection_reason = ""
+        self._query_language_cache: dict[tuple[str, str], str] = {}
         if self.diamond_search_enabled:
             self._init_diamond_agents()
     
@@ -342,7 +344,13 @@ class PlaywrightSearcher:
                 page.set_default_navigation_timeout(30000)
 
                 profile = self._profile_for(site)
-                _, currency = self._site_market(site)
+                country, currency = self._site_market(site)
+                site_query = await localise_query(
+                    self.llm,
+                    query,
+                    language_for_country(country),
+                    self._query_language_cache,
+                )
                 try:
                     adapter_cls = get_adapter(site.adapter_class)
                     adapter = adapter_cls(
@@ -363,7 +371,7 @@ class PlaywrightSearcher:
                     )
                 deals = await adapter.search(
                     page,
-                    query,
+                    site_query,
                     max_results=20,
                     filters=filters,
                     category=category,

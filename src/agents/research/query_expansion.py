@@ -58,11 +58,21 @@ class QueryExpansionAgent(LLMBackedAgent):
     @staticmethod
     def _fallback(prompt: str) -> list[str]:
         """Deterministic variations, used when the LLM is unavailable."""
+        from src.searcher.query_language import detect_language
+
+        # Search terms, not matching keys: each language keeps its real
+        # spelling so the site's own search sees words its sellers use.
+        suffixes = {
+            "en": ("used", "new", "refurbished", "open box", "under 350", "bargain"),
+            "sk": ("použité", "nové", "repasované", "do 350", "výhodná kúpa"),
+            "cs": ("použité", "nové", "repasované", "do 350", "výhodná koupě"),
+            "de": ("gebraucht", "neu", "generalüberholt", "unter 350", "Schnäppchen"),
+        }
         base = " ".join(prompt.split())[:60] or "dji drone"
         terms = [t for t in base.split() if len(t) > 2][:4]
         stem = " ".join(terms) if terms else base
         out = [base, stem]
-        for suffix in ("used", "new", "refurbished", "open box", "under 350", "bargain"):
+        for suffix in suffixes.get(detect_language(prompt), suffixes["en"]):
             candidate = f"{stem} {suffix}"
             if candidate not in out:
                 out.append(candidate)

@@ -18,6 +18,8 @@ from typing import ClassVar
 
 from src.config.models import OutputConfig
 from src.output.domains import DomainProfile, detect, get
+from src.output.domains.ai import proposal_to_profile, propose_domain
+from src.output.domains.cache import AI_DRAFT_DIR, load_drafts, save_draft
 from src.searcher.adapters.base import Deal
 from src.searcher.listing_filter import is_laptop_title, wants_mini_pc_form_factor
 from src.text.normalize import fold
@@ -94,6 +96,8 @@ class ResultProcessor:
         self.llm = llm
         # --domain / output.domain from the CLI; None means auto-detect.
         self.domain_override: str | None = None
+        # Where AI drafts are cached; a test may point it at a temp dir.
+        self.draft_dir = AI_DRAFT_DIR
         # Determine user's preferred output currency
         self.output_currency = (
             getattr(getattr(self.full_config, "search", None), "default_currency", "") or ""
@@ -240,6 +244,8 @@ class ResultProcessor:
 
         analyses = [self._heuristic_analysis(deal, prompt) for deal in deals]
 
+        await self._apply_domain_fallbacks(analyses, prompt)
+
         if self.llm is not None:
             for start in range(0, len(analyses), ANALYSIS_CHUNK):
                 chunk = analyses[start : start + ANALYSIS_CHUNK]
@@ -277,6 +283,56 @@ class ResultProcessor:
 
         self._add_cross_alternatives(analyses)
         return analyses
+
+    async def _apply_domain_fallbacks(
+        self, analyses: list[DealAnalysis], prompt: str | None
+    ) -> None:
+        """Second-chance detection for listings the registry left generic.
+
+        Order is spec section 5.3: cached drafts before one live proposal.
+        An explicit `--domain` override already won in `_heuristic_analysis`
+        and is never replaced here.
+        """
+        unknown: list[tuple[DealAnalysis, str]] = []
+        drafts = {} if self.domain_override else load_drafts(self.draft_dir)
+        for analysis in analyses:
+            if analysis.domain != "generic":
+                continue
+            folded = fold(
+                f"{analysis.deal.title} "
+                f"{json.dumps(analysis.deal.metadata, ensure_ascii=False)}"
+            )
+            profile = detect(folded, extra=drafts.values())
+            if profile.name != "generic":
+                analysis.domain = profile.name
+                analysis.profile = profile
+                analysis.specs = profile.extract(folded)
+            else:
+                unknown.append((analysis, folded))
+
+        if not unknown or self.llm is None:
+            return
+
+        # V1: one live proposal per run, for the first unknown listing only.
+        source, source_text = unknown[0]
+        proposal = await propose_domain(self.llm, source_text, prompt)
+        if proposal is None:
+            return
+        try:
+            save_draft(proposal, source.deal.title, self.draft_dir)
+        except OSError as exc:  # a cache miss must not break the run
+            logger.warning("could not cache AI domain draft: %s", exc)
+        profile = proposal_to_profile(proposal)
+        for analysis, folded in unknown:
+            # Apply the proposal only to listings that match its own keywords;
+            # a sofa must not borrow a camera's vocabulary.
+            if profile.matches(folded) > 0:
+                analysis.domain = profile.name
+                analysis.profile = profile
+        if profile.matches(source_text) > 0:
+            # proposal.specs describe the listing that was sent, not the others.
+            for key, value in profile.normalise_specs(proposal.specs).items():
+                source.specs.setdefault(key, value)
 
     async def _llm_analyze_batch(
         self, analyses: list[DealAnalysis], prompt: str | None

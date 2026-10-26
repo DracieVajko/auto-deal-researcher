@@ -1,6 +1,13 @@
+import asyncio
+import json
+from pathlib import Path
+
 import pytest
 
+from src.config import load_config
 from src.output.domains import detect, get
+from src.output.domains.ai import DomainProposal, propose_domain, validate_proposal
+from src.output.domains.cache import load_drafts, save_draft
 from src.output.processor import DealAnalysis, ResultProcessor
 from src.searcher.adapters.base import Deal
 
@@ -269,3 +276,179 @@ def test_generic_spec_match_is_neutral():
     breakdown = processor._score_breakdown(analysis, 200.0, [analysis])
     assert breakdown["Spec match"] == 50
     assert "Connectivity" not in breakdown
+
+
+def test_validate_rejects_a_builtin_name():
+    assert validate_proposal(
+        {
+            "domain": "bike",
+            "keywords": ["bicykel"],
+            "key_specs": ["a", "b"],
+            "specs": {"a": "1"},
+        }
+    ) is None
+
+
+def test_validate_rejects_too_many_key_specs():
+    payload = {
+        "domain": "camera",
+        "keywords": ["camera"],
+        "key_specs": [f"k{i}" for i in range(13)],
+        "specs": {"k0": "1"},
+    }
+    assert validate_proposal(payload) is None
+
+
+def test_validate_rejects_a_proposal_without_keywords():
+    assert validate_proposal(
+        {"domain": "camera", "key_specs": ["a", "b"], "specs": {"a": "1"}}
+    ) is None
+
+
+def test_validate_rejects_a_single_key_spec():
+    assert validate_proposal(
+        {
+            "domain": "camera",
+            "keywords": ["camera"],
+            "key_specs": ["megapixels"],
+            "specs": {"megapixels": "24"},
+        }
+    ) is None
+
+
+def test_validate_rejects_an_empty_spec_value():
+    assert validate_proposal(
+        {
+            "domain": "camera",
+            "keywords": ["camera"],
+            "key_specs": ["megapixels", "shutter_count"],
+            "specs": {"megapixels": ""},
+        }
+    ) is None
+
+
+def test_validate_accepts_a_valid_proposal():
+    proposal = validate_proposal(
+        {
+            "domain": "camera",
+            "keywords": ["camera", "fotoaparat"],
+            "key_specs": ["megapixels", "shutter_count"],
+            "specs": {"megapixels": "24"},
+        }
+    )
+    assert proposal is not None
+    assert proposal.domain == "camera"
+    assert proposal.keywords == ["camera", "fotoaparat"]
+
+
+def test_validate_folds_keywords_before_storing_them():
+    proposal = validate_proposal(
+        {
+            "domain": "camera",
+            "keywords": ["Fotoaparát", "kamera"],
+            "key_specs": ["megapixels", "shutter_count"],
+            "specs": {"megapixels": "24"},
+        }
+    )
+    assert proposal is not None
+    assert proposal.keywords == ["fotoaparat", "kamera"]
+
+
+def test_validate_deduplicates_keywords_after_folding():
+    proposal = validate_proposal(
+        {
+            "domain": "camera",
+            "keywords": ["fotoaparát", "fotoaparat"],
+            "key_specs": ["megapixels", "shutter_count"],
+            "specs": {"megapixels": "24"},
+        }
+    )
+    assert proposal is not None
+    assert proposal.keywords == ["fotoaparat"]
+
+
+@pytest.mark.asyncio
+async def test_propose_domain_parses_a_model_reply():
+    class FakeLLM:
+        async def _chat(self, system, user, **kwargs):
+            return json.dumps(
+                {
+                    "domain": "camera",
+                    "keywords": ["camera", "fotoaparat"],
+                    "key_specs": ["megapixels", "shutter_count"],
+                    "specs": {"megapixels": "24"},
+                }
+            )
+
+    proposal = await propose_domain(FakeLLM(), "Canon EOS 5D, 24 MP", None)
+    assert proposal is not None
+    assert proposal.domain == "camera"
+    assert proposal.specs == {"megapixels": "24"}
+
+
+def test_draft_round_trip(tmp_path):
+    proposal = DomainProposal(
+        domain="camera",
+        keywords=["camera", "fotoaparat"],
+        key_specs=["megapixels", "shutter_count"],
+        specs={},
+    )
+    save_draft(proposal, "Canon EOS 5D", tmp_path)
+    drafts = load_drafts(tmp_path)
+    assert drafts["camera"].key_specs == ("megapixels", "shutter_count")
+    assert drafts["camera"].strong_keywords == ("camera", "fotoaparat")
+
+
+def test_cached_draft_is_used_for_detection(tmp_path):
+    proposal = DomainProposal(
+        domain="camera",
+        keywords=["camera", "fotoaparat"],
+        key_specs=["megapixels", "shutter_count"],
+        specs={},
+    )
+    save_draft(proposal, "Canon EOS 5D", tmp_path)
+    drafts = load_drafts(tmp_path)
+    profile = detect("Predám fotoaparát Canon EOS", extra=drafts.values())
+    assert profile.name == "camera"
+
+
+def test_cached_draft_reaches_the_report(tmp_path):
+    config = load_config()
+    processor = ResultProcessor(config)
+    processor.draft_dir = tmp_path
+    save_draft(
+        DomainProposal(
+            domain="camera",
+            keywords=["camera", "fotoaparat"],
+            key_specs=["megapixels", "shutter_count"],
+            specs={"megapixels": "24"},
+        ),
+        "Canon EOS 5D",
+        tmp_path,
+    )
+    deal = Deal(
+        url="https://bazos.sk/canon",
+        title="Predám fotoaparát Canon EOS 5D",
+        price_eur=400.0,
+        condition="used",
+        site_name="bazos",
+    )
+    json_path, _ = asyncio.run(
+        processor.save_results([deal], str(tmp_path), prompt="fotoaparat")
+    )
+    result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
+    assert result["domain"] == "camera"
+    assert result["spec_coverage"]["missing"] == ["megapixels", "shutter_count"]
+
+
+def test_corrupt_draft_is_ignored(tmp_path):
+    (tmp_path / "camera.yaml").write_text(":::not yaml", encoding="utf-8")
+    assert load_drafts(tmp_path) == {}
+
+
+def test_draft_with_an_invalid_shape_is_ignored(tmp_path):
+    (tmp_path / "camera.yaml").write_text(
+        "name: camera\nsource: ai\nkeywords: []\nkey_specs: [a, b]\n",
+        encoding="utf-8",
+    )
+    assert load_drafts(tmp_path) == {}

@@ -117,7 +117,7 @@
   neutral for bikes.
 
 ### Verification
-- Test suite: 376 passed, 11 skipped (live tests skipped by default).
+- Test suite: 445 passed, 11 skipped (live tests skipped by default).
 
 ## [1.0.0] - 2026-10-20
 

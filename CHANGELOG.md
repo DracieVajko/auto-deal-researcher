@@ -117,7 +117,17 @@
   neutral for bikes.
 
 ### Verification
-- Test suite: 445 passed, 11 skipped (live tests skipped by default).
+- Test suite: 500 passed, 11 skipped (live tests skipped by default).
+- Live search SK (bazos, bike): 14 deals, all `"domain": "bike"`, `spec_coverage`
+  present, no `Connectivity` row, 14/14 descriptions fetched, bike vocabulary only.
+- Live search CZ (bazos_cz, phone): 6 deals, all `"domain": "phone"`, `storage` and
+  `battery_health` extracted, no bike keys, `price_eur` never in `specs`.
+- German search not verified: no runtime-ready German adapter (mobile.de profile
+  is still incomplete). German *understanding* is covered by the fixture tests.
+- Defects from the 2026-10-26 cloud test are gone: no "storage not stated" con for
+  a listing whose title states the storage, no two deals with the same folded
+  title, `duplicates_collapsed` is in every report, and no con claims a price is
+  above or below market.
 
 ## [1.0.0] - 2026-10-20
 

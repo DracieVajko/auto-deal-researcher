@@ -15,11 +15,13 @@ from src.output.domains import DOMAIN_REGISTRY, get
 from src.output.processor import ResultProcessor
 from src.scheduler.tasks import install_schedule, uninstall_schedule
 from src.searcher.filters import (
+    CATEGORIES,
+    ResolvedRequest,
     SearchFilters,
     filters_from_mapping,
     from_cli,
     merge_filters,
-    resolve_filters,
+    resolve_request,
 )
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
@@ -41,8 +43,13 @@ async def _resolve_runtime_filters(
     seller_type=None,
     sort=None,
     extra_filters=None,
-) -> SearchFilters:
-    """Merge config defaults, prompt extraction and CLI values (CLI wins)."""
+) -> ResolvedRequest:
+    """Merge config defaults, prompt extraction and CLI values (CLI wins).
+
+    The merged filters come back inside a ``ResolvedRequest`` together with
+    the category the model proposed for the prompt (``None`` when nothing
+    usable arrived), so commands that pin their own category can ignore it.
+    """
     config_filters = filters_from_mapping(config.search.default_filters)
     cli_filters = from_cli(
         min_price=min_price,
@@ -55,8 +62,21 @@ async def _resolve_runtime_filters(
         sort=sort,
         extra_filters=extra_filters,
     )
-    prompt_filters = await resolve_filters(prompt, SearchFilters(), llm)
-    return merge_filters(merge_filters(config_filters, prompt_filters), cli_filters).validate()
+    prompt_request = await resolve_request(prompt, SearchFilters(), llm)
+    merged = merge_filters(
+        merge_filters(config_filters, prompt_request.filters), cli_filters
+    ).validate()
+    return ResolvedRequest(filters=merged, category=prompt_request.category)
+
+
+def _validate_category_arg(category: str | None) -> None:
+    """Reject a misspelt --category early, listing what is allowed."""
+    if category is not None and category not in CATEGORIES + ("any",):
+        msg = (
+            f"unknown category '{category}'. Allowed: any, "
+            + ", ".join(CATEGORIES)
+        )
+        raise ValueError(msg)
 
 
 @app.command()
@@ -64,7 +84,7 @@ def run(
     prompt: str | None = typer.Option(None, "--prompt", "-p", help="Search prompt (single-run mode)"),
     prompt_file: str | None = typer.Option(None, "--prompt-file", "-f", help="YAML file with prompt (auto mode)"),
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
-    category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, home, hobby, any"),
+    category: str | None = typer.Option(None, "--category", "-cat", help="Pin the category (electronics, appliances, auto, home, hobby, general, any). Default: inferred from the prompt."),
     winners: int | None = typer.Option(None, "--winners", "-w", help="Override winners_count from config"),
     output_format: str | None = typer.Option(None, "--format", help="Override output format: json, markdown, both"),
     min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
@@ -157,7 +177,8 @@ async def _run_async(
 
     llm = LLMClient(config)
     try:
-        filters = await _resolve_runtime_filters(
+        _validate_category_arg(category)
+        resolved = await _resolve_runtime_filters(
             config,
             prompt,
             llm,
@@ -174,8 +195,11 @@ async def _run_async(
     except ValueError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
+    filters = resolved.filters
     if condition == "any" and filters.condition:
         condition = filters.condition
+    # Explicit --category (including 'any') outranks the model's guess.
+    effective_category = category if category else (resolved.category or "any")
 
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
@@ -186,7 +210,9 @@ async def _run_async(
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         try:
-            deals = await searcher.search(prompt, condition, category, filters)
+            deals = await searcher.search(
+                prompt, condition, effective_category, filters
+            )
         finally:
             await browser_mgr.close()
 
@@ -270,7 +296,7 @@ async def _diamond_search_async(
 
     llm = LLMClient(config)
     try:
-        filters = await _resolve_runtime_filters(
+        resolved = await _resolve_runtime_filters(
             config,
             prompt,
             llm,
@@ -287,6 +313,7 @@ async def _diamond_search_async(
     except ValueError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
+    filters = resolved.filters
     if condition == "any" and filters.condition:
         condition = filters.condition
 
@@ -598,7 +625,7 @@ async def _search_async(
 
     llm = LLMClient(config)
     try:
-        filters = await _resolve_runtime_filters(
+        resolved = await _resolve_runtime_filters(
             config,
             prompt,
             llm,
@@ -615,6 +642,7 @@ async def _search_async(
     except ValueError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
+    filters = resolved.filters
     if condition == "any" and filters.condition:
         condition = filters.condition
 

@@ -517,20 +517,66 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
     ).validate()
 
 
-async def resolve_filters(prompt: str, cli_filters: SearchFilters | None, llm: Any = None) -> SearchFilters:
+CATEGORIES: tuple[str, ...] = (
+    "electronics",
+    "appliances",
+    "auto",
+    "home",
+    "hobby",
+    "general",
+)
+
+
+@dataclass(frozen=True)
+class ResolvedRequest:
+    """Prompt-derived filters plus the product category the model proposed."""
+
+    filters: SearchFilters
+    category: str | None
+
+
+def _normalise_category(raw: Any) -> str | None:
+    """Fold the model's category word; anything outside CATEGORIES is no answer."""
+    if not isinstance(raw, str):
+        return None
+    value = fold(raw).strip()
+    if value in CATEGORIES:
+        return value
+    logger.debug("LLM proposed unusable category %r; ignoring it", raw)
+    return None
+
+
+async def resolve_request(
+    prompt: str, cli_filters: SearchFilters | None, llm: Any = None
+) -> ResolvedRequest:
     """Resolve prompt filters through deterministic parsing, LLM, then CLI.
 
     CLI values always win. An unavailable or broken LLM must never prevent a
-    search from running.
+    search from running. The category arrives on the same LLM call that
+    extracts filters — it is popped before mapping so it can never leak into
+    ``extras``, and an unusable value degrades to ``None`` (= search anything).
     """
     parsed = parse_filters_from_text(prompt)
     llm_filters = SearchFilters()
+    category: str | None = None
     if llm is not None and hasattr(llm, "extract_search_filters"):
         try:
             payload = await llm.extract_search_filters(prompt)
+            if isinstance(payload, dict):
+                category = _normalise_category(payload.get("category"))
+                payload = {k: v for k, v in payload.items() if k != "category"}
             llm_filters = filters_from_mapping(payload)
         except Exception as exc:  # noqa: BLE001 - optional enrichment must not break the run
             logger.warning("Filter extraction failed: %s", exc)
+            category = None
     merged = merge_filters(parsed, llm_filters)
     merged = merge_filters(merged, cli_filters)
-    return merged.validate()
+    return ResolvedRequest(filters=merged.validate(), category=category)
+
+
+async def resolve_filters(
+    prompt: str, cli_filters: SearchFilters | None, llm: Any = None
+) -> SearchFilters:
+    """Filters only, for callers that have no use for the inferred category."""
+    resolved = await resolve_request(prompt, cli_filters, llm)
+    return resolved.filters

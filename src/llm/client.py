@@ -259,10 +259,13 @@ class LLMClient:
             "Extract marketplace search filters from the user request. "
             "Return ONLY a JSON object with optional keys: "
             "min_price, max_price, condition (new|used|refurbished|open_box|marketplace), "
+            "category (electronics|appliances|auto|home|hobby|general), "
             "brand, location, shipping (free|paid), "
             "seller_type (retailer|marketplace|classifieds|auction|private), "
             "sort (relevance|price_asc|price_desc|newest), and extras "
             "(an object of string key/value pairs). Use null for unknown values. "
+            "Give category only as one of the listed words when the request "
+            "clearly implies it; omit it when unsure. "
             "Prices are EUR numbers. Do not invent values that are not in the request."
         )
         data = await self.chat_json(system, prompt, max_tokens=300)

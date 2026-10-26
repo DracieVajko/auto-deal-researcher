@@ -5,11 +5,17 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from src.output.domains.base import DomainProfile
+from src.output.domains.bike import BIKE
+from src.output.domains.computer import COMPUTER
 from src.output.domains.generic import GENERIC
 from src.text.normalize import fold
 
 # Insertion order breaks ties: built-ins are checked before caller-supplied drafts.
-DOMAIN_REGISTRY: dict[str, DomainProfile] = {GENERIC.name: GENERIC}
+DOMAIN_REGISTRY: dict[str, DomainProfile] = {
+    GENERIC.name: GENERIC,
+    COMPUTER.name: COMPUTER,
+    BIKE.name: BIKE,
+}
 
 
 def get(name: str) -> DomainProfile:

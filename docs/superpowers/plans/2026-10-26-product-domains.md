@@ -1150,8 +1150,11 @@ re-run `detect(folded, extra=drafts.values())`. If a draft matches, set
 the call is uniform and keeps the contract.
 
 If an analysis is still `generic` and `self.llm` is set, call `propose_domain` once with
-the first such listing's folded text, remembering which analysis it came from. On
-success: `save_draft`, build `profile = proposal_to_profile(proposal)`, and apply it
+the first such listing's folded text, remembering which analysis it came from. If the
+proposal does not match its own listing (`proposal_to_profile(proposal).matches(source)
+== 0`), discard it: do not save the draft and leave the listing `generic` — a draft that
+cannot name the listing that produced it is write-only and would only pollute the cache.
+On success: `save_draft`, build `profile = proposal_to_profile(proposal)`, and apply it
 **only to analyses whose folded text matches `profile.matches(folded) > 0`**, setting
 `analysis.domain = profile.name` and `analysis.profile = profile` on each. Merge
 `profile.normalise_specs(proposal.specs)` into the analysis whose text was sent, and only

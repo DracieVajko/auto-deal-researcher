@@ -470,3 +470,36 @@ def test_domain_override_reaches_the_report(tmp_path):
     )
     result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
     assert result["domain"] == "computer"
+
+
+def test_proposal_that_misses_its_own_listing_is_discarded(tmp_path):
+    """A draft that cannot name the listing that produced it is write-only."""
+
+    class FakeLLM:
+        async def _chat(self, system, user, **kwargs):
+            if "classify" in system:
+                return json.dumps(
+                    {
+                        "domain": "tent",
+                        # A phrase absent from the listing text.
+                        "keywords": ["vystavny stan"],
+                        "key_specs": ["capacity", "pole"],
+                        "specs": {"capacity": "4 people"},
+                    }
+                )
+            return "[]"
+
+    config = load_config()
+    processor = ResultProcessor(config, FakeLLM())
+    processor.draft_dir = tmp_path
+    deal = Deal(
+        url="https://bazos.sk/stan",
+        title="Penzion s vlastnym stanom",
+        price_eur=50.0,
+        condition="used",
+        site_name="bazos",
+    )
+    json_path, _ = asyncio.run(processor.save_results([deal], str(tmp_path)))
+    result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
+    assert result["domain"] == "generic"
+    assert list(tmp_path.glob("*.yaml")) == []

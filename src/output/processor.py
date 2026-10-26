@@ -319,11 +319,20 @@ class ResultProcessor:
         proposal = await propose_domain(self.llm, source_text, prompt)
         if proposal is None:
             return
+        profile = proposal_to_profile(proposal)
+        if profile.matches(source_text) == 0:
+            # A draft that cannot even name the listing that produced it is
+            # write-only: it would pollute the cache without ever matching.
+            # Keep the listing generic and leave the cache clean.
+            logger.warning(
+                "AI domain proposal %s missed its own listing; discarded",
+                proposal.domain,
+            )
+            return
         try:
             save_draft(proposal, source.deal.title, self.draft_dir)
         except OSError as exc:  # a cache miss must not break the run
             logger.warning("could not cache AI domain draft: %s", exc)
-        profile = proposal_to_profile(proposal)
         for analysis, folded in unknown:
             # Apply the proposal only to listings that match its own keywords;
             # a sofa must not borrow a camera's vocabulary.

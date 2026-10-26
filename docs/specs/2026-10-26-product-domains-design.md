@@ -255,7 +255,9 @@ A proposal is accepted only when all of these hold:
 - `key_specs` contains at least one key present in `specs`.
 
 A rejected proposal logs a warning with the reason and falls back to `generic`. It never
-aborts the run.
+aborts the run. A proposal that does not match the very listing that produced it is also
+rejected: a draft whose keywords cannot name its own example is write-only, so it is
+discarded instead of cached.
 
 ### 7.4 Cache
 

@@ -39,7 +39,7 @@ class DomainProposal:
 
 
 def _reject(reason: str) -> None:
-    logger.debug("AI domain proposal rejected: %s", reason)
+    logger.warning("AI domain proposal rejected: %s", reason)
 
 
 def validate_proposal(payload: dict) -> DomainProposal | None:
@@ -136,9 +136,11 @@ async def propose_domain(
         + 'Return {"domain": "...", "keywords": ["..."], "key_specs": ["..."], '
         '"specs": {"key": "value"}} where domain is a short snake_case product '
         "type, keywords are 1-6 words that identify this product type in a "
-        "listing, key_specs are 2-12 snake_case specifications a buyer of this "
-        "product type cares about, and specs contains ONLY values stated in "
-        "the listing."
+        "listing - use words exactly as they appear in the listing text above, "
+        "at least one keyword must be a single word taken from it; a phrase "
+        "keyword is only accepted in addition to such a word. key_specs are "
+        "2-12 snake_case specifications a buyer of this product type cares "
+        "about, and specs contains ONLY values stated in the listing."
     )
     try:
         response = await llm._chat(_SYSTEM, user, max_tokens=600, temperature=0.0)

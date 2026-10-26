@@ -15,10 +15,13 @@ import statistics
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 
 from src.config.models import OutputConfig
+from src.output.domains import DomainProfile, get
 from src.searcher.adapters.base import Deal
 from src.searcher.listing_filter import is_laptop_title, wants_mini_pc_form_factor
+from src.text.normalize import fold
 from src.utils.time import utcnow_stamp
 
 logger = logging.getLogger(__name__)
@@ -66,9 +69,25 @@ class DealAnalysis:
     score_breakdown: dict[str, float] = field(default_factory=dict)
     seller_type: str = ""
     warranty: str = ""
+    domain: str = "generic"
+    # The exact profile that detected this domain, including an AI draft that
+    # is not in DOMAIN_REGISTRY. Consumers resolve `profile or get(domain)`.
+    profile: DomainProfile | None = None
 
 
 class ResultProcessor:
+    # Scoring rows every domain has, and the one row only computer enables.
+    # A breakdown that omits Connectivity is normalised over 0.95 so a domain
+    # without the row still reaches 100.
+    BASE_WEIGHTS: ClassVar[dict[str, float]] = {
+        "Requirement fit": 0.30,
+        "Spec match": 0.25,
+        "Price": 0.20,
+        "Condition & warranty": 0.10,
+        "Seller trust": 0.10,
+    }
+    CONNECTIVITY_WEIGHT: ClassVar[float] = 0.05
+
     def __init__(self, config, llm=None):
         self.config: OutputConfig = config.output
         self.full_config = config
@@ -797,20 +816,9 @@ class ResultProcessor:
             else:
                 # The final score must be readable from the breakdown shown
                 # in the report. The model's own score is kept separately.
-                weights = {
-                    "Requirement fit": 0.30,
-                    "Spec match": 0.25,
-                    "Price": 0.20,
-                    "Condition & warranty": 0.10,
-                    "Seller trust": 0.10,
-                    "Connectivity": 0.05,
-                }
-                analysis.score = round(
-                    sum(
-                        analysis.score_breakdown.get(label, 0.0) * weight
-                        for label, weight in weights.items()
-                    ),
-                    1,
+                analysis.score = self._weighted_score(
+                    analysis.score_breakdown,
+                    analysis.profile or get(analysis.domain),
                 )
 
             if analysis.wrong_form_factor or not analysis.matches_requirements:
@@ -889,7 +897,7 @@ class ResultProcessor:
     ) -> dict[str, float]:
         deal = analysis.deal
         specs = analysis.specs
-        text = f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}".lower()
+        profile = analysis.profile or get(analysis.domain)
 
         if analysis.wrong_form_factor:
             requirement_fit = 0.0
@@ -898,27 +906,16 @@ class ResultProcessor:
         else:
             requirement_fit = 15.0
 
-        spec_match = 0.0
-        bike = ResultProcessor._looks_like_bike(text)
-        if bike and not analysis.wrong_form_factor:
-            spec_match = 45.0
-            if specs.get("wheel_size"):
-                spec_match += 20
-            if specs.get("frame_size"):
-                spec_match += 20
-            if specs.get("suspension"):
-                spec_match += 10
-        elif not analysis.wrong_form_factor:
-            spec_match = 45.0
-            if specs.get("cpu"):
-                spec_match += 20
-            if specs.get("ram") and not specs["ram"].startswith("No RAM"):
-                spec_match += 15
-            if specs.get("storage") and not specs["storage"].startswith("No storage"):
-                spec_match += 5
-            if any(token in text for token in ("thunderbolt", "usb4", "oculink")):
-                spec_match += 15
-        spec_match = min(100.0, spec_match)
+        if profile.key_specs:
+            stated = sum(
+                1
+                for key in profile.key_specs
+                if (specs.get(key) or "").strip()
+            )
+            spec_match = float(round(100 * stated / len(profile.key_specs)))
+        else:
+            # An unknown product type has no vocabulary to grade against.
+            spec_match = 50.0
 
         if median and deal.price_eur > 0:
             ratio = deal.price_eur / median
@@ -947,31 +944,47 @@ class ResultProcessor:
             "auction": 45.0,
         }.get(analysis.seller_type, 50.0)
 
-        if bike:
-            # A bike has no ports; the row is kept so the breakdown weights
-            # still sum to 1.0, but it must not drag the score down.
-            connectivity = 50.0
-        elif any(token in text for token in ("thunderbolt", "usb4", "oculink")):
-            connectivity = 90.0
-        elif "2.5g" in text or "2.5 g" in text:
-            connectivity = 60.0
-        elif any(token in text for token in ("hdmi", "displayport", "usb-c")):
-            connectivity = 40.0
-        else:
-            connectivity = 20.0
-
         if analysis.wrong_form_factor:
             spec_match = 0.0
             price_score = min(price_score, 30.0)
 
-        return {
+        rows = {
             "Requirement fit": round(requirement_fit),
             "Spec match": round(spec_match),
             "Price": round(price_score),
             "Condition & warranty": round(condition_score),
             "Seller trust": round(seller_score),
-            "Connectivity": round(connectivity),
         }
+        if "Connectivity" in profile.optional_rows:
+            text = fold(
+                f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}"
+            )
+            if any(token in text for token in ("thunderbolt", "usb4", "oculink")):
+                connectivity = 90.0
+            elif "2.5g" in text or "2.5 g" in text:
+                connectivity = 60.0
+            elif any(token in text for token in ("hdmi", "displayport", "usb-c")):
+                connectivity = 40.0
+            else:
+                connectivity = 20.0
+            rows["Connectivity"] = round(connectivity)
+        return rows
+
+    def _weighted_score(
+        self, breakdown: dict[str, float], profile: DomainProfile
+    ) -> float:
+        """Combine a breakdown into the final score over the rows it actually has."""
+        weights = dict(self.BASE_WEIGHTS)
+        if "Connectivity" in profile.optional_rows:
+            weights["Connectivity"] = self.CONNECTIVITY_WEIGHT
+        total = sum(weights.values())
+        return round(
+            sum(
+                breakdown.get(label, 0.0) * weight for label, weight in weights.items()
+            )
+            / total,
+            1,
+        )
 
     @staticmethod
     def _extract_specs(deal: Deal) -> dict[str, str]:

@@ -1,6 +1,8 @@
 import pytest
 
 from src.output.domains import detect, get
+from src.output.processor import DealAnalysis, ResultProcessor
+from src.searcher.adapters.base import Deal
 
 
 def test_unknown_text_falls_back_to_generic():
@@ -214,3 +216,56 @@ def test_furniture_extracts_specs_in_four_languages():
 
 def test_generic_is_not_selected_for_a_known_domain():
     assert detect("Gauč, koža, 200x90 cm").name == "furniture"
+
+
+def _analysis_for(title: str, domain: str, specs: dict[str, str]):
+    deal = Deal(url="u", title=title, price_eur=200.0, condition="used", site_name="bazos")
+    return DealAnalysis(deal=deal, domain=domain, specs=specs, seller_type="classifieds")
+
+
+def test_furniture_has_no_connectivity_row():
+    processor = ResultProcessor.__new__(ResultProcessor)
+    analysis = _analysis_for("Sedačka", "furniture", {"dimensions": "200x90 cm"})
+    breakdown = processor._score_breakdown(analysis, 200.0, [analysis])
+    assert "Connectivity" not in breakdown
+
+
+def test_computer_keeps_connectivity_row():
+    processor = ResultProcessor.__new__(ResultProcessor)
+    analysis = _analysis_for("Mini PC", "computer", {"cpu": "RYZEN 7"})
+    breakdown = processor._score_breakdown(analysis, 200.0, [analysis])
+    assert "Connectivity" in breakdown
+
+
+def test_base_weights_are_0_95_and_connectivity_completes_the_scale():
+    assert sum(ResultProcessor.BASE_WEIGHTS.values()) == pytest.approx(0.95)
+    assert (
+        sum(ResultProcessor.BASE_WEIGHTS.values())
+        + ResultProcessor.CONNECTIVITY_WEIGHT
+    ) == pytest.approx(1.0)
+
+
+def test_weights_normalise_when_a_row_is_missing():
+    processor = ResultProcessor.__new__(ResultProcessor)
+    breakdown = {label: 100.0 for label in ResultProcessor.BASE_WEIGHTS}
+    # No Connectivity row: the five base rows are rescaled from 0.95 to 1.00.
+    assert processor._weighted_score(breakdown, get("furniture")) == 100.0
+    # A computer does have the row; a breakdown without it loses its 0.05.
+    assert processor._weighted_score(breakdown, get("computer")) == pytest.approx(95.0)
+
+
+def test_phone_spec_match_is_coverage():
+    processor = ResultProcessor.__new__(ResultProcessor)
+    analysis = _analysis_for(
+        "iPhone", "phone", {"storage": "128 GB", "battery_health": "89%"}
+    )
+    breakdown = processor._score_breakdown(analysis, 200.0, [analysis])
+    assert breakdown["Spec match"] == 50  # 2 of 4 key specs
+
+
+def test_generic_spec_match_is_neutral():
+    processor = ResultProcessor.__new__(ResultProcessor)
+    analysis = _analysis_for("Kávovar", "generic", {})
+    breakdown = processor._score_breakdown(analysis, 200.0, [analysis])
+    assert breakdown["Spec match"] == 50
+    assert "Connectivity" not in breakdown

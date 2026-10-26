@@ -636,3 +636,77 @@ def test_report_says_description_unavailable_when_fetch_failed(tmp_path):
     )
     result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
     assert any("could not be fetched" in con for con in result["cons"])
+
+
+def test_llm_specs_are_restricted_to_the_profile_keys():
+    processor = ResultProcessor(load_config())
+    analysis = DealAnalysis(
+        deal=Deal(
+            url="u",
+            title="iPhone 13",
+            price_eur=300.0,
+            condition="used",
+            site_name="bazos",
+        ),
+        domain="phone",
+    )
+    processor._merge_llm_analysis(
+        analysis,
+        {
+            "id": "L0",
+            "specs": {
+                "storage_gb": "128",
+                "battery_percentage": "89",
+                "color": "pink",
+                "price_eur": "300",
+            },
+        },
+        "iphone 13",
+    )
+    assert analysis.specs == {"storage": "128", "battery_health": "89"}
+
+
+def test_generic_keeps_model_specs_but_never_price_eur():
+    processor = ResultProcessor(load_config())
+    analysis = DealAnalysis(
+        deal=Deal(
+            url="u",
+            title="Kávovar Delonghi",
+            price_eur=120.0,
+            condition="used",
+            site_name="bazos",
+        ),
+        domain="generic",
+    )
+    processor._merge_llm_analysis(
+        analysis,
+        {
+            "id": "L0",
+            "specs": {"pressure_bar": "15", "color": "silver", "price_eur": "120"},
+        },
+        "kavovar",
+    )
+    assert analysis.specs == {"pressure_bar": "15", "color": "silver"}
+
+
+def test_llm_prompt_names_the_profile_keys():
+    captured = {}
+
+    class CaptureLLM:
+        async def _chat(self, system, user, **kwargs):
+            captured["user"] = user
+            return "[]"
+
+    processor = ResultProcessor(load_config(), llm=CaptureLLM())
+    analysis = DealAnalysis(
+        deal=Deal(
+            url="u",
+            title="iPhone 13",
+            price_eur=300.0,
+            condition="used",
+            site_name="bazos",
+        ),
+        domain="phone",
+    )
+    asyncio.run(processor._llm_analyze_batch([analysis], "iphone 13"))
+    assert "storage, ram, battery_health, screen_size" in captured["user"]

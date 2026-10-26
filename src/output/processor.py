@@ -377,6 +377,9 @@ class ResultProcessor:
                 )
                 if description:
                     line += f" | description: {description[:600]}"
+            profile = analysis.profile or get(analysis.domain)
+            if profile.key_specs:
+                line += " | track these specs: " + ", ".join(profile.key_specs)
             lines.append(line)
 
         pc_mode = any(analysis.domain == "computer" for analysis in analyses)
@@ -399,8 +402,9 @@ class ResultProcessor:
             "specification is wrong when the listing does not mention it.",
             "- When a listing says its description was not fetched, do not claim "
             "a specification is not stated; say it could not be checked.",
-            "- Use short snake_case keys in specs for facts stated in the listing; "
-            "do not invent values.",
+            "- Use only the spec keys listed for that listing and omit a key "
+            "the listing does not state; when no keys are listed, use short "
+            "snake_case keys for facts stated in the listing. Never invent values.",
             "- price_eur is the asking price in EUR.",
             "- Alternatives: at most 2 real, commonly available alternatives worth "
             "considering instead of this listing.",
@@ -414,8 +418,6 @@ class ResultProcessor:
                 "score <= 25.",
                 "- A barebone normally ships without RAM and SSD; treat that as a "
                 "cost to budget, not a disqualifier.",
-                "- For PC listings use specs keys such as cpu, ram, storage, gpu "
-                "and connectivity.",
                 "- The search already verified the product category. Do not claim "
                 "the listing is not a mini PC/barebone; judge the stated specs "
                 "instead.",
@@ -527,15 +529,22 @@ class ResultProcessor:
                 "not specified",
                 "not stated",
             }
+            filtered: dict[str, str] = {}
             for key, value in specs.items():
                 if value is None:
                     continue
                 text = self._tidy_text(str(value).strip())
                 if text.casefold() in unknown:
                     continue
+                filtered[str(key)] = text
+
+            # Map through aliases, keep only the domain's vocabulary and never
+            # a second price. A generic profile has no vocabulary to enforce.
+            profile = analysis.profile or get(analysis.domain)
+            for key, value in profile.normalise_specs(filtered).items():
                 # The deterministic parser reads the listing itself; the model
                 # may fill gaps but must not overwrite a verified value.
-                analysis.specs.setdefault(str(key), text)
+                analysis.specs.setdefault(key, value)
 
         alternatives = data.get("alternatives")
         if isinstance(alternatives, list):

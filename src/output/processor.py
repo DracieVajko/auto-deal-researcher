@@ -12,6 +12,7 @@ import json
 import logging
 import re
 import statistics
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -268,11 +269,19 @@ class ResultProcessor:
         for index, analysis in enumerate(analyses):
             deal = analysis.deal
             seller = analysis.seller_type or "unknown"
-            lines.append(
+            line = (
                 f"[L{index}] {deal.title} | {deal.price_eur:.0f} EUR | "
                 f"{deal.condition} | {deal.site_name} | seller: {seller} | "
                 f"specs: {json.dumps(analysis.specs, ensure_ascii=False)}"
             )
+            # The seller's own description is where frame size, fork type and
+            # defects are stated. Keep it short so the prompt stays predictable.
+            description = " ".join(
+                str(deal.metadata.get("description") or "").split()
+            )
+            if description:
+                line += f" | description: {description[:600]}"
+            lines.append(line)
 
         pc_mode = any(
             self._wants_pc_details(analysis.specs, prompt)
@@ -533,6 +542,63 @@ class ResultProcessor:
                 break
         return kept
 
+    @staticmethod
+    def _bike_size_note(
+        specs: dict[str, str], prompt: str | None
+    ) -> tuple[str | None, bool]:
+        """Compare a stated frame size with the rider height in the request.
+
+        Returns (message, too_small). The ranges are approximate on purpose:
+        they only reject a frame that is clearly wrong (an XXS frame for a
+        180 cm rider), and leave borderline sizes to the buyer.
+        """
+        height_match = re.search(r"\b(1[5-9]\d)\s*cm\b", (prompt or "").lower())
+        frame = (specs.get("frame_size") or "").upper()
+        if not height_match or not frame:
+            return None, False
+        height = int(height_match.group(1))
+
+        letter = re.match(r"(XXS|XS|S|M|L|XL|XXL)\b", frame)
+        number = re.search(r"(\d{2})", frame)
+        if letter:
+            ranges = {
+                "XXS": (145, 155),
+                "XS": (155, 165),
+                "S": (160, 170),
+                "M": (168, 178),
+                "L": (175, 185),
+                "XL": (182, 192),
+                "XXL": (188, 198),
+            }
+            low, high = ranges[letter.group(1)]
+        elif number:
+            ranges = {
+                14: (145, 155),
+                15: (150, 160),
+                16: (160, 170),
+                17: (165, 175),
+                18: (170, 180),
+                19: (175, 185),
+                20: (180, 190),
+                21: (185, 195),
+                22: (188, 198),
+            }
+            low, high = ranges.get(int(number.group(1)), (0, 250))
+        else:
+            return None, False
+
+        if height > high + 2:
+            return (
+                f"Frame size {frame} is too small for a {height} cm rider",
+                True,
+            )
+        if height < low - 5:
+            return (
+                f"Frame size {frame} is likely too large for a {height} cm rider",
+                False,
+            )
+        return None, False
+
     def _heuristic_analysis(self, deal: Deal, prompt: str | None) -> DealAnalysis:
         """Baseline analysis that works without any LLM."""
         specs = self._extract_specs(deal)
@@ -542,9 +608,14 @@ class ResultProcessor:
         text = f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}".lower()
 
         matches = self._matches_prompt(prompt, deal, specs, wrong_form)
+        size_warning, size_too_small = self._bike_size_note(specs, prompt)
+        if size_too_small:
+            matches = False
         pros, cons = self._heuristic_pros_cons(
             deal, prompt, specs, seller_type, wrong_form, laptop
         )
+        if size_warning:
+            cons.append(size_warning)
 
         score = 50.0
         if wrong_form:
@@ -596,6 +667,11 @@ class ResultProcessor:
         request = prompt.lower()
         if wants_mini_pc_form_factor(request):
             return True
+        # Only apply the hardware-token gate to hardware requests. "ram" in
+        # "odpruzeny ram" is a bike frame, not memory, and used to mark every
+        # bicycle as not matching the request.
+        if not ResultProcessor._wants_pc_details(specs, request):
+            return True
         hardware_tokens = (
             "ryzen",
             "intel",
@@ -610,10 +686,8 @@ class ResultProcessor:
             "oculink",
             "ram",
         )
-        if any(token in request for token in hardware_tokens):
-            listing = f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}".lower()
-            return any(token in listing for token in hardware_tokens)
-        return True
+        listing = f"{deal.title} {json.dumps(deal.metadata, ensure_ascii=False)}".lower()
+        return any(token in listing for token in hardware_tokens)
 
     # Words that mark a request as being about computing hardware. Used to keep
     # CPU/RAM/SSD advice out of bicycle, furniture and other non-PC reports.
@@ -825,7 +899,16 @@ class ResultProcessor:
             requirement_fit = 15.0
 
         spec_match = 0.0
-        if not analysis.wrong_form_factor:
+        bike = ResultProcessor._looks_like_bike(text)
+        if bike and not analysis.wrong_form_factor:
+            spec_match = 45.0
+            if specs.get("wheel_size"):
+                spec_match += 20
+            if specs.get("frame_size"):
+                spec_match += 20
+            if specs.get("suspension"):
+                spec_match += 10
+        elif not analysis.wrong_form_factor:
             spec_match = 45.0
             if specs.get("cpu"):
                 spec_match += 20
@@ -864,7 +947,11 @@ class ResultProcessor:
             "auction": 45.0,
         }.get(analysis.seller_type, 50.0)
 
-        if any(token in text for token in ("thunderbolt", "usb4", "oculink")):
+        if bike:
+            # A bike has no ports; the row is kept so the breakdown weights
+            # still sum to 1.0, but it must not drag the score down.
+            connectivity = 50.0
+        elif any(token in text for token in ("thunderbolt", "usb4", "oculink")):
             connectivity = 90.0
         elif "2.5g" in text or "2.5 g" in text:
             connectivity = 60.0
@@ -968,7 +1055,94 @@ class ResultProcessor:
         if ports:
             specs["connectivity"] = ", ".join(ports)
 
+        ResultProcessor._extract_bike_specs(lower, specs)
+
         return specs
+
+    _BIKE_TERMS = re.compile(r"\b(bicykel|bike|mtb)\b")
+
+    @staticmethod
+    def _looks_like_bike(lower: str) -> bool:
+        if ResultProcessor._BIKE_TERMS.search(lower):
+            return True
+        # Frame-only ads say "kolesá" and "rám" but not "bicykel". A car ad
+        # also says "kolesá", so require both words.
+        has_wheels = "koles" in lower
+        return has_wheels and ("rám" in lower or "ram" in lower)
+
+    @staticmethod
+    def _extract_bike_specs(lower: str, specs: dict[str, str]) -> None:
+        """Pull bike facts that sellers write in the description.
+
+        Only runs for bike listings, so PC reports keep their existing keys.
+        The LLM still adds detail; this is the offline fallback and makes the
+        JSON report useful when no provider answers.
+        """
+        if not ResultProcessor._looks_like_bike(lower):
+            return
+
+        wheel = re.search(
+            r'\b(2[46]|27[.,]5|28|29)\s*(?:palcov\w*|[x\u00d7]\s*\d|\\?"|\\?”|\\?″)',
+            lower,
+        ) or re.search(
+            r"koles[áa]\s*(?:s[uú]\s*)?(2[46]|27[.,]5|28|29)", lower
+        )
+        if wheel:
+            specs["wheel_size"] = f'{wheel.group(1).replace(",", ".")}"'
+
+        letter = re.search(
+            r"\br[áa]m\s*(?:je\s*)?(?:ve[ľl]kosti\s*)?"
+            r"(xxs|xs|s|m|l|xl|xxl)\b",
+            lower,
+        ) or re.search(
+            r"ve[ľl]kos[ťt]\s*r[áa]mu\s*:?\s*(xxs|xs|s|m|l|xl|xxl)\b", lower
+        )
+        number = re.search(
+            r"\br[áa]m\s*(?:je\s*)?(?:ve[ľl]kosti\s*)?(\d{2})\s*(?:palc|\\?\"|\\?”)",
+            lower,
+        ) or re.search(
+            r"\bve[ľl]kos[ťt]\s*r[áa]mu\s*(?:je\s*)?(\d{2})", lower
+        ) or re.search(r"\br[áa]m\s*(\d{2})\b", lower)
+        if not number:
+            number = re.search(
+                r"ve[ľl]kosti\s*(?:xxs|xs|s|m|l|xl|xxl)\s*\((\d{2})", lower
+            )
+        if number and specs.get("wheel_size", "").startswith(number.group(1)):
+            # "26" after "rám" is the wheel size, not the frame size.
+            number = None
+        frame_parts = []
+        if letter:
+            frame_parts.append(letter.group(1).upper())
+        if number:
+            frame_parts.append(f'{number.group(1)}"')
+        if frame_parts:
+            specs["frame_size"] = " ".join(frame_parts)
+
+        plain = (
+            unicodedata.normalize("NFKD", lower)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+        if (
+            "celoodpru" in plain
+            or re.search(r"odpruzen\w*\s*ram", plain)
+            or re.search(r"zadn\w*\s*odpruzen", plain)
+        ):
+            specs["suspension"] = "Full suspension"
+        elif re.search(r"odpruzen\w*\s*vidlic", plain):
+            specs["suspension"] = "Front suspension"
+        elif re.search(r"pevn\w*\s*vidlic|bez\s*odpruzen", plain):
+            specs["suspension"] = "Rigid fork"
+
+        if re.search(r"kotucov|kotoucov|disc\s*brake", plain):
+            specs["brakes"] = "Disc brakes"
+        elif re.search(r"\bv[- ]?brzd|v[- ]?brake", plain):
+            specs["brakes"] = "V-brakes"
+
+        if "shimano" in plain:
+            specs["drivetrain"] = "Shimano"
+        elif "sram" in plain:
+            specs["drivetrain"] = "SRAM"
 
     @staticmethod
     def _site_trust(deal: Deal) -> tuple[str, str]:

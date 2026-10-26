@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+import re
 from typing import ClassVar
 from urllib.parse import quote_plus
 
@@ -24,6 +26,14 @@ class BazosAdapter(BaseAdapter):
     warranty_note = "Private sellers; warranty only if they hand over the receipt."
     results_selector = ".inzeraty"
     item_selector = ".inzeraty > div"
+
+    # Detail pages carry the description, location and the specs that the
+    # result cards omit (frame size, fork, brakes). Fetching them costs one
+    # request per listing, so it can be disabled with ADS_BAZOS_DETAILS=0.
+    detail_description_selector = ".popisdetail"
+    detail_main_selector = ".maincontent"
+    detail_timeout_ms = 10000
+    detail_delay_seconds = 0.5
 
     async def search(
         self,
@@ -74,6 +84,29 @@ class BazosAdapter(BaseAdapter):
             if deal:
                 deals.append(deal)
 
+        if deals and os.environ.get("ADS_BAZOS_DETAILS", "1").strip().lower() not in (
+            "0",
+            "false",
+            "no",
+        ):
+            try:
+                limit = int(os.environ.get("ADS_BAZOS_DETAIL_LIMIT", "10"))
+            except ValueError:
+                logger.warning(
+                    "[%s] Invalid ADS_BAZOS_DETAIL_LIMIT; using 10", self.name
+                )
+                limit = 10
+            selected = deals[: max(0, limit)]
+            failed = await self._enrich_details(page, selected)
+            if failed:
+                logger.warning(
+                    "[%s] %d/%d detail pages returned no description; "
+                    "those listings keep their card data only",
+                    self.name,
+                    failed,
+                    len(selected),
+                )
+
         return deals
 
     def default_search_url(self, query: str) -> str:
@@ -118,6 +151,86 @@ class BazosAdapter(BaseAdapter):
     async def extract_deal(self, page: Page, element) -> Deal | None:
         """Abstract method required by BaseAdapter - not used in this adapter."""
         return None
+
+    async def _enrich_details(self, page: Page, deals: list[Deal]) -> int:
+        """Load each listing page for its description and location.
+
+        The result cards only carry title and price. Frame size, fork type and
+        the seller's town are written in the description, so without this step
+        the report can only guess from the title. A failed page leaves the card
+        data untouched and does not abort the run.
+
+        Returns the number of pages that produced no description, so the caller
+        can report the gap instead of silently shipping a thinner report.
+        """
+        failed = 0
+        for deal in deals:
+            try:
+                await page.goto(
+                    deal.url,
+                    wait_until="domcontentloaded",
+                    timeout=self.detail_timeout_ms,
+                )
+                description = await self._inner_text(
+                    page, self.detail_description_selector
+                )
+                main = await self._inner_text(page, self.detail_main_selector)
+                if not description:
+                    # Bazos occasionally serves an empty shell when requests
+                    # come too fast. One reload is cheaper than a report with
+                    # no specs.
+                    await asyncio.sleep(1.0)
+                    await page.reload(
+                        wait_until="domcontentloaded",
+                        timeout=self.detail_timeout_ms,
+                    )
+                    description = await self._inner_text(
+                        page, self.detail_description_selector
+                    )
+                    main = await self._inner_text(page, self.detail_main_selector)
+                if not description:
+                    failed += 1
+                    logger.debug(
+                        "[%s] No description on detail page %s (title=%r, url=%s)",
+                        self.name,
+                        deal.url,
+                        await page.title(),
+                        page.url,
+                    )
+            except PlaywrightError as e:
+                logger.debug(f"[{self.name}] Detail fetch failed for {deal.url}: {e}")
+                failed += 1
+                continue
+
+            if description:
+                deal.metadata["description"] = description
+            location = self._parse_location(main)
+            if location:
+                deal.metadata["location"] = location
+            await asyncio.sleep(self.detail_delay_seconds)
+
+        return failed
+
+    @staticmethod
+    async def _inner_text(page: Page, selector: str) -> str:
+        element = await page.query_selector(selector)
+        if not element:
+            return ""
+        return " ".join((await element.inner_text()).split())
+
+    @staticmethod
+    def _parse_location(main_text: str) -> str:
+        """Pull "841 04 Bratislava" out of the detail page's metadata block."""
+        match = re.search(
+            r"Lokalita:\s*(\d{3}\s?\d{2})\s+(.+?)\s+(?:Videlo|Zobrazené):",
+            main_text,
+        )
+        if match:
+            return f"{match.group(1)} {match.group(2)}".strip()
+        match = re.search(
+            r"Lokalita:\s*(.+?)\s*(?:Videlo|Zobrazené):", main_text
+        )
+        return match.group(1).strip() if match else ""
 
     async def _extract_from_group(self, page: Page, title_container, price_container) -> Deal | None:
         """Extract deal from title container (has link) and price container."""

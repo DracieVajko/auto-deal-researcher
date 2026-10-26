@@ -27,6 +27,16 @@
 - `python -m src.cli llm-check` probes every configured LLM provider on its own
   and reports status, latency, provider error text and a fix hint (exit code 1
   when nothing is healthy).
+- Bazos detail pages are fetched after the result list, so the description and
+  the seller's town (`Deal.metadata["description"]` / `["location"]`) reach the
+  report. Frame size, fork, brakes and drivetrain now come from the seller's own
+  text instead of the title. `ADS_BAZOS_DETAILS=0` disables the extra requests
+  and `ADS_BAZOS_DETAIL_LIMIT` caps them (default 10).
+- Offline bike spec extraction (`wheel_size`, `frame_size`, `suspension`,
+  `brakes`, `drivetrain`) works without an LLM; car ads that only mention
+  "kolesá" are not treated as bikes.
+- A stated frame size is compared with the rider height in the request, so an
+  XXS frame is skipped for a 180 cm rider instead of scoring well.
 
 ### Changed
 - Site profiles are loaded at runtime; unknown adapters participate only when
@@ -51,6 +61,9 @@
   LM Studio first, or raise the variable for slow hardware.
 - Cloud fallback order is Mistral → Gemini → OpenRouter. The free OpenRouter
   model is code-oriented and is kept only as a last resort.
+- The deal-analysis prompt now includes the seller's description (up to 600
+  characters), so frame size, defects and included parts are judged from the
+  listing text instead of the title alone.
 
 ### Removed
 - `src/searcher/judge.py`: an unreferenced stub that could not even be
@@ -75,9 +88,13 @@
 - The local circuit breaker was keyed by endpoint only. One model that timed
   out or failed to load therefore disabled every other model on the same
   endpoint for the rest of the run. The key now includes the model id.
+- Non-PC listings were scored with the PC spec formula: 45/100 spec match and
+  20/100 connectivity regardless of the item, so a complete bicycle could
+  never score well. Bike specs now feed the spec score and the port row is
+  neutral for bikes.
 
 ### Verification
-- Test suite: 358 passed, 11 skipped (live tests skipped by default).
+- Test suite: 376 passed, 11 skipped (live tests skipped by default).
 
 ## [1.0.0] - 2026-10-20
 

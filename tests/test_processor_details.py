@@ -246,6 +246,199 @@ def test_pc_analysis_prompt_keeps_pc_rules():
     assert "barebone" in llm.user.lower()
 
 
+def test_bike_specs_are_extracted_from_description():
+    """Frame and wheel size live in the description, not the result card."""
+    deal = Deal(
+        url="https://sport.bazos.sk/inzerat/1/item.php",
+        title="Horský bicykel Author",
+        price_eur=90.0,
+        metadata={
+            "description": (
+                "Kolesá sú 26 palcové, rám je veľkosti L (19”). "
+                "Vhodné pre asi 180cm postavu."
+            )
+        },
+    )
+
+    specs = ResultProcessor._extract_specs(deal)
+
+    assert specs["wheel_size"] == '26"'
+    assert specs["frame_size"] == 'L 19"'
+
+
+def test_bike_specs_handle_escaped_quotes():
+    """json.dumps escapes quotes, so 26\\" must still parse."""
+    deal = Deal(
+        url="https://sport.bazos.sk/inzerat/1/item.php",
+        title="MTB",
+        price_eur=100.0,
+        metadata={
+            "description": (
+                '26" kolesá, rám 18", kotúčové brzdy, SRAM'
+            )
+        },
+    )
+
+    specs = ResultProcessor._extract_specs(deal)
+
+    assert specs["wheel_size"] == '26"'
+    assert specs["frame_size"] == '18"'
+    assert specs["brakes"] == "Disc brakes"
+    assert specs["drivetrain"] == "SRAM"
+
+
+def test_pc_specs_do_not_get_bike_keys():
+    """PC listings mention RAM; that must never become a frame size."""
+    deal = Deal(
+        url="https://www.alza.sk/mini-pc",
+        title="Mini PC barebone",
+        price_eur=300.0,
+        metadata={"description": "Ryzen 7 32GB DDR5 RAM, 1TB SSD"},
+    )
+
+    specs = ResultProcessor._extract_specs(deal)
+
+    assert "frame_size" not in specs
+    assert "wheel_size" not in specs
+    assert specs["ram"] == "32 GB DDR5"
+
+
+def test_car_wheels_are_not_bike_specs():
+    """A car ad also says "kolesá"; it must not get bike keys."""
+    deal = Deal(
+        url="https://auto.bazos.sk/inzerat/1/skoda.php",
+        title="Škoda Octavia",
+        price_eur=3000.0,
+        metadata={"description": 'Predám 18" kolesá, letné pneumatiky'},
+    )
+
+    specs = ResultProcessor._extract_specs(deal)
+
+    assert "wheel_size" not in specs
+    assert "frame_size" not in specs
+
+
+def test_bike_prompt_with_ram_is_not_gated_as_pc():
+    """\"odpruzeny ram\" is a frame, not memory; it must not set fit to 15."""
+    deal = Deal(
+        url="https://sport.bazos.sk/inzerat/1/item.php",
+        title="Horský bicykel 26",
+        price_eur=90.0,
+        metadata={"description": 'rám 18"'},
+    )
+    specs = ResultProcessor._extract_specs(deal)
+
+    assert ResultProcessor._matches_prompt(BIKE_PROMPT, deal, specs, False)
+
+
+def test_pc_prompt_still_rejects_unrelated_listing():
+    deal = Deal(
+        url="https://sport.bazos.sk/inzerat/1/item.php",
+        title="Horský bicykel",
+        price_eur=90.0,
+    )
+
+    assert not ResultProcessor._matches_prompt(
+        "laptop with 32 GB RAM", deal, {}, False
+    )
+
+
+def test_bike_frame_size_supports_xxs_and_prime_marks():
+    deal = Deal(
+        url="https://sport.bazos.sk/inzerat/1/item.php",
+        title="Kellys Madman 10 bicykel",
+        price_eur=280.0,
+        metadata={
+            "description": (
+                "plášte: IMPAC Ridgepac 54-559 (26x2.10) "
+                "veľkosť rámu: XXS"
+            )
+        },
+    )
+
+    specs = ResultProcessor._extract_specs(deal)
+
+    assert specs["wheel_size"] == '26"'
+    assert specs["frame_size"] == "XXS"
+
+
+def test_small_frame_is_flagged_for_tall_rider():
+    message, too_small = ResultProcessor._bike_size_note(
+        {"wheel_size": '26"', "frame_size": "XXS"}, BIKE_PROMPT
+    )
+
+    assert too_small
+    assert message and "too small" in message
+
+
+def test_large_frame_is_fine_for_180_cm():
+    message, too_small = ResultProcessor._bike_size_note(
+        {"frame_size": 'L 19"'}, BIKE_PROMPT
+    )
+
+    assert message is None
+    assert not too_small
+
+
+def test_size_note_needs_a_rider_height():
+    message, too_small = ResultProcessor._bike_size_note(
+        {"frame_size": "XXS"}, "horsky bicykel 26"
+    )
+
+    assert message is None
+    assert not too_small
+
+
+def test_heuristic_skips_a_too_small_frame(tmp_path):
+    config = load_config()
+    processor = ResultProcessor(config)
+    deal = Deal(
+        url="https://sport.bazos.sk/inzerat/1/item.php",
+        title="Kellys Madman 10 bicykel",
+        price_eur=280.0,
+        condition="used",
+        site_name="bazos",
+        metadata={
+            "description": 'veľkosť rámu: XXS, 26" kolesá, Shimano',
+        },
+    )
+
+    json_path, _ = asyncio.run(
+        processor.save_results([deal], str(tmp_path), prompt=BIKE_PROMPT)
+    )
+
+    payload = json.loads(Path(json_path).read_text(encoding="utf-8"))
+    result = payload["deals"][0]
+    assert result["verdict"] == "skip"
+    assert any("too small" in con for con in result["cons"])
+
+
+def test_llm_batch_includes_listing_description():
+    config = load_config()
+    llm = CapturingLLM()
+    processor = ResultProcessor(config, llm)
+    analysis = _analysis("Horský bicykel Author")
+    analysis.deal.metadata["description"] = "rám je veľkosti L (19”), kolesá 26"
+
+    asyncio.run(processor._llm_analyze_batch([analysis], BIKE_PROMPT))
+
+    assert "description:" in llm.user
+    assert "veľkosti L (19" in llm.user
+
+
+def test_llm_batch_truncates_long_description():
+    config = load_config()
+    llm = CapturingLLM()
+    processor = ResultProcessor(config, llm)
+    analysis = _analysis("Horský bicykel")
+    analysis.deal.metadata["description"] = "x" * 2000
+
+    asyncio.run(processor._llm_analyze_batch([analysis], BIKE_PROMPT))
+
+    assert "x" * 600 in llm.user
+    assert "x" * 601 not in llm.user
+
+
 def test_laptop_search_keeps_laptops(tmp_path):
     """Form-factor filtering is request-specific, not anti-laptop."""
     config = load_config()

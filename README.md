@@ -82,6 +82,8 @@ All secrets live in `.env` (git-ignored). See `.env.example` for the full list.
 | `ADS_LOCAL_LLM_TIMEOUT` | `LLMClient` | Seconds, default `180` |
 | `ADS_CLOUD_LLM_TIMEOUT` | `LLMClient` | Seconds, default `120` |
 | `ADS_GEMINI_MIN_OUTPUT_TOKENS` | `LLMClient` | Output-token floor for Gemini thinking models, default `512` |
+| `ADS_BAZOS_DETAILS` | `BazosAdapter` | `1` (default) fetches each listing's detail page for description and town; `0` skips the extra requests |
+| `ADS_BAZOS_DETAIL_LIMIT` | `BazosAdapter` | Maximum detail pages fetched per search, default `10` |
 
 `config-check` fails loudly when a `${VAR}` has no value and no default.
 

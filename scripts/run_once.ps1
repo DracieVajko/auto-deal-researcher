@@ -24,8 +24,8 @@
 param(
     [string]$Prompt = "",
     [string]$PromptFile = "",
-    [string]$Condition = "any",
-    [string]$Category = "any",
+    [string]$Condition = "",
+    [string]$Category = "",
     [int]$Winners = 0,
     [string]$Format = ""
 )
@@ -36,8 +36,10 @@ cd $repoRoot
 $args = @("python", "-m", "src.cli", "run")
 if ($Prompt) { $args += @("--prompt", $Prompt) }
 if ($PromptFile) { $args += @("--prompt-file", $PromptFile) }
-$args += @("--condition", $Condition, "--category", $Category)
+if ($Condition) { $args += @("--condition", $Condition) }
+if ($Category) { $args += @("--category", $Category) }
 if ($Winners -gt 0) { $args += @("--winners", $Winners) }
 if ($Format) { $args += @("--format", $Format) }
 
 & $args
+exit $LASTEXITCODE

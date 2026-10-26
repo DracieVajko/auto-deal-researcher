@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from src.config.models import OutputConfig
+from src.output.dedup import collapse_duplicates
 from src.output.domains import DomainProfile, detect, get
 from src.output.domains.ai import proposal_to_profile, propose_domain
 from src.output.domains.cache import AI_DRAFT_DIR, load_drafts, save_draft
@@ -139,6 +140,10 @@ class ResultProcessor:
         out_dir = Path(output_dir or self.config.directory)
         out_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240 - tiny CLI, not a server
 
+        # The same item posted twice must not double-count in the median or
+        # take two places in the report.
+        deals, duplicates_collapsed = collapse_duplicates(deals)
+
         analyses = await self._analyze_deals(deals, prompt)
         relevant = [a for a in analyses if not a.wrong_form_factor]
         filtered = [a for a in analyses if a.wrong_form_factor]
@@ -160,6 +165,7 @@ class ResultProcessor:
             "prompt": prompt or "",
             "generated_at": timestamp,
             "count": len(relevant),
+            "duplicates_collapsed": duplicates_collapsed,
             "filtered_out_count": len(filtered),
             "deals": [
                 self._deal_to_dict(

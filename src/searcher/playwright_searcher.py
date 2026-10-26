@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from playwright.async_api import BrowserContext, Page
@@ -234,6 +235,7 @@ class PlaywrightSearcher:
         condition: str = "any",
         category: str = "any",
         filters: SearchFilters | None = None,
+        on_sites: Callable[[list[str]], None] | None = None,
     ) -> list[Deal]:
         """Main search entry point — multi-round with LLM query refinement."""
         all_deals: list[Deal] = []
@@ -262,7 +264,14 @@ class PlaywrightSearcher:
         while attempts and round_num < max_rounds:
             query = attempts.pop(0)
             round_num += 1
-            round_deals = await self._execute_round(query, condition, category, seen_urls, filters)
+            round_deals = await self._execute_round(
+                query,
+                condition,
+                category,
+                seen_urls,
+                filters,
+                on_sites=on_sites if round_num == 1 else None,
+            )
             rounds.append(SearchRound(round_num, query, len(round_deals), round_deals))
             for deal in round_deals:
                 if deal.url not in seen_urls:
@@ -329,8 +338,11 @@ class PlaywrightSearcher:
         category: str,
         seen_urls: set,
         filters: SearchFilters | None = None,
+        on_sites: Callable[[list[str]], None] | None = None,
     ) -> list[Deal]:
         sites = await self._select_sites(condition, category, prompt=query)
+        if on_sites and sites:
+            on_sites([site.name for site in sites])
         all_deals = []
 
         for site in sites:

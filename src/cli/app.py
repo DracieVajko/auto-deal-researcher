@@ -1,6 +1,8 @@
 """Auto Deal Searcher - Typer app factory."""
 
 import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import typer
 
@@ -123,47 +125,54 @@ def run(
     )
 
 
-async def _run_async(
-    prompt,
-    prompt_file,
-    condition,
-    category,
-    winners,
-    output_format,
-    min_price=None,
-    max_price=None,
-    brand=None,
-    location=None,
-    shipping=None,
-    seller_type=None,
-    sort=None,
-    extra_filters=None,
-    country=None,
-    max_sites=None,
-    domain=None,
-):
+@dataclass
+class SearchBrief:
+    """What the pipeline understood from the request before searching."""
+
+    filters: SearchFilters
+    condition: str
+    category: str
+
+
+@dataclass
+class SearchOutcome:
+    """The result of one search cycle, for the caller to present."""
+
+    deal_count: int
+    sites: list[str]
+    json_path: str
+    md_path: str
+    results_dir: str
+
+
+async def run_search(
+    prompt: str,
+    *,
+    condition: str = "any",
+    category: str | None = None,
+    winners: int | None = None,
+    output_format: str | None = None,
+    min_price: str | None = None,
+    max_price: str | None = None,
+    brand: str | None = None,
+    location: str | None = None,
+    shipping: str | None = None,
+    seller_type: str | None = None,
+    sort: str | None = None,
+    extra_filters: list[str] | None = None,
+    country: str | None = None,
+    max_sites: int | None = None,
+    domain: str | None = None,
+    brief: Callable[[SearchBrief], None] | None = None,
+    plan: Callable[[list[str]], None] | None = None,
+) -> SearchOutcome:
+    """One full search cycle: resolve, search, store, report. Prints nothing.
+
+    ``brief`` sees the resolved filters before anything opens a browser and
+    ``plan`` sees the chosen shop names; ``run`` and ``ask`` share this code
+    and each presents the outcome in its own words.
+    """
     config = load_config()
-
-    if domain:
-        try:
-            get(domain)
-        except KeyError:
-            typer.echo(
-                f"Error: unknown domain '{domain}'. Known domains: "
-                f"{', '.join(sorted(DOMAIN_REGISTRY))}",
-                err=True,
-            )
-            raise typer.Exit(1) from None
-
-    # Resolve prompt
-    if prompt_file:
-        import yaml
-        with open(prompt_file) as f:  # noqa: ASYNC230 - small CLI startup read
-            data = yaml.safe_load(f)
-            prompt = data.get("prompt", "")
-    if not prompt:
-        typer.echo("Error: Provide --prompt or --prompt-file", err=True)
-        raise typer.Exit(1)
 
     # Override config
     if winners:
@@ -198,8 +207,23 @@ async def _run_async(
     filters = resolved.filters
     if condition == "any" and filters.condition:
         condition = filters.condition
-    # Explicit --category (including 'any') outranks the model's guess.
+    # An explicit --category (including 'any') outranks the model's guess.
     effective_category = category if category else (resolved.category or "any")
+    if brief:
+        brief(
+            SearchBrief(
+                filters=filters, condition=condition, category=effective_category
+            )
+        )
+
+    sites: list[str] = []
+
+    def _capture_plan(names: list[str]) -> None:
+        for name in names:
+            if name not in sites:
+                sites.append(name)
+        if plan:
+            plan(list(names))
 
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
@@ -211,7 +235,7 @@ async def _run_async(
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         try:
             deals = await searcher.search(
-                prompt, condition, effective_category, filters
+                prompt, condition, effective_category, filters, on_sites=_capture_plan
             )
         finally:
             await browser_mgr.close()
@@ -224,8 +248,77 @@ async def _run_async(
         storage.save_deal(deal)
 
     # Output (AI-named, timestamped)
-    await processor.save_results(deals, config.output.directory, prompt=prompt)
-    typer.echo(f"Found {len(deals)} deals. Results in {config.output.directory}/")
+    json_path, md_path = await processor.save_results(
+        deals, config.output.directory, prompt=prompt
+    )
+    return SearchOutcome(
+        deal_count=len(deals),
+        sites=sites,
+        json_path=json_path,
+        md_path=md_path,
+        results_dir=config.output.directory,
+    )
+
+
+async def _run_async(
+    prompt,
+    prompt_file,
+    condition,
+    category,
+    winners,
+    output_format,
+    min_price=None,
+    max_price=None,
+    brand=None,
+    location=None,
+    shipping=None,
+    seller_type=None,
+    sort=None,
+    extra_filters=None,
+    country=None,
+    max_sites=None,
+    domain=None,
+):
+    if domain:
+        try:
+            get(domain)
+        except KeyError:
+            typer.echo(
+                f"Error: unknown domain '{domain}'. Known domains: "
+                f"{', '.join(sorted(DOMAIN_REGISTRY))}",
+                err=True,
+            )
+            raise typer.Exit(1) from None
+
+    # Resolve prompt
+    if prompt_file:
+        import yaml
+        with open(prompt_file) as f:  # noqa: ASYNC230 - small CLI startup read
+            data = yaml.safe_load(f)
+            prompt = data.get("prompt", "")
+    if not prompt:
+        typer.echo("Error: Provide --prompt or --prompt-file", err=True)
+        raise typer.Exit(1)
+
+    outcome = await run_search(
+        prompt,
+        condition=condition,
+        category=category,
+        winners=winners,
+        output_format=output_format,
+        min_price=min_price,
+        max_price=max_price,
+        brand=brand,
+        location=location,
+        shipping=shipping,
+        seller_type=seller_type,
+        sort=sort,
+        extra_filters=extra_filters,
+        country=country,
+        max_sites=max_sites,
+        domain=domain,
+    )
+    typer.echo(f"Found {outcome.deal_count} deals. Results in {outcome.results_dir}/")
 
 
 @app.command()

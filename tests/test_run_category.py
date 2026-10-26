@@ -31,8 +31,12 @@ class FakeSearcher:
     async def __aexit__(self, *exc):
         return False
 
-    async def search(self, prompt, condition="any", category="any", filters=None, **kw):
+    async def search(
+        self, prompt, condition="any", category="any", filters=None, on_sites=None
+    ):
         FakeSearcher.calls.append({"condition": condition, "category": category})
+        if on_sites:
+            on_sites(["alza"])
         return []
 
 
@@ -107,3 +111,29 @@ def test_no_llm_category_stays_any(monkeypatch, tmp_path):
     result = runner.invoke(app_module.app, ["run", "--prompt", "x"])
     assert result.exit_code == 0, result.output
     assert FakeSearcher.calls[0]["category"] == "any"
+
+
+def test_run_command_output_is_unchanged(monkeypatch, tmp_path):
+    _setup(monkeypatch, tmp_path, {})
+    result = runner.invoke(app_module.app, ["run", "--prompt", "x"])
+    assert result.exit_code == 0, result.output
+    assert result.output.startswith("Found 0 deals. Results in")
+
+
+def test_run_search_returns_outcome_and_fires_brief(monkeypatch, tmp_path):
+    import asyncio
+
+    _setup(monkeypatch, tmp_path, {"category": "hobby", "max_price": 300})
+    seen_briefs = []
+    seen_sites = []
+    outcome = asyncio.run(
+        app_module.run_search(
+            "notebook do 300",
+            brief=seen_briefs.append,
+            plan=seen_sites.extend,
+        )
+    )
+    assert outcome.deal_count == 0
+    assert seen_briefs[0].category == "hobby"
+    assert seen_briefs[0].filters.max_price == 300.0
+    assert seen_sites == ["alza"]

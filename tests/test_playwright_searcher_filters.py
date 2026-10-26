@@ -197,3 +197,29 @@ async def test_execute_round_forwards_filters_to_adapter(monkeypatch):
     assert adapter.calls[0][1]["filters"] is filters
     assert adapter.calls[0][1]["category"] == "electronics"
     assert adapter.calls[0][1]["profile"] is None
+
+
+@pytest.mark.asyncio
+async def test_execute_round_reports_selected_sites(monkeypatch):
+    """The wizard's plan hook must receive the site names once."""
+    config = _config(
+        WebsiteConfig(
+            name="alza_cz",
+            base_url="https://www.alza.cz",
+            adapter_class="alza",
+            categories=[Category.ELECTRONICS],
+            conditions=[Condition.NEW],
+        )
+    )
+    searcher = _searcher(config)
+    searcher.profiles = {}
+    searcher.browser_manager = FakeBrowserManager()
+    FakeAdapter.instances = []
+    monkeypatch.setattr("src.searcher.playwright_searcher.get_adapter", lambda name: FakeAdapter)
+
+    names = []
+    await searcher._execute_round(
+        "pc", "new", "electronics", set(), None, on_sites=names.extend
+    )
+
+    assert names == ["alza_cz"]

@@ -27,6 +27,16 @@
 - `python -m src.cli llm-check` probes every configured LLM provider on its own
   and reports status, latency, provider error text and a fix hint (exit code 1
   when nothing is healthy).
+- Prompt-only search: `run --prompt "..."` without `--condition`/`--category`
+  reads condition, category, price, brand, shipping, location and sort from the
+  prompt itself (condition through the multilingual parser and the LLM, category
+  via the same LLM call that already extracts filters); the explicit flags
+  remain as overrides and `--category any` forces the old broad shop list.
+- `ask` command: an interactive wizard that needs only a prompt, prints what it
+  understood and the selected shops before searching, then the report paths.
+- `scripts/search.bat` (Windows) and `scripts/search.sh` (Linux/macOS)
+  launchers; `run_once.ps1`/`run_once.sh` now forward `-Condition`/`-Category`
+  only when you supply them.
 - Bazos detail pages are fetched after the result list, so the description and
   the seller's town (`Deal.metadata["description"]` / `["location"]`) reach the
   report. Frame size, fork, brakes and drivetrain now come from the seller's own

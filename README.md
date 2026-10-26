@@ -273,6 +273,44 @@ match its own keywords, and cached under `data/domains/ai/*.yaml` (git-ignored)
 for later runs. A cached draft is never written into `src/`; promoting it to a
 real domain with deterministic extractors is a human decision.
 
+### Prompt-only search
+
+The prompt alone is enough. Condition, category, price, brand, shipping,
+location and sort are read from it (in five languages); the explicit
+`--condition` / `--category` / `--max-price` flags remain as overrides.
+`--category any` forces the old broad shop list even when the model guesses
+a category.
+
+```bash
+# Only the prompt is required.
+python -m src.cli run --prompt "used refurbished DJI drone under 350 euros"
+
+# Or the interactive wizard, which prints what it understood before searching.
+python -m src.cli ask
+```
+
+The wizard asks three questions (the prompt is mandatory; country and max
+shops accept Enter for the config defaults) and prints `Understood:
+condition=..., category=...` plus the selected shops before any browser opens.
+
+### Launcher scripts
+
+Double-click entry points for users who do not want to remember the CLI flags:
+
+```bash
+# Windows
+scripts\search.bat
+
+# Linux / macOS (once, after clone)
+chmod +x scripts/search.sh
+./scripts/search.sh
+```
+
+Both start `src.cli ask`. On Windows the window stays open at the end so the
+report paths can be copied; on POSIX the exit code is propagated.
+`run_once.ps1` and `run_once.sh` still work as scheduled-run wrappers, and
+now forward `-Condition`/`-Category` only when you supply them.
+
 ### Currency
 
 Prices are converted to EUR, so `--max-price` means the same thing on every

@@ -127,7 +127,11 @@
   neutral for bikes.
 
 ### Verification
-- Test suite: 509 passed, 11 skipped (live tests skipped by default).
+- Test suite: 538 passed, 11 skipped (live tests skipped by default).
+- Live wizard run (`ask`): `Understood: condition=used, category=hobby, max_price=200.0`,
+  `Shops: bazos`, 0 deals found (no matching listings in the search window).
+- Live bare run (`run --prompt "iPhone 13 použitý 128 GB"`): 8 deals, all
+  `"domain": "phone"`, `sites: ["bazos"]`, no `--condition`/`--category` flags used.
 - Final whole-branch review fixes (each with a test that failed first): battery
   capacity in mAh is never health and values above 100% are dropped; a failed
   detail fetch no longer produces "does not state the CPU/memory" cons; unit-less

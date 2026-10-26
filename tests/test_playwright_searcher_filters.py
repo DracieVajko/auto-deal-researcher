@@ -151,9 +151,10 @@ class FakeBrowserManager:
 class FakeAdapter:
     instances: ClassVar[list] = []
 
-    def __init__(self, base_url=None, currency=None):
+    def __init__(self, base_url=None, currency=None, enrich_limit=None):
         self.base_url = base_url
         self.currency = currency
+        self.enrich_limit = enrich_limit
         self.calls = []
         FakeAdapter.instances.append(self)
 

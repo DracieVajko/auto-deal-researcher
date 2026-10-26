@@ -35,8 +35,9 @@ class ProfileAdapter(BaseAdapter):
         base_url: str | None = None,
         profile: SiteProfile | None = None,
         currency: str | None = None,
+        enrich_limit: int | None = None,
     ):
-        super().__init__(base_url, currency)
+        super().__init__(base_url, currency, enrich_limit)
         self.profile = profile
         if profile is not None:
             self.name = profile.site_id

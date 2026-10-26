@@ -73,7 +73,7 @@ async def test_enrich_details_keeps_card_data_when_page_fails():
     failed = await adapter._enrich_details(FakePage(fail=True), [deal])
 
     assert failed == 1
-    assert deal.metadata == {}
+    assert deal.metadata == {"detail_failed": True}
 
 
 class FakeRetryPage(FakePage):
@@ -172,4 +172,98 @@ async def test_details_can_be_disabled(monkeypatch):
     assert len(await adapter.search(page, "bicykel")) == 5
     assert len(calls) == 1
     assert len(calls[0]) == 2
+
+
+@pytest.mark.asyncio
+async def test_enrichment_covers_the_whole_page_by_default(monkeypatch):
+    import src.searcher.adapters.bazos as bazos_mod
+
+    adapter = BazosAdapter()
+    calls = []
+
+    async def fake_enrich(page, selected):
+        calls.append(list(selected))
+        return 0
+
+    async def noop(*args, **kwargs):
+        return None
+
+    async def elements(*args, **kwargs):
+        return [object()] * 75
+
+    created = []
+
+    async def fake_extract(page, title_el, price_el):
+        deal = _deal(url=f"https://sport.bazos.sk/inzerat/{len(created)}/item.php")
+        created.append(deal)
+        return deal
+
+    monkeypatch.delenv("ADS_BAZOS_DETAIL_LIMIT", raising=False)
+    monkeypatch.setattr(adapter, "_enrich_details", fake_enrich)
+    monkeypatch.setattr(adapter, "_goto_search", noop)
+    monkeypatch.setattr(adapter, "_handle_cookie_consent", noop)
+    monkeypatch.setattr(adapter, "_apply_filters", noop)
+    monkeypatch.setattr(adapter, "_extract_from_group", fake_extract)
+    monkeypatch.setattr(bazos_mod.asyncio, "sleep", noop)
+
+    page = FakePage()
+    page.wait_for_selector = noop
+    page.query_selector_all = elements
+
+    assert len(await adapter.search(page, "iphone")) == 15
+    assert len(calls[0]) == 15
+
+
+@pytest.mark.asyncio
+async def test_enrichment_prefers_the_cheapest_when_capped(monkeypatch):
+    import src.searcher.adapters.bazos as bazos_mod
+
+    adapter = BazosAdapter()
+    prices = [300.0, 100.0, 200.0, 400.0]
+    calls = []
+
+    async def fake_enrich(page, selected):
+        calls.append(list(selected))
+        return 0
+
+    async def noop(*args, **kwargs):
+        return None
+
+    async def elements(*args, **kwargs):
+        return [object()] * 20
+
+    created = []
+
+    async def fake_extract(page, title_el, price_el):
+        deal = _deal(url=f"https://sport.bazos.sk/inzerat/{len(created)}/item.php")
+        deal.price_eur = prices[len(created)]
+        created.append(deal)
+        return deal
+
+    monkeypatch.setenv("ADS_BAZOS_DETAIL_LIMIT", "2")
+    monkeypatch.setattr(adapter, "_enrich_details", fake_enrich)
+    monkeypatch.setattr(adapter, "_goto_search", noop)
+    monkeypatch.setattr(adapter, "_handle_cookie_consent", noop)
+    monkeypatch.setattr(adapter, "_apply_filters", noop)
+    monkeypatch.setattr(adapter, "_extract_from_group", fake_extract)
+    monkeypatch.setattr(bazos_mod.asyncio, "sleep", noop)
+
+    page = FakePage()
+    page.wait_for_selector = noop
+    page.query_selector_all = elements
+
+    await adapter.search(page, "iphone")
+    assert [d.price_eur for d in calls[0]] == [100.0, 200.0]
+
+
+@pytest.mark.asyncio
+async def test_failed_detail_is_marked_not_guessed():
+    adapter = BazosAdapter()
+    adapter.detail_delay_seconds = 0
+    deal = _deal()
+
+    failed = await adapter._enrich_details(FakePage(fail=True), [deal])
+
+    assert failed == 1
+    assert deal.metadata["detail_failed"] is True
 

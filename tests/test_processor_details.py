@@ -618,3 +618,21 @@ def test_bike_report_still_skips_xxs_for_tall_rider(tmp_path):
     result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
     assert result["verdict"] == "skip"
     assert any("too small" in con for con in result["cons"])
+
+
+def test_report_says_description_unavailable_when_fetch_failed(tmp_path):
+    config = load_config()
+    processor = ResultProcessor(config)
+    deal = Deal(
+        url="https://bazos.sk/x",
+        title="iPhone 13 128GB",
+        price_eur=300.0,
+        condition="used",
+        site_name="bazos",
+        metadata={"detail_failed": True},
+    )
+    json_path, _ = asyncio.run(
+        processor.save_results([deal], str(tmp_path), prompt="iphone 13")
+    )
+    result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
+    assert any("could not be fetched" in con for con in result["cons"])

@@ -180,6 +180,9 @@ class SearchConfig(BaseModel):
     default_currency: str = ""
     # Static EUR rates for the currencies the sites list prices in.
     currency_rates: dict[str, float] = Field(default_factory=dict)
+    # Listing detail pages fetched per site per search. Matches one full
+    # results page so the cap never hides a cheap listing.
+    enrich_limit: int = 20
     diamond_search: DiamondSearchConfig = DiamondSearchConfig()
 
 

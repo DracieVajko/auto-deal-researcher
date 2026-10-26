@@ -345,14 +345,21 @@ class PlaywrightSearcher:
                 _, currency = self._site_market(site)
                 try:
                     adapter_cls = get_adapter(site.adapter_class)
-                    adapter = adapter_cls(base_url=site.base_url, currency=currency)
+                    adapter = adapter_cls(
+                        base_url=site.base_url,
+                        currency=currency,
+                        enrich_limit=getattr(self.config.search, "enrich_limit", 20),
+                    )
                 except ValueError:
                     if profile is None or not profile.is_runtime_ready:
                         continue
                     from src.searcher.adapters.profile_adapter import ProfileAdapter
 
                     adapter = ProfileAdapter(
-                        base_url=site.base_url, profile=profile, currency=currency
+                        base_url=site.base_url,
+                        profile=profile,
+                        currency=currency,
+                        enrich_limit=getattr(self.config.search, "enrich_limit", 20),
                     )
                 deals = await adapter.search(
                     page,

@@ -90,13 +90,21 @@ class BazosAdapter(BaseAdapter):
             "no",
         ):
             try:
-                limit = int(os.environ.get("ADS_BAZOS_DETAIL_LIMIT", "10"))
+                limit = int(
+                    os.environ.get("ADS_BAZOS_DETAIL_LIMIT", str(self.enrich_limit))
+                )
             except ValueError:
                 logger.warning(
-                    "[%s] Invalid ADS_BAZOS_DETAIL_LIMIT; using 10", self.name
+                    "[%s] Invalid ADS_BAZOS_DETAIL_LIMIT; using %d",
+                    self.name,
+                    self.enrich_limit,
                 )
-                limit = 10
-            selected = deals[: max(0, limit)]
+                limit = self.enrich_limit
+            # Cheapest listings first: the cap should not decide by page order.
+            ordered = sorted(deals, key=lambda deal: (deal.price_eur <= 0, deal.price_eur))
+            selected = ordered[: max(0, limit)]
+            for deal in ordered[max(0, limit):]:
+                deal.metadata["detail_skipped"] = True
             failed = await self._enrich_details(page, selected)
             if failed:
                 logger.warning(
@@ -190,6 +198,7 @@ class BazosAdapter(BaseAdapter):
                     main = await self._inner_text(page, self.detail_main_selector)
                 if not description:
                     failed += 1
+                    deal.metadata["detail_failed"] = True
                     logger.debug(
                         "[%s] No description on detail page %s (title=%r, url=%s)",
                         self.name,
@@ -200,6 +209,7 @@ class BazosAdapter(BaseAdapter):
             except PlaywrightError as e:
                 logger.debug(f"[{self.name}] Detail fetch failed for {deal.url}: {e}")
                 failed += 1
+                deal.metadata["detail_failed"] = True
                 continue
 
             if description:

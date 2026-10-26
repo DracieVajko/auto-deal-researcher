@@ -67,7 +67,12 @@ class BaseAdapter(ABC):
     results_selector: str = ""      # Main results container selector
     item_selector: str = ""         # Individual item selector
 
-    def __init__(self, base_url: str | None = None, currency: str | None = None):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        currency: str | None = None,
+        enrich_limit: int | None = None,
+    ):
         """Allow a site entry to override the adapter's default country domain.
 
         The currency can be overridden too, because one adapter can serve
@@ -75,6 +80,8 @@ class BaseAdapter(ABC):
         """
         self.base_url = (base_url or type(self).base_url).rstrip("/")
         self.currency = (currency or type(self).currency or "EUR").upper()
+        # Detail pages fetched per search; defaults to one full page of results.
+        self.enrich_limit = enrich_limit or 20
 
     @abstractmethod
     async def search(

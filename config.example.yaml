@@ -269,6 +269,9 @@ search:
   user_city: ""
   # How many shops may be opened per search round.
   max_sites: 8
+  # Listing detail pages fetched per site per search. Adapters enrich the
+  # cheapest listings first when this cap cuts the page.
+  enrich_limit: 20
   # Static EUR rates for the currencies the sites list prices in.
   currency_rates:
     EUR: 1.0

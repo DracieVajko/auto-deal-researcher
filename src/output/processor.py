@@ -363,11 +363,14 @@ class ResultProcessor:
             )
             # The seller's own description is where frame size, fork type and
             # defects are stated. Keep it short so the prompt stays predictable.
-            description = " ".join(
-                str(deal.metadata.get("description") or "").split()
-            )
-            if description:
-                line += f" | description: {description[:600]}"
+            if deal.metadata.get("detail_failed") or deal.metadata.get("detail_skipped"):
+                line += " | description: not fetched"
+            else:
+                description = " ".join(
+                    str(deal.metadata.get("description") or "").split()
+                )
+                if description:
+                    line += f" | description: {description[:600]}"
             lines.append(line)
 
         pc_mode = any(analysis.domain == "computer" for analysis in analyses)
@@ -388,6 +391,8 @@ class ResultProcessor:
             "the missing one as a defect.",
             "- If a specification is not stated, say 'not stated'. Never claim a "
             "specification is wrong when the listing does not mention it.",
+            "- When a listing says its description was not fetched, do not claim "
+            "a specification is not stated; say it could not be checked.",
             "- Use short snake_case keys in specs for facts stated in the listing; "
             "do not invent values.",
             "- price_eur is the asking price in EUR.",
@@ -760,6 +765,10 @@ class ResultProcessor:
         cons: list[str] = []
 
         request = fold(prompt or "")
+        if deal.metadata.get("detail_failed") or deal.metadata.get("detail_skipped"):
+            cons.append(
+                "listing description could not be fetched — specs may be missing"
+            )
         if wrong_form:
             cons.append("Laptop/notebook form factor — not a mini PC or barebone")
         elif laptop and any(

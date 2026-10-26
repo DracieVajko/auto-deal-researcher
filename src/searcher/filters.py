@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import logging
 import re
-import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+from src.text.normalize import fold
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +28,34 @@ _CONDITION_ALIASES = {
     "novy": "new",
     "nove": "new",
     "nové": "new",
+    "neu": "new",
+    "neue": "new",
+    "neues": "new",
+    "neuer": "new",
     "used": "used",
     "pouzity": "used",
     "pouzite": "used",
     "použitý": "used",
     "použité": "used",
+    "gebraucht": "used",
+    "gebrauchte": "used",
+    "gebrauchter": "used",
+    "gebrauchtes": "used",
+    "wie neu": "used",
     "bazar": "used",
     "bazarovy": "used",
     "second hand": "used",
     "refurbished": "refurbished",
     "rekonstruovany": "refurbished",
     "repasovany": "refurbished",
+    "generaluberholt": "refurbished",
+    "generaluberholte": "refurbished",
+    "generaluberholter": "refurbished",
+    "generaluberholtes": "refurbished",
+    "aufbereitet": "refurbished",
+    "aufbereitete": "refurbished",
+    "aufbereiteter": "refurbished",
+    "aufbereitetes": "refurbished",
     "open box": "open_box",
     "openbox": "open_box",
     "open_box": "open_box",
@@ -52,6 +70,11 @@ _SHIPPING_ALIASES = {
     "free shipping": "free",
     "doprava zdarma": "free",
     "postovne zdarma": "free",
+    "versandkostenfrei": "free",
+    "kostenloser versand": "free",
+    "kostenloses versand": "free",
+    "kostenlosem versand": "free",
+    "kostenlosen versand": "free",
     "paid": "paid",
     "platena": "paid",
     "platena doprava": "paid",
@@ -66,14 +89,25 @@ _SORT_ALIASES = {
     "najlacnejsie": "price_asc",
     "od najlacnejsieho": "price_asc",
     "cheapest": "price_asc",
+    "gunstigste zuerst": "price_asc",
+    "gunstigsten zuerst": "price_asc",
+    "billigste": "price_asc",
+    "billigsten": "price_asc",
+    "nejlevnejsi": "price_asc",
     "price_desc": "price_desc",
     "price descending": "price_desc",
     "najdrahsie": "price_desc",
     "od najdrahsieho": "price_desc",
     "most expensive": "price_desc",
+    "teuerste": "price_desc",
+    "teuersten": "price_desc",
+    "nejdrazsi": "price_desc",
     "newest": "newest",
     "najnovsie": "newest",
     "latest": "newest",
+    "neueste": "newest",
+    "neuesten": "newest",
+    "nejnovejsi": "newest",
 }
 
 _SELLER_ALIASES = {
@@ -91,23 +125,24 @@ _SELLER_ALIASES = {
 
 _NUMBER_RE = re.compile(r"\d[\d\s\u00a0\u202f.,]*")
 _MIN_RE = re.compile(
-    r"(?:od|min(?:imum)?|nad|above|viac\s+ako|from)\s*"
-    r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:eur|euro|€)?",
+    r"\b(?:od|min(?:imum)?|nad|above|over|viac\s+ako|from|ab|mindestens)\s*"
+    r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:eur|euro|€|kč|kc|czk|zł|zl|pln|ft|huf)?",
     re.IGNORECASE,
 )
 _MAX_RE = re.compile(
-    r"(?:do|max(?:imum)?|pod|under|najviac|menej\s+ako|up\s+to)\s*"
-    r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:eur|euro|€)?",
+    r"\b(?:do|maximal|max(?:imum)?|pod|unter|bis|under|najviac|menej\s+ako|"
+    r"up\s+to|h[oö]chstens)\s*"
+    r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:eur|euro|€|kč|kc|czk|zł|zl|pln|ft|huf)?",
     re.IGNORECASE,
 )
 _RANGE_RE = re.compile(
     r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:-|\u2013|\u2014|až|az|to)\s*"
-    r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:eur|euro|€)?",
+    r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:eur|euro|€|kč|kc|czk|zł|zl|pln|ft|huf)?",
     re.IGNORECASE,
 )
 _BETWEEN_RE = re.compile(
     r"(?:medzi|between)\s*(\d[\d\s\u00a0\u202f.,]*)\s*(?:a|and|až|az|-)\s*"
-    r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:eur|euro|€)?",
+    r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:eur|euro|€|kč|kc|czk|zł|zl|pln|ft|huf)?",
     re.IGNORECASE,
 )
 _BRAND_RE = re.compile(r"\b(?:brand|znacka|značka)\s*[:=]\s*([^,;]+)", re.IGNORECASE)
@@ -118,8 +153,9 @@ _EXTRA_RE = re.compile(r"\b([a-z][a-z0-9_]{1,24})\s*=\s*([\w./+-]{1,40})", re.IG
 
 
 def _strip_diacritics(text: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", text)
-    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    # Thin alias over the canonical folding (spec 13.1); fold also lowercases,
+    # so callers' .lower() stays harmless.
+    return fold(text)
 
 
 def _clean(text: Any) -> str | None:
@@ -406,9 +442,17 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
     condition = None
     for patterned, value in (
         (r"\bopen[\s_-]?box\b|\brozbalen(?:y|e)\b", "open_box"),
-        (r"\brefurbished\b|\brepasovan(?:y|e)\b|\brekonstruovan(?:y|e)\b", "refurbished"),
-        (r"\bused\b|\bpouzit(?:y|e)\b|\bbazar(?:ovy|ove)?\b|\bsecond[\s-]?hand\b", "used"),
-        (r"\bbrand[\s-]?new\b|\bnew\b|\bnov(?:y|e)\b", "new"),
+        (
+            r"\brefurbished\b|\brepasovan(?:y|e)\b|\brekonstruovan(?:y|e)\b"
+            r"|generaluberholt(?:e|es|er)?|aufbereitet(?:e|es|er)?",
+            "refurbished",
+        ),
+        (
+            r"\bused\b|\bpouzit(?:y|e)\b|\bbazar(?:ovy|ove)?\b|\bsecond[\s-]?hand\b"
+            r"|gebraucht(?:e|es|er)?|wie neu",
+            "used",
+        ),
+        (r"\bbrand[\s-]?new\b|\bnew\b|\bnov(?:y|e)\b|\bneu(?:e|es|er)?\b", "new"),
         (r"\bmarketplace\b", "marketplace"),
     ):
         if re.search(patterned, normalised):
@@ -416,16 +460,31 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
             break
 
     shipping = None
-    if re.search(r"\b(?:free[\s-]?shipping|doprava\s+zdarma|postovne\s+zdarma)\b", normalised):
+    if re.search(
+        r"\b(?:free[\s-]?shipping|doprava\s+zdarma|postovne\s+zdarma"
+        r"|versandkostenfrei|kostenlos(?:er|em|en|e)?\s+versand)\b",
+        normalised,
+    ):
         shipping = "free"
     elif re.search(r"\b(?:paid[\s-]?shipping|platena\s+doprava)\b", normalised):
         shipping = "paid"
 
     sort = None
     for patterned, value in (
-        (r"\bnajlacnejsie\b|\bcheapest\b|\bprice[\s_-]?asc\b", "price_asc"),
-        (r"\bnajdrahsie\b|\bmost[\s-]?expensive\b|\bprice[\s_-]?desc\b", "price_desc"),
-        (r"\bnajnovsie\b|\bnewest\b|\blatest\b", "newest"),
+        (
+            r"\bnajlacnejsie\b|\bcheapest\b|\bprice[\s_-]?asc\b"
+            r"|gunstigste(?:n)?\s+zuerst|billigste(?:n)?|nejlevnejsi",
+            "price_asc",
+        ),
+        (
+            r"\bnajdrahsie\b|\bmost[\s-]?expensive\b|\bprice[\s_-]?desc\b"
+            r"|teuerste(?:n)?|nejdrazsi",
+            "price_desc",
+        ),
+        (
+            r"\bnajnovsie\b|\bnewest\b|\blatest\b|neueste(?:n)?|nejnovejsi",
+            "newest",
+        ),
         (r"\bnajrelevantnejsie\b|\brelevance\b", "relevance"),
     ):
         if re.search(patterned, normalised):

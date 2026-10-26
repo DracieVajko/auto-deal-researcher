@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import unicodedata
 from typing import ClassVar
 from urllib.parse import quote_plus, urljoin
 
@@ -12,6 +11,7 @@ from playwright.async_api import Page
 
 from src.searcher.filters import SearchFilters
 from src.searcher.site_profiles import SiteProfile
+from src.text.normalize import fold
 
 from .base import BaseAdapter, Deal, SiteBlockedError
 
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 def _strip_diacritics(text: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", text)
-    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    # Thin alias over the canonical folding (spec 13.1); fold also lowercases.
+    return fold(text)
 
 
 class ProfileAdapter(BaseAdapter):

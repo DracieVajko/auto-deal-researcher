@@ -82,6 +82,54 @@ def _validate_category_arg(category: str | None) -> None:
 
 
 @app.command()
+def ask(
+    country: str | None = typer.Option(None, "--country", help="Market; asked when omitted"),
+    max_sites: int | None = typer.Option(None, "--max-sites", help="Max shops per round; asked when omitted"),
+):
+    """Prompt-only search: describe what you want, the app infers the rest."""
+    asyncio.run(_ask_async(country, max_sites))
+
+
+async def _ask_async(country: str | None, max_sites: int | None) -> None:
+    config = load_config()
+
+    prompt = typer.prompt("What are you looking for?").strip()
+    while not prompt:
+        prompt = typer.prompt("Please type a description of what you want.").strip()
+
+    if not country:
+        country = typer.prompt("Country", default=config.search.user_country)
+    if max_sites is None:
+        max_sites = typer.prompt(
+            "Max shops", default=int(config.search.max_sites), type=int
+        )
+
+    def _brief(b: SearchBrief) -> None:
+        parts = [f"condition={b.condition}", f"category={b.category}"]
+        if not b.inferred and b.category == "any":
+            parts[-1] = "category=any (no model guess)"
+        for key in ("min_price", "max_price", "brand", "location", "shipping", "seller_type", "sort"):
+            value = getattr(b.filters, key)
+            if value is not None:
+                parts.append(f"{key}={value}")
+        typer.echo("Understood: " + ", ".join(parts))
+
+    def _plan(names: list[str]) -> None:
+        typer.echo("Shops: " + ", ".join(names))
+
+    outcome = await run_search(
+        prompt,
+        country=country.upper(),
+        max_sites=int(max_sites),
+        brief=_brief,
+        plan=_plan,
+    )
+    typer.echo(f"Found {outcome.deal_count} deals. Results in {outcome.results_dir}/")
+    typer.echo(f"JSON: {outcome.json_path}")
+    typer.echo(f"Markdown: {outcome.md_path}")
+
+
+@app.command()
 def run(
     prompt: str | None = typer.Option(None, "--prompt", "-p", help="Search prompt (single-run mode)"),
     prompt_file: str | None = typer.Option(None, "--prompt-file", "-f", help="YAML file with prompt (auto mode)"),
@@ -132,6 +180,7 @@ class SearchBrief:
     filters: SearchFilters
     condition: str
     category: str
+    inferred: bool = False
 
 
 @dataclass
@@ -212,7 +261,10 @@ async def run_search(
     if brief:
         brief(
             SearchBrief(
-                filters=filters, condition=condition, category=effective_category
+                filters=filters,
+                condition=condition,
+                category=effective_category,
+                inferred=bool(resolved.category),
             )
         )
 

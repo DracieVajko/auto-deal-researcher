@@ -21,6 +21,11 @@ from src.output.dedup import collapse_duplicates
 from src.output.domains import DomainProfile, detect, get
 from src.output.domains.ai import proposal_to_profile, propose_domain
 from src.output.domains.cache import AI_DRAFT_DIR, load_drafts, save_draft
+from src.output.requirements import (
+    apply_requirement_guard,
+    extract_requirements,
+    has_hard_defect,
+)
 from src.searcher.adapters.base import Deal
 from src.searcher.listing_filter import is_laptop_title, wants_mini_pc_form_factor
 from src.text.normalize import fold
@@ -516,6 +521,19 @@ class ResultProcessor:
                 if cleaned:
                     merged = self._append_unique(getattr(analysis, attr), cleaned)
                     setattr(analysis, attr, merged)
+
+        # The deterministic layer reads the listing itself; if a required spec
+        # is stated and satisfies the request, a model claim of "not stated"
+        # is a wrong fact, not a judgement. Drop it — but only facts: a hard
+        # defect stays a rejection for its own reason.
+        requirements = extract_requirements(prompt or "")
+        kept, rescued = apply_requirement_guard(
+            analysis.cons, analysis.specs, requirements
+        )
+        if rescued:
+            analysis.cons = kept
+            if not has_hard_defect(kept):
+                analysis.matches_requirements = True
 
         specs = data.get("specs")
         if isinstance(specs, dict):

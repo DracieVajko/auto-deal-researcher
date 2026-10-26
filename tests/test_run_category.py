@@ -1,6 +1,7 @@
 """run wiring: the category the model infers must reach site selection."""
 
 import importlib
+from typing import ClassVar
 
 from typer.testing import CliRunner
 
@@ -19,7 +20,7 @@ class StubLLMClient:
 
 
 class FakeSearcher:
-    calls: list = []
+    calls: ClassVar[list] = []
 
     def __init__(self, config, llm, storage, browser_mgr):
         pass

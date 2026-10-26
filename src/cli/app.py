@@ -71,7 +71,7 @@ async def _resolve_runtime_filters(
 
 def _validate_category_arg(category: str | None) -> None:
     """Reject a misspelt --category early, listing what is allowed."""
-    if category is not None and category not in CATEGORIES + ("any",):
+    if category is not None and category not in (*CATEGORIES, "any"):
         msg = (
             f"unknown category '{category}'. Allowed: any, "
             + ", ".join(CATEGORIES)

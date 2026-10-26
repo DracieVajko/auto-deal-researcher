@@ -10,15 +10,17 @@ _RAM = re.compile(
 )
 _BATTERY = re.compile(
     r"(?:bateria|baterie|akku|battery|batterie|stav\s+baterie|zdravie\s+baterie)"
-    r"\s*(\d{1,3})\s*%?"
+    r"\s*(\d{1,3})(?!\d)\s*%?"
 )
 _SCREEN = re.compile(r"\b(\d[.,]\d)\s*(?:palca|palce|palcov|zoll|inch|cala|cali|\")")
 
 
 def extract_storage(text: str) -> str | None:
     for match in _STORAGE.finditer(text):
-        # "8gb ram" is memory, not storage.
+        # "8gb ram" or "ram 8 gb" is memory, not storage.
         if re.match(r"\s*ram\b", text[match.end():]):
+            continue
+        if re.search(r"\bram\s+$", text[: match.start()]):
             continue
         size, unit = match.group(1), match.group(2)
         return f"{size} {'GB' if unit == 'go' else unit.upper()}"
@@ -37,7 +39,11 @@ def extract_battery_health(text: str) -> str | None:
     match = _BATTERY.search(text)
     if not match:
         return None
-    return f"{match.group(1)}%"
+    value = int(match.group(1))
+    if value > 100:
+        # "bateria 300" is a capacity, never a health percentage.
+        return None
+    return f"{value}%"
 
 
 def extract_screen_size(text: str) -> str | None:

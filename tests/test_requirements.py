@@ -65,3 +65,12 @@ def test_guard_respects_a_battery_below_the_minimum():
     )
     assert kept == ["battery not stated"]
     assert rescued is False
+
+
+def test_guard_only_drops_cons_about_the_guarded_attribute():
+    # Spec 16.2: the guard only ever removes a con about *that* requirement.
+    kept, rescued = apply_requirement_guard(
+        ["barva neuvedena"], {"storage": "128 GB"}, {"storage_gb": 128}
+    )
+    assert kept == ["barva neuvedena"]
+    assert rescued is False

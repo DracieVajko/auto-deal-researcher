@@ -35,8 +35,14 @@ def extract_mileage(text: str) -> str | None:
     if not match:
         return None
     digits = re.sub(r"[ .]", "", match.group(1))
-    if match.group(2) == "tkm":
+    unit = match.group(2)
+    if unit == "tkm":
         digits = str(int(digits) * 1000)
+    elif unit == "meilen":
+        # Spec 13.3 pairs 112000 meilen with a stored 180000 km: the number
+        # is converted (1 mi = 1.609344 km), rounded to the thousand the
+        # seller's own precision implies.
+        digits = str(int(round(int(digits) * 1.609344, -3)))
     return f"{digits} km"
 
 

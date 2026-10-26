@@ -406,7 +406,7 @@ Keywords, stored folded:
 
 - `COMPUTER` strong: `mini pc`, `barebone`, `nuc`, `laptop`, `notebook`, `computer`,
   `rechner`, `komputer`.
-- `BIKE` strong: `bicykel`, `bicykl`, `bike`, `mtb`, `fahrrad`, `mountainbike`,
+- `BIKE` strong: `bicykel`, `bicykl`, `bicycle`, `bike`, `mtb`, `fahrrad`, `mountainbike`,
   `mountain bike`, `ebike`, `rower`.
 
 `auto`, `rad` and `kolo` are deliberately absent (spec section 5.2).
@@ -1854,7 +1854,7 @@ diacritics:
 
 | Requirement | Spec | Con pattern |
 |---|---|---|
-| `storage_gb` | `storage` | `storage.*not stated`, `not stated.*storage`, `no mention of storage`, `storage.*not mentioned`, `storage.*missing`, `neuveden`, `nicht angegeben` |
+| `storage_gb` | `storage` | `storage.*not stated`, `not stated.*storage`, `no mention of storage`, `storage.*not mentioned`, `storage.*missing`, `(?:storage|kapacita|ulozis|pamat).*neuveden`, `(?:storage|speicher|kapazitat).*nicht angegeben` |
 | `min_battery_percent` | `battery_health` | `batter.*not stated`, `not stated.*batter`, `no mention of batter`, `battery.*not mentioned`, `batter.*missing`, `akku.*nicht`, `bater.*neuveden` |
 
 `max_price_eur` is extracted for completeness but not used by the guard: price is a deal
@@ -1863,8 +1863,10 @@ field, and "above your maximum" is a real reason, not a false "not stated" claim
 A con is dropped only when the spec is present, its numeric value satisfies the
 requirement, and the con matches the pattern. Match against `fold(con)` and write the
 patterns in folded form, so `Storage not stated` and `storage not stated` behave the
-same. Return `(kept_cons, rescued)` where `rescued` is True when at least one con was
-dropped.
+same. Every pattern is scoped to the guarded attribute (spec 16.2: the guard "only ever
+removes a con" about that requirement) — a bare `neuveden` would also drop an honest gap
+about another attribute and wrongly flip `matches_requirements`. Return `(kept_cons,
+rescued)` where `rescued` is True when at least one con was dropped.
 
 `has_hard_defect` folds each remaining con and returns True for an independent defect:
 `cracked`, `broken`, `water damage`, `does not work`, `not working`, `faulty`,

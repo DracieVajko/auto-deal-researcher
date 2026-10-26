@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -544,3 +545,42 @@ def test_price_claim_cons_are_dropped():
     )
     assert not any("market" in con for con in analysis.cons)
     assert any("storage" in con for con in analysis.cons)
+
+
+def test_battery_capacity_in_mah_is_not_health():
+    specs = get("phone").extract("samsung galaxy s21, bateria 4800 mah, 128gb")
+    assert "battery_health" not in specs
+    assert specs["storage"] == "128 GB"
+
+
+def test_battery_health_above_one_hundred_is_not_a_percentage():
+    specs = get("phone").extract("samsung galaxy, bateria 300 %")
+    assert "battery_health" not in specs
+
+
+def test_ram_size_is_never_storage():
+    specs = get("phone").extract("xiaomi 12, ram 8 gb, bez skriabancov")
+    assert specs["ram"] == "8 GB"
+    assert "storage" not in specs
+
+
+def test_furniture_dimensions_without_a_unit_default_to_cm():
+    specs = get("furniture").extract("sedacia souprava, rozmery 250x180")
+    assert specs["dimensions"] == "250x180 cm"
+
+
+def test_bicycle_word_detects_bike():
+    assert detect("Selling a bicycle, 26 inch").name == "bike"
+    assert detect("Selling bicycle seat post 27.2").name == "bike"
+
+
+def test_mileage_converts_meilen_to_km():
+    specs = get("car").extract("vw golf baujahr 2011, 112000 meilen")
+    assert specs["mileage"] == "180000 km"
+
+
+def test_corrupt_draft_logs_a_warning(tmp_path, caplog):
+    (tmp_path / "camera.yaml").write_text(":::not yaml", encoding="utf-8")
+    with caplog.at_level(logging.WARNING):
+        load_drafts(tmp_path)
+    assert any("camera.yaml" in record.getMessage() for record in caplog.records)

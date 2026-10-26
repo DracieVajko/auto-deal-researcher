@@ -127,9 +127,13 @@ def load_drafts(directory: Path) -> dict[str, DomainProfile]:
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
         except (OSError, yaml.YAMLError) as exc:
-            logger.debug("skipping draft %s: %s", path.name, exc)
+            logger.warning("skipping corrupt draft %s: %s", path.name, exc)
             continue
         profile = _profile_from_draft(data)
-        if profile is not None:
-            drafts[profile.name] = profile
+        if profile is None:
+            # Spec section 10: a draft that does not validate is a warning,
+            # not silence - an empty cache should be visible to the operator.
+            logger.warning("draft %s does not validate; ignored", path.name)
+            continue
+        drafts[profile.name] = profile
     return drafts

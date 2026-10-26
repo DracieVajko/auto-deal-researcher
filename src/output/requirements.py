@@ -89,8 +89,10 @@ _GUARDS = {
             r"no mention of storage",
             r"storage.*not mentioned",
             r"storage.*missing",
-            r"neuveden",
-            r"nicht angegeben",
+            # Scoped to the attribute (spec 16.2): "barva neuvedena" is an
+            # honest gap about colour, never a false claim about storage.
+            r"(?:storage|kapacita|ulozis|pamat).*neuveden",
+            r"(?:storage|speicher|kapazitat).*nicht angegeben",
         ),
     ),
     "min_battery_percent": (

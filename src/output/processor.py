@@ -810,7 +810,10 @@ class ResultProcessor:
         cons: list[str] = []
 
         request = fold(prompt or "")
-        if deal.metadata.get("detail_failed") or deal.metadata.get("detail_skipped"):
+        unverified = bool(
+            deal.metadata.get("detail_failed") or deal.metadata.get("detail_skipped")
+        )
+        if unverified:
             cons.append(
                 "listing description could not be fetched — specs may be missing"
             )
@@ -827,7 +830,9 @@ class ResultProcessor:
             cpu = specs.get("cpu")
             if cpu:
                 pros.append(f"Stated CPU: {cpu}")
-            else:
+            elif not unverified:
+                # We never read the description; we may not claim it hides
+                # the CPU (spec section 14).
                 cons.append("Listing does not state the CPU")
 
             ram = specs.get("ram")
@@ -838,7 +843,7 @@ class ResultProcessor:
                     pros.append(f"DDR5 memory ({ram})")
                 else:
                     pros.append(f"Stated memory: {ram}")
-            else:
+            elif not unverified:
                 cons.append("Listing does not state the memory size or type")
 
             storage = specs.get("storage")

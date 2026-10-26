@@ -118,7 +118,7 @@ title with a German description still matches.
 | Domain | Strong keywords (folded, any language) | Key specs | Optional rows |
 |---|---|---|---|
 | `computer` | `mini pc`, `barebone`, `nuc`, `laptop`, `notebook`, `computer`, `rechner`, `komputer` | cpu, ram, storage, connectivity | Connectivity |
-| `bike` | `bicykel`, `bicykl`, `bike`, `mtb`, `fahrrad`, `mountainbike`, `ebike`, `rower` | wheel_size, frame_size, suspension, brakes, drivetrain | — |
+| `bike` | `bicykel`, `bicykl`, `bicycle`, `bike`, `mountain bike`, `mtb`, `fahrrad`, `mountainbike`, `ebike`, `rower` | wheel_size, frame_size, suspension, brakes, drivetrain | — |
 | `phone` | `iphone`, `smartfon`, `smartphone`, `mobil`, `handy`, `samsung galaxy`, `xiaomi`, `pixel`, `huawei`, `oneplus` | storage, ram, battery_health, screen_size | — |
 | `car` | `automobil`, `vozidlo`, `fahrzeug`, `pkw`, `samochod`, `skoda`, `vw`, `audi`, `bmw`, `mercedes`, `opel`, `ford`, `renault`, `peugeot`, `citroen`, `toyota`, `hyundai`, `kia`, `seat`, `fiat`, `volvo`, `mazda`, `nissan`, `honda`, `suzuki`, `dacia` | year, mileage, fuel, engine, transmission | — |
 | `furniture` | `sedacia`, `sedaci`, `gauc`, `sofa`, `couch`, `sessel`, `stuhl`, `tisch`, `schrank`, `bett`, `regal`, `nabytek`, `meble`, `kanapa`, `fotel`, `stol`, `skrina`, `postel`, `komoda`, `polica` | dimensions, material, color, condition_notes | — |

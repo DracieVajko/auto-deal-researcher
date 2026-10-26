@@ -638,6 +638,27 @@ def test_report_says_description_unavailable_when_fetch_failed(tmp_path):
     assert any("could not be fetched" in con for con in result["cons"])
 
 
+def test_failed_detail_does_not_claim_specs_are_missing(tmp_path):
+    """Review focus 8: 'not stated' is only earned when the fetch succeeded."""
+    config = load_config()
+    processor = ResultProcessor(config)
+    deal = Deal(
+        url="https://bazos.sk/mini",
+        title="Mini PC barebone",
+        price_eur=300.0,
+        condition="used",
+        site_name="bazos",
+        metadata={"detail_failed": True},
+    )
+    json_path, _ = asyncio.run(
+        processor.save_results([deal], str(tmp_path), prompt="mini pc")
+    )
+    result = json.loads(Path(json_path).read_text(encoding="utf-8"))["deals"][0]
+    assert result["domain"] == "computer"
+    assert any("could not be fetched" in con for con in result["cons"])
+    assert not any("does not state" in con for con in result["cons"])
+
+
 def test_llm_specs_are_restricted_to_the_profile_keys():
     processor = ResultProcessor(load_config())
     analysis = DealAnalysis(

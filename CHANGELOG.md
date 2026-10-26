@@ -117,7 +117,14 @@
   neutral for bikes.
 
 ### Verification
-- Test suite: 500 passed, 11 skipped (live tests skipped by default).
+- Test suite: 509 passed, 11 skipped (live tests skipped by default).
+- Final whole-branch review fixes (each with a test that failed first): battery
+  capacity in mAh is never health and values above 100% are dropped; a failed
+  detail fetch no longer produces "does not state the CPU/memory" cons; unit-less
+  furniture dimensions default to cm; requirement-guard patterns are scoped to
+  their attribute; `bicycle` detects the bike domain; `meilen` converts to km per
+  spec 13.3; corrupt AI drafts log a warning (spec section 10); `ram 8 gb` is
+  never recorded as storage.
 - Live search SK (bazos, bike): 14 deals, all `"domain": "bike"`, `spec_coverage`
   present, no `Connectivity` row, 14/14 descriptions fetched, bike vocabulary only.
 - Live search CZ (bazos_cz, phone): 6 deals, all `"domain": "phone"`, `storage` and

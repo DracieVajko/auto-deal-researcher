@@ -147,6 +147,7 @@ BIKE = DomainProfile(
     strong_keywords=(
         "bicykel",
         "bicykl",
+        "bicycle",
         "bike",
         "mtb",
         "fahrrad",

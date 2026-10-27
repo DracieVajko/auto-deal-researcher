@@ -300,7 +300,7 @@ llm:
     # Gemma 26B for general tasks; small bonsai/qwen 9B is preferred for tagging.
     - type: "lmstudio"
       endpoint: "http://localhost:1234"
-      model: "google/gemma-4-26b-a4b"
+      model: "google/gemma-4-26b-a4b-qat"
     - type: "ollama"
       endpoint: "http://localhost:11434"
       model: "llama3.1:8b"

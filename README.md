@@ -168,7 +168,7 @@ llm:
   local:
     - type: "lmstudio"
       endpoint: "http://localhost:1234"
-      model: "google/gemma-4-26b-a4b"   # gemma 26B; small bonsai/qwen 9B preferred for tagging
+      model: "google/gemma-4-26b-a4b-qat"   # gemma 26B; small bonsai/qwen 9B preferred for tagging
   api_fallback:
     - provider: "mistral"
       api_key_env: "MISTRAL_API_KEY"

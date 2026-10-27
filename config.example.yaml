@@ -297,12 +297,10 @@ search:
 
 llm:
   local:
-    # Non-reasoning model: returns strict JSON without spending the output
-    # budget on reasoning tokens. A small general instruct model (Llama 3.1 8B
-    # or Qwen2.5 7B Instruct) is the better long-term choice when available.
+    # Gemma 26B for general tasks; small bonsai/qwen 9B is preferred for tagging.
     - type: "lmstudio"
       endpoint: "http://localhost:1234"
-      model: "qwen/qwen3-coder-30b"
+      model: "google/gemma-4-26b-a4b"
     - type: "ollama"
       endpoint: "http://localhost:11434"
       model: "llama3.1:8b"

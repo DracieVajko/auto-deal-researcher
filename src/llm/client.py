@@ -9,7 +9,7 @@ import time
 
 import requests
 
-from src.llm.local_coordinator import LocalModelCoordinator
+from src.llm.local_coordinator import LocalModelCoordinator, ensure_lmstudio_model
 from src.searcher.adapters.base import Deal
 
 logger = logging.getLogger(__name__)
@@ -290,6 +290,8 @@ class LLMClient:
             if self._breaker.is_open(key):
                 logger.info(f"Skipping local LLM {local.type} (circuit open)")
                 continue
+            if local.type == "lmstudio" and getattr(self._coordinator, "policy", "never") in ("wait", "force"):
+                ensure_lmstudio_model(local.model)
             try:
                 logger.info(f"Trying local LLM: {local.type} at {local.endpoint}")
                 reply = await self._call_local_llm_async(

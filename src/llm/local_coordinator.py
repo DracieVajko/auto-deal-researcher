@@ -341,3 +341,45 @@ class LocalModelCoordinator:
             else:
                 lines.append(f"{name}: " + ", ".join(str(m) for m in st.loaded))
         return "\n".join(lines)
+
+
+def ensure_lmstudio_model(model_key: str, timeout: float = 300.0) -> bool:
+    """Make sure *model_key* is the model loaded in LM Studio.
+
+    Unloads any other resident model first, then loads the requested one via
+    the `lms` CLI. Returns True on success. Best-effort: failures are logged
+    but never raise, so a missing CLI or a load error simply falls through to
+    the normal request path (which may auto-load or fail on its own).
+    """
+    if not model_key:
+        return False
+    try:
+        # Check what is currently loaded.
+        ps = subprocess.run(
+            ["lms", "ps"], capture_output=True, text=True, timeout=15,
+        )
+        if model_key in (ps.stdout or ""):
+            logger.info("LM Studio already has %s loaded", model_key)
+            return True
+        # Unload everything else first.
+        subprocess.run(
+            ["lms", "unload", "-a"], capture_output=True, text=True, timeout=60,
+        )
+        logger.info("Loading %s in LM Studio...", model_key)
+        done = subprocess.run(
+            ["lms", "load", model_key, "--auto"], capture_output=True, text=True, timeout=timeout,
+        )
+        if done.returncode == 0:
+            logger.info("Loaded %s in LM Studio", model_key)
+            return True
+        logger.warning("lms load %s failed: %s", model_key, (done.stderr or done.stdout or "").strip()[:300])
+        return False
+    except FileNotFoundError:
+        logger.debug("lms CLI not found; skipping auto-load")
+        return False
+    except subprocess.TimeoutExpired:
+        logger.warning("lms load %s timed out", model_key)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("ensure_lmstudio_model(%s) failed: %s", model_key, exc)
+        return False

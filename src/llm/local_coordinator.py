@@ -346,25 +346,41 @@ class LocalModelCoordinator:
 def ensure_lmstudio_model(model_key: str, timeout: float = 300.0) -> bool:
     """Make sure *model_key* is the model loaded in LM Studio.
 
-    Unloads any other resident model first, then loads the requested one via
-    the `lms` CLI. Returns True on success. Best-effort: failures are logged
-    but never raise, so a missing CLI or a load error simply falls through to
-    the normal request path (which may auto-load or fail on its own).
+    Unloads any other resident model first (and waits until LM Studio
+    confirms nothing is resident), then loads the requested one via the
+    `lms` CLI. Returns True on success. Best-effort: failures are logged
+    but never raise.
+
+    A previous version fired `lms load` immediately after `lms unload -a`,
+    which on slow unloads left two models resident at once (OOM). We now
+    poll `lms ps` until the backend reports no loaded models before issuing
+    the load.
     """
     if not model_key:
         return False
     try:
-        # Check what is currently loaded.
         ps = subprocess.run(
             ["lms", "ps"], capture_output=True, text=True, timeout=15,
         )
         if model_key in (ps.stdout or ""):
             logger.info("LM Studio already has %s loaded", model_key)
             return True
-        # Unload everything else first.
+
         subprocess.run(
             ["lms", "unload", "-a"], capture_output=True, text=True, timeout=60,
         )
+        deadline = time.monotonic() + 60.0
+        while time.monotonic() < deadline:
+            ps = subprocess.run(
+                ["lms", "ps"], capture_output=True, text=True, timeout=15,
+            )
+            out = (ps.stdout or "") + (ps.stderr or "")
+            if "No models are currently loaded" in out or not _lmstudio_has_loaded(out):
+                break
+            time.sleep(2.0)
+        else:
+            logger.warning("LM Studio did not fully unload before loading %s", model_key)
+
         logger.info("Loading %s in LM Studio...", model_key)
         done = subprocess.run(
             ["lms", "load", model_key, "--auto"], capture_output=True, text=True, timeout=timeout,
@@ -380,6 +396,23 @@ def ensure_lmstudio_model(model_key: str, timeout: float = 300.0) -> bool:
     except subprocess.TimeoutExpired:
         logger.warning("lms load %s timed out", model_key)
         return False
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("ensure_lmstudio_model(%s) failed: %s", model_key, exc)
         return False
+
+
+def _lmstudio_has_loaded(ps_output: str) -> bool:
+    low = (ps_output or "").lower()
+    if "no models are currently loaded" in low:
+        return False
+    for line in (ps_output or "").splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if s.startswith("LLM") or s.startswith("EMBEDDING") or s.startswith("You have"):
+            continue
+        if "PARAMS" in s or "ARCH" in s:
+            continue
+        if "GB" in s or "MB" in s:
+            return True
+    return False

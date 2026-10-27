@@ -10,6 +10,7 @@ import typer
 from src.browser.manager import BrowserManager
 from src.cli.commands.history import history_app
 from src.cli.commands.monitor import monitor as monitor_fn
+from src.cli.commands.watch import watch as watch_fn
 from src.config import load_config
 from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.llm.client import LLMClient
@@ -875,6 +876,17 @@ def monitor(
 ):
     """Run continuous monitoring with intelligent change detection."""
     monitor_fn(prompt_file, interval_hours, max_runs, output_dir, price_drop_threshold)
+
+
+@app.command()
+def watch(
+    urls: list[str] | None = typer.Option(None, "--url", "-u", help="Product URL to watch (repeatable)"),
+    watchlist: str | None = typer.Option(None, "--watchlist", "-w", help="File with one URL per line"),
+    output_dir: str = typer.Option("results/watch", "--output-dir", help="Output directory"),
+    alternatives: bool = typer.Option(True, "--alternatives/--no-alternatives", help="Search for 2-3 counter-products"),
+):
+    """Watch specific product URLs: track price/stock and find alternatives."""
+    watch_fn(urls, watchlist, output_dir, alternatives)
 
 
 if __name__ == "__main__":

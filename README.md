@@ -295,15 +295,16 @@ condition=..., category=...` plus the selected shops before any browser opens.
 
 ### Launcher scripts
 
-Double-click entry points for users who do not want to remember the CLI flags:
+Double-click entry points for users who do not want to remember the CLI flags.
+They live at the repository root (and are also available under `scripts/`):
 
 ```bash
-# Windows
-scripts\search.bat
+# Windows (root or scripts/)
+search.bat
 
-# Linux / macOS (once, after clone)
-chmod +x scripts/search.sh
-./scripts/search.sh
+# Linux / macOS (root or scripts/, once, after clone)
+chmod +x search.sh
+./search.sh
 ```
 
 Both start `src.cli ask`. On Windows the window stays open at the end so the

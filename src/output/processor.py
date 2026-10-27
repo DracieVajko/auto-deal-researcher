@@ -184,13 +184,24 @@ class ResultProcessor:
         relevant.sort(key=lambda analysis: analysis.score, reverse=True)
 
         top_n = getattr(getattr(self.full_config, "search", None), "winners_count", 3)
+
+        # LLM-based winner selection: cheapest, best overall, best price/performance.
+        # Falls back to score order when no LLM is available or the call fails.
         top_picks: set[str] = set()
-        for analysis in relevant:
-            if analysis.verdict == "skip":
-                continue
-            top_picks.add(analysis.deal.url)
-            if len(top_picks) >= top_n:
-                break
+        llm_picks = await self._llm_pick_winners(relevant, prompt) if getattr(self, "llm", None) else None
+        if llm_picks:
+            for url in llm_picks:
+                if url:
+                    top_picks.add(url)
+                    if len(top_picks) >= top_n:
+                        break
+        if not top_picks:
+            for analysis in relevant:
+                if analysis.verdict == "skip":
+                    continue
+                top_picks.add(analysis.deal.url)
+                if len(top_picks) >= top_n:
+                    break
 
         json_path = out_dir / f"{stem}.json"
         payload = {
@@ -1157,6 +1168,57 @@ class ResultProcessor:
     # ------------------------------------------------------------------
     # Markdown
     # ------------------------------------------------------------------
+    async def _llm_pick_winners(self, relevant, prompt):
+        """Ask the LLM to pick winners: cheapest, best overall, best price/performance.
+
+        Returns a list of deal URLs (up to 3) or None on failure.
+        """
+        if not self.llm or not relevant:
+            return None
+        # Build a compact summary
+        lines = []
+        for i, a in enumerate(relevant[:25], 1):
+            d = a.deal
+            lines.append(
+                f"{i}. {d.title[:80]} | {d.price_eur} EUR | {d.condition} | "
+                f"score {a.score:.0f} | {d.site_name} | {d.url}"
+            )
+        summary = "\n".join(lines)
+        system = (
+            "You are a shopping advisor. Given a list of deals, pick exactly 3 winners:\n"
+            "1) cheapest: lowest price that is still usable\n"
+            "2) best: highest overall value (quality, specs, condition)\n"
+            "3) best_value: best price/performance ratio\n"
+            "Return ONLY a JSON object: {\"cheapest\": <index>, \"best\": <index>, "
+            "\"best_value\": <index>, \"reason\": \"short explanation\"}. "
+            "Indices are 1-based from the list. Do not invent indices."
+        )
+        user = f"Request: {prompt or 'n/a'}\n\nDeals:\n{summary}"
+        try:
+            raw = await self.llm._chat(system, user, max_tokens=200)
+            import json, re
+            m = re.search(r"\{.*\}", raw, re.S)
+            if not m:
+                return None
+            data = json.loads(m.group(0))
+            urls = []
+            for key in ("cheapest", "best", "best_value"):
+                idx = data.get(key)
+                if isinstance(idx, int) and 1 <= idx <= len(relevant[:25]):
+                    urls.append(relevant[idx - 1].deal.url)
+            # dedupe preserving order
+            seen = set()
+            out = []
+            for u in urls:
+                if u and u not in seen:
+                    seen.add(u)
+                    out.append(u)
+            return out or None
+        except Exception as exc:
+            logger.debug("LLM winner selection failed: %s", exc)
+            return None
+
+
     def _to_markdown(
         self,
         prompt: str | None,

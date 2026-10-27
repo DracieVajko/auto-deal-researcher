@@ -1,6 +1,7 @@
 """Auto Deal Searcher - Typer app factory."""
 
 import asyncio
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -81,6 +82,23 @@ def _validate_category_arg(category: str | None) -> None:
         raise ValueError(msg)
 
 
+
+def _available_llm_backends(config) -> list[str]:
+    """Return the LLM backends that are configured and usable."""
+    backends: list[str] = []
+    if getattr(config.llm, "local", None):
+        backends.append("local")
+    cloud_ok = False
+    for api in getattr(config.llm, "api_fallback", []) or []:
+        if os.environ.get(api.api_key_env, ""):
+            cloud_ok = True
+            break
+    if cloud_ok:
+        backends.append("cloud")
+    return backends
+
+
+
 @app.command()
 def ask(
     country: str | None = typer.Option(None, "--country", help="Market; asked when omitted"),
@@ -92,6 +110,20 @@ def ask(
 
 async def _ask_async(country: str | None, max_sites: int | None) -> None:
     config = load_config()
+
+    backends = _available_llm_backends(config)
+    llm_mode = None
+    if len(backends) >= 2:
+        typer.echo("LLM backend: " + ", ".join(f"{i + 1}) {b}" for i, b in enumerate(backends)))
+        choice = typer.prompt(
+            "Choose (number)", default="1", type=int
+        )
+        if 1 <= choice <= len(backends):
+            llm_mode = backends[choice - 1]
+        else:
+            llm_mode = backends[0]
+    elif len(backends) == 1:
+        llm_mode = backends[0]
 
     prompt = typer.prompt("What are you looking for?").strip()
     while not prompt:
@@ -121,6 +153,7 @@ async def _ask_async(country: str | None, max_sites: int | None) -> None:
         prompt,
         country=country.upper(),
         max_sites=int(max_sites),
+        llm_mode=llm_mode,
         brief=_brief,
         plan=_plan,
     )
@@ -147,6 +180,7 @@ def run(
     extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
     country: str | None = typer.Option(None, "--country", help="Market to prefer, e.g. SK, CZ, DE"),
     max_sites: int | None = typer.Option(None, "--max-sites", help="How many shops to open per round"),
+    llm: str | None = typer.Option(None, "--llm", help="LLM backend: local, cloud, or auto (default)"),
     domain: str | None = typer.Option(None, "--domain", help="Force a product domain (bike, computer, phone, car, furniture, generic)"),
 ):
     """Run a single search cycle."""
@@ -211,6 +245,7 @@ async def run_search(
     extra_filters: list[str] | None = None,
     country: str | None = None,
     max_sites: int | None = None,
+    llm_mode: str | None = None,
     domain: str | None = None,
     brief: Callable[[SearchBrief], None] | None = None,
     plan: Callable[[list[str]], None] | None = None,
@@ -222,6 +257,12 @@ async def run_search(
     and each presents the outcome in its own words.
     """
     config = load_config()
+
+    # Restrict the LLM backend when the caller asked for one.
+    if llm_mode == "local":
+        config.llm.api_fallback = []
+    elif llm_mode == "cloud":
+        config.llm.local = []
 
     # Override config
     if winners:
@@ -329,6 +370,7 @@ async def _run_async(
     extra_filters=None,
     country=None,
     max_sites=None,
+    llm_mode=None,
     domain=None,
 ):
     if domain:
@@ -368,6 +410,7 @@ async def _run_async(
         extra_filters=extra_filters,
         country=country,
         max_sites=max_sites,
+        llm_mode=llm_mode,
         domain=domain,
     )
     typer.echo(f"Found {outcome.deal_count} deals. Results in {outcome.results_dir}/")

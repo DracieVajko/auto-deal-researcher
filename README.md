@@ -292,6 +292,9 @@ python -m src.cli ask
 The wizard asks three questions (the prompt is mandatory; country and max
 shops accept Enter for the config defaults) and prints `Understood:
 condition=..., category=...` plus the selected shops before any browser opens.
+When both a local (lmstudio/ollama) and a cloud (mistral/gemini/openrouter)
+backend are configured it also asks which LLM to use; with only one available
+it picks it silently. `run` accepts the same choice via `--llm {local,cloud,auto}`.
 
 ### Launcher scripts
 

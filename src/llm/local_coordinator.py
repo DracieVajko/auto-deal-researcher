@@ -385,11 +385,22 @@ def ensure_lmstudio_model(model_key: str, timeout: float = 300.0) -> bool:
         done = subprocess.run(
             ["lms", "load", model_key, "--auto"], capture_output=True, text=True, timeout=timeout,
         )
-        if done.returncode == 0:
-            logger.info("Loaded %s in LM Studio", model_key)
-            return True
-        logger.warning("lms load %s failed: %s", model_key, (done.stderr or done.stdout or "").strip()[:300])
-        return False
+        if done.returncode != 0:
+            logger.warning("lms load %s failed: %s", model_key, (done.stderr or done.stdout or "").strip()[:300])
+            return False
+        # Wait until LM Studio reports the model as resident (load may return
+        # before the model is actually ready for inference).
+        deadline = time.monotonic() + 120.0
+        while time.monotonic() < deadline:
+            ps = subprocess.run(
+                ["lms", "ps"], capture_output=True, text=True, timeout=15,
+            )
+            if model_key in (ps.stdout or ""):
+                logger.info("Loaded %s in LM Studio", model_key)
+                return True
+            time.sleep(3.0)
+        logger.warning("lms load %s returned 0 but model not yet resident", model_key)
+        return True
     except FileNotFoundError:
         logger.debug("lms CLI not found; skipping auto-load")
         return False

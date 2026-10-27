@@ -1337,7 +1337,7 @@ class ResultProcessor:
                 )
             lines += [""]
 
-        # ---- Price history charts for top picks (if stored) ----
+        # ---- Price history charts for all deals with stored history ----
         try:
             from src.output.charts import price_history_svg
             storage = None
@@ -1349,8 +1349,6 @@ class ResultProcessor:
             if storage is not None:
                 chart_lines = []
                 for a in relevant:
-                    if a.deal.url not in top_picks:
-                        continue
                     hist = storage.get_price_history(a.deal.url, days=90)
                     pts = [(h["timestamp"][:10], h["price_eur"]) for h in (hist or []) if h.get("price_eur")]
                     if len(pts) >= 2:

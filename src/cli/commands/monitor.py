@@ -12,6 +12,9 @@ from src.intelligence.price_tracker import PriceTracker
 from src.llm.client import LLMClient
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
+from src.notifications.manager import NotificationManager
+from src.notifications.base import Alert
+from src.notifications.channels.console import ConsoleChannel
 from src.utils.time import utcnow_stamp
 
 
@@ -51,6 +54,36 @@ async def _monitor_async(
     os.makedirs(output_dir, exist_ok=True)
 
     config = load_config()
+
+    # Notification manager from config
+    notif = NotificationManager(
+        cooldown_seconds=getattr(config.notifications, "default_cooldown_seconds", 3600),
+    )
+    notif.add_channel(ConsoleChannel())
+    try:
+        from src.notifications.channels.system import SystemChannel
+        notif.add_channel(SystemChannel())
+    except Exception:
+        pass
+    try:
+        from src.notifications.channels.email import EmailChannel
+        notif.add_channel(EmailChannel())
+    except Exception:
+        pass
+    try:
+        from src.notifications.channels.webhook import WebhookChannel
+        for ch in getattr(config.notifications, "channels", []) or []:
+            if ch.type == "webhook":
+                notif.add_channel(WebhookChannel(ch.name))
+    except Exception:
+        pass
+    try:
+        from src.notifications.channels.discord import DiscordChannel
+        for ch in getattr(config.notifications, "channels", []) or []:
+            if ch.type == "discord":
+                notif.add_channel(DiscordChannel(ch.name))
+    except Exception:
+        pass
 
     # Resolve prompt
     if prompt_file:
@@ -95,6 +128,17 @@ async def _monitor_async(
 
             # Print report
             typer.echo(report.to_markdown())
+
+            # Send notification
+            try:
+                alert = Alert(
+                    title=f"Monitor run #{run_count}",
+                    message=f"{len(deals)} deals found. New: {report.new_count}. Report: {report_path}",
+                    severity="info",
+                )
+                await notif.send_alert(alert)
+            except Exception:
+                pass
 
             # Save report to file
             report_path = os.path.join(output_dir, f"{run_id}.md")

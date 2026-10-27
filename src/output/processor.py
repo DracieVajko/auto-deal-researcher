@@ -160,6 +160,25 @@ class ResultProcessor:
         analyses = await self._analyze_deals(deals, prompt)
         relevant = [a for a in analyses if not a.wrong_form_factor]
         filtered = [a for a in analyses if a.wrong_form_factor]
+
+        # Price-range sanity: drop extreme outliers so a 100 EUR bike is not
+        # compared against a 1000 EUR one (Fabia vs Ferrari). Only when we
+        # have enough deals to compute a meaningful median.
+        if len(relevant) >= 5:
+            prices = sorted(a.deal.price_eur for a in relevant if a.deal.price_eur)
+            if prices:
+                median = prices[len(prices) // 2]
+                lo, hi = median * 0.3, median * 3.0
+                kept, dropped = [], []
+                for a in relevant:
+                    p = a.deal.price_eur
+                    if p is None or (lo <= p <= hi):
+                        kept.append(a)
+                    else:
+                        dropped.append(a)
+                if dropped and len(kept) >= 3:
+                    relevant = kept
+                    filtered = filtered + dropped
         # Best overall deal first: the summary must agree with the scores
         # instead of keeping an arbitrary search order.
         relevant.sort(key=lambda analysis: analysis.score, reverse=True)
@@ -1164,20 +1183,53 @@ class ResultProcessor:
 
         lines += ["## Summary", ""]
         lines.append(
-            "| # | Pick | Product | Price | Condition | Site | Score | Verdict |"
+            "| # | Pick | Product | Price | Condition | Site | Score | Verdict | Link |"
         )
-        lines.append("|---|------|---------|-------|-----------|------|-------|---------|")
+        lines.append("|---|------|---------|-------|-----------|------|-------|---------|------|")
         for index, analysis in enumerate(relevant, 1):
             deal = analysis.deal
             price_out, currency_out = self._format_price(deal)
             pick = "⭐" if deal.url in top_picks else ""
             verdict = VERDICT_LABELS.get(analysis.verdict, analysis.verdict)
+            title = self._escape(deal.title)
+            if deal.url:
+                title = f"[{title}]({deal.url})"
             lines.append(
-                f"| {index} | {pick} | {self._escape(deal.title)} | "
+                f"| {index} | {pick} | {title} | "
                 f"{price_out:.2f} {currency_out} | "
                 f"{CONDITION_LABELS.get(deal.condition, deal.condition)} | "
-                f"{deal.site_name} | {analysis.score:.0f} | {verdict} |"
+                f"{deal.site_name} | {analysis.score:.0f} | {verdict} | "
+                f"[open]({deal.url}) |"
             )
+        # ---- Top picks: cheapest, best overall, best price/performance ----
+        if relevant:
+            lines += ["", "## Top picks", ""]
+            # Best overall = highest score
+            best = max(relevant, key=lambda a: a.score)
+            # Cheapest = lowest price
+            cheapest = min(relevant, key=lambda a: a.deal.price_eur or float("inf"))
+            # Best price/performance = highest score per euro
+            pp = max(relevant, key=lambda a: (a.score / (a.deal.price_eur or 1.0)))
+            picks = []
+            if best is not None:
+                picks.append(("🏆 Best overall", best))
+            if cheapest is not None and cheapest is not best:
+                picks.append(("💰 Cheapest", cheapest))
+            if pp is not None and pp not in (best, cheapest):
+                picks.append(("⚡ Best price/performance", pp))
+            # Deduplicate by url
+            seen_urls = set()
+            for label, a in picks:
+                if a.deal.url in seen_urls:
+                    continue
+                seen_urls.add(a.deal.url)
+                price_out, currency_out = self._format_price(a.deal)
+                lines.append(
+                    f"- **{label}:** [{a.deal.title}]({a.deal.url}) — "
+                    f"{price_out:.2f} {currency_out} (score {a.score:.0f})"
+                )
+            lines += [""]
+
         lines += [""]
         if relevant and all(a.verdict == "skip" for a in relevant):
             lines += [

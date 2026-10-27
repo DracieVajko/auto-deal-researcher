@@ -111,30 +111,36 @@ def ask(
 async def _ask_async(country: str | None, max_sites: int | None) -> None:
     config = load_config()
 
-    backends = _available_llm_backends(config)
-    llm_mode = None
-    if len(backends) >= 2:
-        typer.echo("LLM backend: " + ", ".join(f"{i + 1}) {b}" for i, b in enumerate(backends)))
-        choice = typer.prompt(
-            "Choose (number)", default="1", type=int
-        )
-        if 1 <= choice <= len(backends):
-            llm_mode = backends[choice - 1]
-        else:
-            llm_mode = backends[0]
-    elif len(backends) == 1:
-        llm_mode = backends[0]
+    typer.echo("")
+    typer.echo("Auto Deal Searcher - prompt-only search")
+    typer.echo("-" * 40)
 
     prompt = typer.prompt("What are you looking for?").strip()
     while not prompt:
         prompt = typer.prompt("Please type a description of what you want.").strip()
 
+    backends = _available_llm_backends(config)
+    llm_mode = None
+    if len(backends) >= 2:
+        typer.echo("")
+        typer.echo("LLM backend:")
+        for i, b in enumerate(backends, 1):
+            label = "local (LM Studio/Ollama)" if b == "local" else "cloud (mistral/gemini/openrouter)"
+            typer.echo(f"  {i}) {label}")
+        choice = typer.prompt("Choose", default="2" if "cloud" in backends else "1", type=int)
+        if 1 <= choice <= len(backends):
+            llm_mode = backends[choice - 1]
+        else:
+            llm_mode = backends[-1] if "cloud" in backends else backends[0]
+    elif len(backends) == 1:
+        llm_mode = backends[0]
+
     if not country:
         country = typer.prompt("Country", default=config.search.user_country)
     if max_sites is None:
-        max_sites = typer.prompt(
-            "Max shops", default=int(config.search.max_sites), type=int
-        )
+        max_sites = typer.prompt("Max shops", default=int(config.search.max_sites), type=int)
+
+    typer.echo("")
 
     def _brief(b: SearchBrief) -> None:
         parts = [f"condition={b.condition}", f"category={b.category}"]

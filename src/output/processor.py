@@ -255,6 +255,33 @@ class ResultProcessor:
         except Exception as exc:
             logger.debug("CSV export failed: %s", exc)
 
+        # Excel export (openpyxl, optional)
+        try:
+            import openpyxl
+            from openpyxl.styles import Font
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Deals"
+            headers = ["rank", "title", "price_eur", "condition", "site", "score", "verdict", "url", "top_pick"]
+            ws.append(headers)
+            for c in ws[1]:
+                c.font = Font(bold=True)
+            for index, analysis in enumerate(relevant, 1):
+                deal = analysis.deal
+                ws.append([
+                    index, deal.title, deal.price_eur, deal.condition,
+                    deal.site_name, round(analysis.score, 1),
+                    analysis.verdict, deal.url,
+                    "yes" if deal.url in top_picks else "no",
+                ])
+            # widen columns
+            ws.column_dimensions["B"].width = 60
+            ws.column_dimensions["H"].width = 60
+            xlsx_path = out_dir / f"{stem}.xlsx"
+            wb.save(xlsx_path)
+        except Exception as exc:
+            logger.debug("Excel export failed: %s", exc)
+
         if filtered:
             logger.info(
                 "Filtered %d laptop/notebook listing(s) from the report",
@@ -1309,6 +1336,35 @@ class ResultProcessor:
                     f"{price_out:.2f} {currency_out} (score {a.score:.0f})"
                 )
             lines += [""]
+
+        # ---- Price history charts for top picks (if stored) ----
+        try:
+            from src.output.charts import price_history_svg
+            storage = None
+            try:
+                from src.storage.manager import StorageManager
+                storage = StorageManager(self.full_config.storage.db_path)
+            except Exception:
+                storage = None
+            if storage is not None:
+                chart_lines = []
+                for a in relevant:
+                    if a.deal.url not in top_picks:
+                        continue
+                    hist = storage.get_price_history(a.deal.url, days=90)
+                    pts = [(h["timestamp"][:10], h["price_eur"]) for h in (hist or []) if h.get("price_eur")]
+                    if len(pts) >= 2:
+                        svg = price_history_svg(pts, title=a.deal.title[:40])
+                        if svg:
+                            chart_lines.append(f"### {a.deal.title[:60]}")
+                            chart_lines.append("")
+                            chart_lines.append(svg)
+                            chart_lines.append("")
+                if chart_lines:
+                    lines += ["## Price history", ""]
+                    lines += chart_lines
+        except Exception as exc:
+            logger.debug("Price history chart failed: %s", exc)
 
         # ---- Comparison view: top picks side by side ----
         if top_picks and len(top_picks) >= 2:

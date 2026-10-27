@@ -237,6 +237,24 @@ class ResultProcessor:
         with open(md_path, "w", encoding="utf-8") as handle:  # noqa: ASYNC230
             handle.write(md_content)
 
+        # CSV export (stdlib, no extra deps)
+        csv_path = out_dir / f"{stem}.csv"
+        try:
+            import csv
+            with open(csv_path, "w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["rank", "title", "price_eur", "condition", "site", "score", "verdict", "url", "top_pick"])
+                for index, analysis in enumerate(relevant, 1):
+                    deal = analysis.deal
+                    writer.writerow([
+                        index, deal.title, deal.price_eur, deal.condition,
+                        deal.site_name, round(analysis.score, 1),
+                        analysis.verdict, deal.url,
+                        "yes" if deal.url in top_picks else "no",
+                    ])
+        except Exception as exc:
+            logger.debug("CSV export failed: %s", exc)
+
         if filtered:
             logger.info(
                 "Filtered %d laptop/notebook listing(s) from the report",
@@ -1291,6 +1309,20 @@ class ResultProcessor:
                     f"{price_out:.2f} {currency_out} (score {a.score:.0f})"
                 )
             lines += [""]
+
+        # ---- Comparison view: top picks side by side ----
+        if top_picks and len(top_picks) >= 2:
+            lines += ["## Comparison", ""]
+            pick_analyses = [a for a in relevant if a.deal.url in top_picks][:3]
+            if pick_analyses:
+                lines.append("| | " + " | ".join(self._escape(a.deal.title[:40]) for a in pick_analyses) + " |")
+                lines.append("|---|" + "|".join(["---"] * len(pick_analyses)) + "|")
+                lines.append("| Price | " + " | ".join(f"{a.deal.price_eur:.2f}" for a in pick_analyses) + " |")
+                lines.append("| Score | " + " | ".join(f"{a.score:.0f}" for a in pick_analyses) + " |")
+                lines.append("| Condition | " + " | ".join(a.deal.condition for a in pick_analyses) + " |")
+                lines.append("| Site | " + " | ".join(a.deal.site_name for a in pick_analyses) + " |")
+                lines.append("| Link | " + " | ".join(f"[open]({a.deal.url})" for a in pick_analyses) + " |")
+                lines += [""]
 
         lines += [""]
         if relevant and all(a.verdict == "skip" for a in relevant):

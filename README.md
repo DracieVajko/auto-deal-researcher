@@ -296,6 +296,28 @@ When both a local (lmstudio/ollama) and a cloud (mistral/gemini/openrouter)
 backend are configured it also asks which LLM to use; with only one available
 it picks it silently. `run` accepts the same choice via `--llm {local,cloud,auto}`.
 
+### Long-term monitoring (wait for a deal)
+
+For hunting a specific item at a target price over weeks/months:
+
+```bash
+# 1. Create a prompt file
+cat > prompts/hunt.yaml <<'EOF'
+prompt: "Audi A4 2.0 TDI under 8000 EUR, manual, under 200k km, SK/CZ"
+EOF
+
+# 2. Install a daily 08:00 run (Windows Task Scheduler / cron)
+python -m src.cli monitor --prompt-file prompts/hunt.yaml --interval 24 --max-runs 0
+
+# Or one-shot scheduled via OS:
+#   Windows: scripts\install_task.ps1
+#   Linux/macOS: scripts/install_cron.sh
+```
+
+Results accumulate in `results/monitoring/` and price changes are tracked in
+`data/deals.db`. Alerts fire through configured notification channels
+(console, webhook, discord, email, system).
+
 ### Launcher scripts
 
 Double-click entry points for users who do not want to remember the CLI flags.

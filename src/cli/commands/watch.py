@@ -113,6 +113,17 @@ async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool
             typer.echo(f"  fetching {url}")
             info = await _fetch_product(page, url)
             results.append(info)
+            # record price history for trend charts
+            if info.get("price") is not None:
+                try:
+                    from src.searcher.models import Deal
+                    deal = Deal(
+                        url=url, title=info["title"], price_eur=info["price"],
+                        site_name="watchlist", condition="any",
+                    )
+                    storage.record_price_sighting(deal, "watch")
+                except Exception:
+                    pass
             # record price history
             # record price history (best effort) - skip if Deal construction fails
             pass
@@ -127,6 +138,18 @@ async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool
         lines.append(f"- Stock: {r['stock']}")
         if r.get("error"):
             lines.append(f"- Error: {r['error']}")
+        # price history chart
+        try:
+            hist = storage.get_price_history(r["url"], days=90)
+            pts = [(h["timestamp"][:10], h["price_eur"]) for h in hist if h.get("price_eur")]
+            if len(pts) >= 2:
+                from src.output.charts import price_history_svg
+                svg = price_history_svg(pts, title="Price history")
+                if svg:
+                    lines.append("")
+                    lines.append(svg)
+        except Exception:
+            pass
         lines.append("")
 
     # Alternatives search

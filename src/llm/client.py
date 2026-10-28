@@ -264,8 +264,15 @@ class LLMClient:
             "seller_type (retailer|marketplace|classifieds|auction|private), "
             "sort (relevance|price_asc|price_desc|newest), and extras "
             "(an object of string key/value pairs). Use null for unknown values. "
+            "min_price: only set when the user explicitly says 'from X', 'at least X' or 'over X'. "
+            "max_price: set when the user says 'up to X', 'under X', 'do X', 'below X'. "
             "Give category only as one of the listed words when the request "
             "clearly implies it; omit it when unsure. "
+            "ALWAYS set category to 'electronics' when the request involves phones, "
+            "smartphones, laptops, tablets, TVs, cameras or any electronic device. "
+            "Bikes, scooters and outdoor gear are 'hobby'. "
+            "Cars, motorcycles and vehicles are 'auto'. "
+            "Furniture and home appliances are 'home' or 'appliances'. "
             "Prices are EUR numbers. Do not invent values that are not in the request."
         )
         data = await self.chat_json(system, prompt, max_tokens=300)

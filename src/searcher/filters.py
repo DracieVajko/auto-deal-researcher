@@ -161,7 +161,11 @@ def _strip_diacritics(text: str) -> str:
 def _clean(text: Any) -> str | None:
     if text is None:
         return None
-    value = " ".join(str(text).split()).strip()
+    if isinstance(text, list):
+        parts = [" ".join(str(t).split()).strip() for t in text if t is not None]
+        value = ", ".join(p for p in parts if p)
+    else:
+        value = " ".join(str(text).split()).strip()
     return value or None
 
 
@@ -311,8 +315,19 @@ def merge_filters(base: SearchFilters | None, override: SearchFilters | None) ->
     override = override or SearchFilters()
     extras = dict(base.extras)
     extras.update(override.extras)
+    # Guard against LLM hallucinating a min_price equal to max_price (e.g.
+    # interpreting "up to 300" as "exactly 300"). Only trust an override
+    # min_price when it differs from the override max_price or base already had one.
+    override_min = override.min_price
+    if (
+        override_min is not None
+        and base.min_price is None
+        and override.max_price is not None
+        and override_min == override.max_price
+    ):
+        override_min = None
     return SearchFilters(
-        min_price=override.min_price if override.min_price is not None else base.min_price,
+        min_price=override_min if override_min is not None else base.min_price,
         max_price=override.max_price if override.max_price is not None else base.max_price,
         condition=override.condition or base.condition,
         brand=override.brand or base.brand,

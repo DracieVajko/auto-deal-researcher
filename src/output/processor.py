@@ -157,6 +157,16 @@ class ResultProcessor:
         # take two places in the report.
         deals, duplicates_collapsed = collapse_duplicates(deals)
 
+        # Hard brand filter: keep only deals whose title mentions one of the
+        # requested brands (comma-separated). Applied before LLM analysis.
+        brand_filter = getattr(self, "_brand_filter", None)
+        if brand_filter:
+            brands = [b.strip().lower() for b in str(brand_filter).split(",") if b.strip()]
+            if brands:
+                kept = [d for d in deals if any(b in (d.title or "").lower() for b in brands)]
+                if kept:
+                    deals = kept
+
         analyses = await self._analyze_deals(deals, prompt)
         relevant = [a for a in analyses if not a.wrong_form_factor]
         filtered = [a for a in analyses if a.wrong_form_factor]

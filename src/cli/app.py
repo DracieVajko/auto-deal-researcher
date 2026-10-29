@@ -331,6 +331,9 @@ async def run_search(
     # --domain beats output.domain; the config value is already loaded in __init__.
     if domain:
         processor.domain_override = domain
+    # pass brand filter for hard filtering in the report
+    if filters.brand:
+        processor._brand_filter = filters.brand
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         try:

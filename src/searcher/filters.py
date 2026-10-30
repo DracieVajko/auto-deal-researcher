@@ -538,6 +538,31 @@ CATEGORIES: tuple[Category, ...] = (
 )
 
 
+@dataclass
+class SearchRequest:
+    """Grouped filter inputs flowing from CLI through run_search."""
+
+    prompt: str = ""
+    prompt_file: str | None = None
+    condition: str = Condition.ANY
+    category: str | None = None
+    winners: int | None = None
+    output_format: str | None = None
+    min_price: str | None = None
+    max_price: str | None = None
+    brand: str | None = None
+    location: str | None = None
+    shipping: str | None = None
+    seller_type: str | None = None
+    sort: str | None = None
+    extra_filters: list[str] | None = None
+    country: str | None = None
+    max_sites: int | None = None
+    llm_mode: str | None = None
+    debug: bool = False
+    domain: str | None = None
+
+
 @dataclass(frozen=True)
 class ResolvedRequest:
     """Prompt-derived filters plus the product category the model proposed."""

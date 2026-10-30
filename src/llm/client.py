@@ -237,15 +237,6 @@ class LLMClient:
         else:
             return asyncio.run(self._generate_search_query_async(product_description))
 
-    # === Public API used by agents ===
-    async def chat(self, system: str, user: str, max_tokens: int = 400) -> str:
-        """Public single-turn chat across the whole fallback chain.
-
-        Returns the raw user text as the last resort so callers always get a
-        usable string instead of an exception.
-        """
-        return await self._chat(system, user, max_tokens)
-
     async def chat_json(self, system: str, user: str, max_tokens: int = 400):
         """Chat and parse a JSON object/list from the reply."""
         raw = await self._chat(system, user, max_tokens)

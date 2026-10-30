@@ -23,17 +23,23 @@ class SystemChannel(NotificationChannel):
         title = alert.title
         message = alert.message
         system = platform.system()
+        def _ps_escape(value: str) -> str:
+            return str(value).replace("'", "''")
+
+        def _sh_escape(value: str) -> str:
+            return str(value).replace("\\", "\\\\").replace('"', '\\"')
+
         try:
             if system == "Windows":
                 # PowerShell toast (BurntToast not required; use basic balloon)
                 ps = (
-                    f'Add-Type -AssemblyName System.Windows.Forms; '
-                    f'$n = New-Object System.Windows.Forms.NotifyIcon; '
-                    f'$n.Icon = [System.Drawing.SystemIcons]::Information; '
-                    f'$n.Visible = $true; '
-                    f'$n.ShowBalloonTip(5000, "{title}", "{message}", '
-                    f'[System.Windows.Forms.ToolTipIcon]::Info); '
-                    f'Start-Sleep -Seconds 6'
+                    "Add-Type -AssemblyName System.Windows.Forms; "
+                    "$n = New-Object System.Windows.Forms.NotifyIcon; "
+                    "$n.Icon = [System.Drawing.SystemIcons]::Information; "
+                    "$n.Visible = $true; "
+                    f"$n.ShowBalloonTip(5000, '{_ps_escape(title)}', '{_ps_escape(message)}', "
+                    "[System.Windows.Forms.ToolTipIcon]::Info); "
+                    "Start-Sleep -Seconds 6"
                 )
                 subprocess.run(
                     ["powershell", "-NoProfile", "-Command", ps],
@@ -42,7 +48,7 @@ class SystemChannel(NotificationChannel):
                 return True
             elif system == "Darwin":
                 subprocess.run(
-                    ["osascript", "-e", f'display notification "{message}" with title "{title}"'],
+                    ["osascript", "-e", f'display notification "{_sh_escape(message)}" with title "{_sh_escape(title)}"'],
                     capture_output=True, timeout=10,
                 )
                 return True

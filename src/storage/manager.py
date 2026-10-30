@@ -166,7 +166,7 @@ class StorageManager:
         if run_id:
             self.record_price_sighting(deal, run_id)
 
-    def record_price_sighting(self, deal: Deal, run_id: str) -> int:
+    def record_price_sighting(self, deal: Deal, run_id: str) -> int | None:
         """Record a price sighting in price_history table."""
         # price_history.deal_id is NOT NULL, so the deal row must exist first.
         row = self.db.execute("SELECT id FROM deals WHERE url = ?", (deal.url,)).fetchone()

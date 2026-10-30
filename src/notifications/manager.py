@@ -34,7 +34,7 @@ class NotificationManager:
         self._seen[message] = now
         return True
 
-    async def send_alert(self, alert: Alert, channels: list[str] = None):
+    async def send_alert(self, alert: Alert, channels: list[str] | None = None):
         """Send alert through specified channels (or all if None)."""
         targets = channels or [c.name for c in self.channels]
         for channel in self.channels:

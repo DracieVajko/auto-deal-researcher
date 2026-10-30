@@ -203,7 +203,6 @@ class ChangeDetector:
 
             # Price change
             if abs(current.price_eur - previous["price_eur"]) > 0.01:
-                _ = ((current.price_eur - previous["price_eur"]) / previous["price_eur"]) * 100
                 price_change = {
                     "url": url,
                     "title": current.title,
@@ -317,7 +316,6 @@ class ChangeDetector:
             previous = previous_by_url[url]
 
             if abs(current.price_eur - previous.price_eur) > 0.01:
-                _ = ((current.price_eur - previous.price_eur) / previous.price_eur) * 100
                 report.price_changes.append({
                     "url": url,
                     "title": current.title,

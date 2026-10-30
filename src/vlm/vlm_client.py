@@ -266,7 +266,7 @@ Rules:
                 max_tokens=4096,
                 temperature=0.1,
             )
-            content = response.json()["choices"][0]["message"]["content"]
+            content = response["choices"][0]["message"]["content"]
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group())
@@ -316,7 +316,7 @@ Rules:
                 max_tokens=200,
                 temperature=0.0,
             )
-            content = response.json()["choices"][0]["message"]["content"]
+            content = response["choices"][0]["message"]["content"]
             match = re.search(r'\{.*\}', content, re.DOTALL)
             if match:
                 return json.loads(match.group())

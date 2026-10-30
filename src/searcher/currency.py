@@ -122,7 +122,7 @@ def to_eur(
     currency: str | None = "EUR",
     rates: dict[str, float] | None = None,
 ) -> float:
-    """Convert *amount* to EUR using *rates* (defaults to DEFAULT_RATES).
+    """Convert *amount* to EUR using *rates* (defaults to the active _RATES table).
 
     An unknown currency is treated as EUR: that is the historical behaviour
     of the adapters and keeps the price filters usable instead of dropping

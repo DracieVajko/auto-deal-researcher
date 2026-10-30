@@ -163,14 +163,15 @@ class SearchOrchestrator:
             try:
                 # Build judgment prompt
                 judgment = await self._judge_deal(prompt, deal)
-                yield {
+                results.append({
                     "deal": deal,
                     "judgment": judgment,
                     "score": judgment.get("match_score", 0),
-                }
+                })
             except Exception as e:
                 logger.error(f"Judgment failed for {deal.url}: {e}")
-                yield {"deal": deal, "judgment": {"decision": "UNCERTAIN", "confidence": 0}}
+                results.append({"deal": deal, "judgment": {"decision": "UNCERTAIN", "confidence": 0}})
+        return results
 
     async def _judge_deal(self, prompt: str, deal) -> dict:
         """Use LLM to judge a single deal."""

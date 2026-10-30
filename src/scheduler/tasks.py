@@ -26,21 +26,24 @@ def uninstall_schedule():
 
 def _install_windows_tasks(config: AppConfig):
     python_exe = sys.executable
-    _ = Path(__file__).parent.parent.parent / "scripts" / "run_once.ps1"
-
     for task in config.schedule.tasks:
         if not task.enabled:
             continue
         for time_str in task.times:
             safe_name = "".join(c for c in f"AutoDealSearcher-{task.name}-{time_str.replace(':', '')}" if c.isalnum() or c in "-_")
-            quoted_exe = f"'{python_exe}'"
-            quoted_prompt = f"'{task.prompt_file}'"
+            # PowerShell single-quoted literals; escape embedded single quotes by doubling.
+            def _ps_quote(value: str) -> str:
+                return "'" + str(value).replace("'", "''") + "'"
+            quoted_exe = _ps_quote(python_exe)
+            quoted_prompt = _ps_quote(task.prompt_file)
+            quoted_time = _ps_quote(time_str)
+            quoted_name = _ps_quote(safe_name)
             # PowerShell command to create scheduled task
             ps_cmd = f'''
 $action = New-ScheduledTaskAction -Execute {quoted_exe} -Argument '-m src.cli run --prompt-file {quoted_prompt}'
-$trigger = New-ScheduledTaskTrigger -Daily -At {time_str}
+$trigger = New-ScheduledTaskTrigger -Daily -At {quoted_time}
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd
-Register-ScheduledTask -TaskName '{safe_name}' -Action $action -Trigger $trigger -Settings $settings -Force
+Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
 '''
             subprocess.run(["powershell", "-Command", ps_cmd], check=True)
             print(f"Installed Windows task: {safe_name}")

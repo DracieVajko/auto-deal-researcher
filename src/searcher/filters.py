@@ -13,6 +13,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.config.models import Category, Condition
+
 from src.text.normalize import fold
 
 logger = logging.getLogger(__name__)
@@ -152,12 +154,6 @@ _SORT_RE = re.compile(r"\b(?:sort|zoradenie|triedenie)\s*[:=]\s*([^,;]+)", re.IG
 _EXTRA_RE = re.compile(r"\b([a-z][a-z0-9_]{1,24})\s*=\s*([\w./+-]{1,40})", re.IGNORECASE)
 
 
-def _strip_diacritics(text: str) -> str:
-    # Thin alias over the canonical folding (spec 13.1); fold also lowercases,
-    # so callers' .lower() stays harmless.
-    return fold(text)
-
-
 def _clean(text: Any) -> str | None:
     if text is None:
         return None
@@ -216,8 +212,8 @@ def _optional_float(value: Any) -> float | None:
 def _normalise_choice(value: Any, aliases: Mapping[str, str], allowed: tuple[str, ...], *, strict: bool) -> str | None:
     if value is None or value == "":
         return None
-    text = _strip_diacritics(_clean(value) or "").lower()
-    if text in ("any", "all", "alles", "vsetko", "všetko"):
+    text = fold(_clean(value) or "").lower()
+    if text in (Condition.ANY, "all", "alles", "vsetko", "všetko"):
         return None
     normalised = aliases.get(text, text)
     if normalised in allowed:
@@ -431,7 +427,7 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
     shipping wording and sort wording.
     """
     text = prompt or ""
-    normalised = _strip_diacritics(text).lower()
+    normalised = fold(text).lower()
 
     min_price = None
     max_price = None
@@ -532,13 +528,13 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
     ).validate()
 
 
-CATEGORIES: tuple[str, ...] = (
-    "electronics",
-    "appliances",
-    "auto",
-    "home",
-    "hobby",
-    "general",
+CATEGORIES: tuple[Category, ...] = (
+    Category.ELECTRONICS,
+    Category.APPLIANCES,
+    Category.AUTO,
+    Category.HOME,
+    Category.HOBBY,
+    Category.GENERAL,
 )
 
 

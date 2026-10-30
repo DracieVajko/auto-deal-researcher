@@ -66,29 +66,10 @@ class PriceTracker:
         """Record a price sighting, return the history entry ID."""
         return self.storage.record_price_sighting(deal, run_id)
 
-    def get_price_history(self, url: str, days: int = 30) -> list[dict]:
-        """Get price history for a specific product URL."""
-        return self.storage.get_price_history(url, days)
-
-    def get_price_history_for_deal(self, deal_id: int) -> list[dict]:
-        return self.storage.get_price_history_for_deal(deal_id)
-
-    def detect_price_drops(self, threshold_pct: float = 5.0, days: int = 7) -> list[dict]:
-        """Find products with price drops >= threshold% in last N days."""
-        return self.storage.detect_price_drops(threshold_pct, days)
-
-    def detect_new_lows(self, days: int = 30) -> list[dict]:
-        """Find products at their lowest price in N days."""
-        return self.storage.detect_new_lows(days)
-
-    def get_price_trend(self, url: str, days: int = 30) -> dict:
-        """Compute trend: dropping, rising, stable, volatile."""
-        return self.storage.get_price_trend(url, days)
-
     def get_price_trend_for_deal(self, deal_id: int, days: int = 30) -> dict:
         deal = self.storage.get_deal_by_id(deal_id)
         if deal:
-            return self.get_price_trend(deal.url, days)
+            return self.storage.get_price_trend(deal.url, days)
         return {"trend": "unknown", "data_points": 0}
 
     def get_deals_nearing_target(self, target_price_eur: float, margin_pct: float = 5.0) -> list[dict]:

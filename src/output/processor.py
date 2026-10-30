@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from src.config.models import OutputConfig
+from src.config.models import Condition
 from src.output.dedup import collapse_duplicates
 from src.output.domains import DomainProfile, detect, get
 from src.output.domains.ai import proposal_to_profile, propose_domain
@@ -798,9 +799,9 @@ class ResultProcessor:
             score += 5
         if any(token in text for token in ("thunderbolt", "usb4", "oculink")):
             score += 6
-        if deal.condition == "new":
+        if deal.condition == Condition.NEW:
             score += 6
-        elif deal.condition == "open_box":
+        elif deal.condition == Condition.OPEN_BOX:
             score += 4
         if seller_type == "classifieds":
             score -= 4
@@ -947,13 +948,13 @@ class ResultProcessor:
             elif any(token in text for token in ("thunderbolt", "usb4", "oculink")):
                 pros.append("Thunderbolt/USB4/OCuLink mentioned in the listing")
 
-        if deal.condition == "new":
+        if deal.condition == Condition.NEW:
             pros.append("New item — manufacturer warranty applies")
-        elif deal.condition == "open_box":
+        elif deal.condition == Condition.OPEN_BOX:
             pros.append("Open-box item — usually discounted with full warranty")
-        elif deal.condition == "refurbished":
+        elif deal.condition == Condition.REFURBISHED:
             pros.append("Refurbished — seller warranty should be confirmed")
-        elif deal.condition == "used":
+        elif deal.condition == Condition.USED:
             cons.append("Used item — inspect and test before paying")
 
         if seller_type == "classifieds":
@@ -1501,7 +1502,7 @@ class ResultProcessor:
         deal: Deal, analysis: DealAnalysis, prompt: str | None = None
     ) -> list[str]:
         pc = ResultProcessor._wants_pc_details(analysis.domain, prompt)
-        if deal.condition in ("new", "open_box"):
+        if deal.condition in (Condition.NEW, Condition.OPEN_BOX):
             items = [
                 "Confirm the warranty length and who honours it.",
                 "Check the return window and who pays return shipping.",

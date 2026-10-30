@@ -16,6 +16,7 @@ from src.llm.client import LLMClient
 from src.searcher.adapters import Deal, get_adapter
 from src.searcher.adapters.base import SiteBlockedError
 from src.searcher.filter_engine import FilterEngine
+from src.config.models import Category, Condition
 from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
 from src.searcher.query_language import language_for_country, localise_query
@@ -125,9 +126,9 @@ class PlaywrightSearcher:
     def _site_matches(site: WebsiteConfig, condition: str, category: str) -> bool:
         categories = {getattr(item, "value", str(item)) for item in site.categories}
         conditions = {getattr(item, "value", str(item)) for item in site.conditions}
-        if category != "any" and "any" not in categories and category not in categories:
+        if category != Category.ANY and Category.ANY not in categories and category not in categories:
             return False
-        if condition != "any" and "any" not in conditions and condition not in conditions:
+        if condition != Condition.ANY and Condition.ANY not in conditions and condition not in conditions:
             return False
         return True
 
@@ -232,8 +233,8 @@ class PlaywrightSearcher:
     async def search(
         self,
         prompt: str,
-        condition: str = "any",
-        category: str = "any",
+        condition: str = Condition.ANY,
+        category: str = Category.ANY,
         filters: SearchFilters | None = None,
         on_sites: Callable[[list[str]], None] | None = None,
     ) -> list[Deal]:
@@ -420,8 +421,8 @@ class PlaywrightSearcher:
     async def search_with_diamond(
         self,
         prompt: str,
-        condition: str = "any",
-        category: str = "any",
+        condition: str = Condition.ANY,
+        category: str = Category.ANY,
         filters: SearchFilters | None = None,
     ) -> list[Deal]:
         """

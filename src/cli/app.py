@@ -18,6 +18,7 @@ from src.llm.health import run_checks as run_llm_checks
 from src.output.domains import DOMAIN_REGISTRY, get
 from src.output.processor import ResultProcessor
 from src.scheduler.tasks import install_schedule, uninstall_schedule
+from src.config.models import Condition, Category
 from src.searcher.filters import (
     CATEGORIES,
     ResolvedRequest,
@@ -252,7 +253,7 @@ class SearchOutcome:
 async def run_search(
     prompt: str,
     *,
-    condition: str = "any",
+    condition: str = Condition.ANY,
     category: str | None = None,
     winners: int | None = None,
     output_format: str | None = None,
@@ -321,10 +322,10 @@ async def run_search(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
     filters = resolved.filters
-    if condition == "any" and filters.condition:
+    if condition == Condition.ANY and filters.condition:
         condition = filters.condition
     # An explicit --category (including 'any') outranks the model's guess.
-    effective_category = category if category else (resolved.category or "any")
+    effective_category = category if category else (resolved.category or Category.ANY)
     if brief:
         brief(
             SearchBrief(
@@ -536,7 +537,7 @@ async def _diamond_search_async(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
     filters = resolved.filters
-    if condition == "any" and filters.condition:
+    if condition == Condition.ANY and filters.condition:
         condition = filters.condition
 
     storage = StorageManager(config.storage.db_path)
@@ -865,7 +866,7 @@ async def _search_async(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from None
     filters = resolved.filters
-    if condition == "any" and filters.condition:
+    if condition == Condition.ANY and filters.condition:
         condition = filters.condition
 
     storage = StorageManager(config.storage.db_path)

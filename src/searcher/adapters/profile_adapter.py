@@ -18,11 +18,6 @@ from .base import BaseAdapter, Deal, SiteBlockedError
 logger = logging.getLogger(__name__)
 
 
-def _strip_diacritics(text: str) -> str:
-    # Thin alias over the canonical folding (spec 13.1); fold also lowercases.
-    return fold(text)
-
-
 class ProfileAdapter(BaseAdapter):
     """Extract listings using selectors recorded in a site profile."""
 
@@ -186,7 +181,7 @@ class ProfileAdapter(BaseAdapter):
 
     @staticmethod
     def _detect_condition(text: str) -> str:
-        normalised = _strip_diacritics(text).lower()
+        normalised = fold(text).lower()
         if "open box" in normalised or "openbox" in normalised or "rozbalen" in normalised:
             return "open_box"
         if "refurbished" in normalised or "repasovan" in normalised or "rekonstruovan" in normalised:

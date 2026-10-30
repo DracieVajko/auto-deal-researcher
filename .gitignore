@@ -99,3 +99,6 @@ playwright/.auth/
 browser_profile/
 # Recorded site flows (contain selectors, review before committing)
 flows/
+
+# Desloppify local state
+.desloppify/

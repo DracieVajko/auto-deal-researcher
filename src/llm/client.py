@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # APIs, but an unbounded wait lets a dead backend stall a whole run. 180 s
 # covers a warm model; a model that is not loaded should be started with
 # `llm-check` or LM Studio first. Override with ADS_LOCAL_LLM_TIMEOUT.
-LOCAL_TIMEOUT = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "600"))
+LOCAL_TIMEOUT = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "900"))
 CLOUD_TIMEOUT = float(os.environ.get("ADS_CLOUD_LLM_TIMEOUT", "120"))
 
 # Gemini thinking models spend output tokens on reasoning before they emit any

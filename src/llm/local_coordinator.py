@@ -343,7 +343,7 @@ class LocalModelCoordinator:
         return "\n".join(lines)
 
 
-def ensure_lmstudio_model(model_key: str, timeout: float = 300.0) -> bool:
+def ensure_lmstudio_model(model_key: str, timeout: float = 600.0) -> bool:
     """Make sure *model_key* is the model loaded in LM Studio.
 
     Unloads any other resident model first (and waits until LM Studio

@@ -104,13 +104,20 @@ def _available_llm_backends(config) -> list[str]:
 def ask(
     country: str | None = typer.Option(None, "--country", help="Market; asked when omitted"),
     max_sites: int | None = typer.Option(None, "--max-sites", help="Max shops per round; asked when omitted"),
+    debug: bool = typer.Option(False, "--debug", "-d", help="Verbose LLM provider diagnostics"),
 ):
     """Prompt-only search: describe what you want, the app infers the rest."""
-    asyncio.run(_ask_async(country, max_sites))
+    if debug:
+        import logging
+        logging.basicConfig(level=logging.DEBUG, format='%(name)s: %(message)s')
+    asyncio.run(_ask_async(country, max_sites, debug))
 
 
-async def _ask_async(country: str | None, max_sites: int | None) -> None:
+async def _ask_async(country: str | None, max_sites: int | None, debug: bool = False) -> None:
     config = load_config()
+    if debug:
+        import logging
+        logging.basicConfig(level=logging.DEBUG, format='%(name)s: %(message)s')
 
     typer.echo("")
     typer.echo("Auto Deal Searcher - prompt-only search")
@@ -161,6 +168,7 @@ async def _ask_async(country: str | None, max_sites: int | None) -> None:
         country=country.upper(),
         max_sites=int(max_sites),
         llm_mode=llm_mode,
+        debug=debug,
         brief=_brief,
         plan=_plan,
     )
@@ -188,9 +196,13 @@ def run(
     country: str | None = typer.Option(None, "--country", help="Market to prefer, e.g. SK, CZ, DE"),
     max_sites: int | None = typer.Option(None, "--max-sites", help="How many shops to open per round"),
     llm: str | None = typer.Option(None, "--llm", help="LLM backend: local, cloud, or auto (default)"),
+    debug: bool = typer.Option(False, "--debug", "-d", help="Verbose LLM provider diagnostics"),
     domain: str | None = typer.Option(None, "--domain", help="Force a product domain (bike, computer, phone, car, furniture, generic)"),
 ):
     """Run a single search cycle."""
+    if debug:
+        import logging
+        logging.basicConfig(level=logging.DEBUG, format='%(name)s: %(message)s')
     asyncio.run(
         _run_async(
             prompt,
@@ -209,6 +221,8 @@ def run(
             extra_filters,
             country,
             max_sites,
+            llm_mode=llm,
+            debug=debug,
             domain=domain,
         )
     )
@@ -253,6 +267,7 @@ async def run_search(
     country: str | None = None,
     max_sites: int | None = None,
     llm_mode: str | None = None,
+    debug: bool = False,
     domain: str | None = None,
     brief: Callable[[SearchBrief], None] | None = None,
     plan: Callable[[list[str]], None] | None = None,
@@ -264,6 +279,10 @@ async def run_search(
     and each presents the outcome in its own words.
     """
     config = load_config()
+
+    if debug:
+        import logging
+        logging.basicConfig(level=logging.DEBUG, format='%(name)s: %(message)s')
 
     # Restrict the LLM backend when the caller asked for one.
     if llm_mode == "local":
@@ -381,8 +400,12 @@ async def _run_async(
     country=None,
     max_sites=None,
     llm_mode=None,
+    debug=False,
     domain=None,
 ):
+    if debug:
+        import logging
+        logging.basicConfig(level=logging.DEBUG, format='%(name)s: %(message)s')
     if domain:
         try:
             get(domain)
@@ -421,6 +444,7 @@ async def _run_async(
         country=country,
         max_sites=max_sites,
         llm_mode=llm_mode,
+        debug=debug,
         domain=domain,
     )
     typer.echo(f"Found {outcome.deal_count} deals. Results in {outcome.results_dir}/")

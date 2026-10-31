@@ -73,13 +73,6 @@ class LLMConfig(BaseModel):
     auto_context_sizing: bool = True
     total_token_budget: int = 128000
     local_coordination: "LocalCoordinationConfig" = None
-    # Legacy fields for backward compatibility
-    local_endpoint: str = "http://localhost:11434"
-    openrouter: str | None = None
-    gemini: str | None = None
-    mistral: str | None = None
-    api_key: str | None = None
-    model_name: str = "llama3"
 
 
 class NotificationChannelConfig(BaseModel):

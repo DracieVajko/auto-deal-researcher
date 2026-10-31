@@ -52,18 +52,18 @@ class MockLLMClient:
     async def rank_results(self, prompt: str, deals: list[Deal], top_n: int) -> list[Deal]:
         self.call_count += 1
         def score(deal):
-            score = 0
+            total = 0
             title_lower = deal.title.lower()
             if "dji" in title_lower:
-                score += 100
+                total += 100
             if "mini 3 pro" in title_lower:
-                score += 50
+                total += 50
             elif "air 2s" in title_lower:
-                score += 40
+                total += 40
             elif "mavic 3" in title_lower:
-                score += 30
-            score -= deal.price_eur / 10
-            return score
+                total += 30
+            total -= deal.price_eur / 10
+            return total
         
         ranked = sorted(deals, key=score, reverse=True)
         return ranked[:top_n]

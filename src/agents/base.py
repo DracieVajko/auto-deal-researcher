@@ -64,7 +64,7 @@ class AgentResult(Generic[R]):
 class AgentBase(ABC, Generic[T, R]):
     """Base class for all agents in the Diamond Search pipeline."""
 
-    def __init__(self, name: str, role: AgentRole, config: dict = None):
+    def __init__(self, name: str, role: AgentRole, config: dict | None = None):
         self.name = name
         self.role = role
         self.config = config or {}
@@ -77,7 +77,7 @@ class AgentBase(ABC, Generic[T, R]):
     def is_running(self) -> bool:
         return self._running
 
-    def register_handler(self, message_type: str, handler: Callable):
+    def register_handler(self, message_type: str, handler: Callable[[AgentMessage], Any]):
         """Register a message handler for a specific message type."""
         self._message_handlers[message_type] = handler
 
@@ -118,7 +118,7 @@ class MessageBus:
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
         self._message_history: list[AgentMessage] = []
 
-    def subscribe(self, message_type: str, handler: Callable):
+    def subscribe(self, message_type: str, handler: Callable[[AgentMessage], Any]):
         self._subscribers[message_type].append(handler)
 
     async def publish(self, message: AgentMessage):

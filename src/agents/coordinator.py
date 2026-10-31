@@ -204,6 +204,28 @@ class CoordinatorAgent(AgentBase[dict, dict]):
             logger.warning(f"[run_id={run_id}] Budget exceeded, skipping synthesis")
             return {"error": "Budget exceeded, synthesis skipped"}
 
+    async def score_deals(self, prompt, research, deals, run_id):
+        """Public entry point: run expertise, price and synthesis phases on already-fetched deals.
+
+        Wraps the private _run_expertise_layer / _run_price_layer / _synthesize_results
+        calls so callers do not depend on private method names.
+        """
+        deal_dicts = [
+            {
+                "url": d.url, "title": d.title, "price_eur": d.price_eur,
+                "condition": d.condition, "category": d.category,
+                "site_name": d.site_name, "metadata": dict(d.metadata or {}),
+            }
+            for d in deals
+        ]
+        expertise = await self._run_expertise_layer(prompt, research, run_id, deal_dicts)
+        scored = (expertise.get("domain_expert") or {}).get("evaluated_deals") or deal_dicts
+        price = await self._run_price_layer(prompt, research, expertise, run_id, scored)
+        final = await self._synthesize_results(
+            prompt, {"research": research, "expertise": expertise, "price": price}, run_id
+        )
+        return scored, final
+
         result = await self.agents["recommendation"].run({
             "prompt": prompt,
             "all_results": all_results,

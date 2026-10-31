@@ -470,24 +470,8 @@ class PlaywrightSearcher:
 
         deals = await self.search(search_query, condition, category, filters)
 
-        deal_dicts = [
-            {
-                "url": d.url, "title": d.title, "price_eur": d.price_eur,
-                "condition": d.condition, "category": d.category,
-                "site_name": d.site_name, "metadata": dict(d.metadata or {}),
-            }
-            for d in deals
-        ]
-
-        expertise = await self._diamond_coordinator._run_expertise_layer(
-            prompt, research, run_id, deal_dicts
-        )
-        scored = (expertise.get("domain_expert") or {}).get("evaluated_deals") or deal_dicts
-        price = await self._diamond_coordinator._run_price_layer(
-            prompt, research, expertise, run_id, scored
-        )
-        final = await self._diamond_coordinator._synthesize_results(
-            prompt, {"research": research, "expertise": expertise, "price": price}, run_id
+        scored, final = await self._diamond_coordinator.score_deals(
+            prompt, research, deals, run_id
         )
 
         evaluated_deals = scored

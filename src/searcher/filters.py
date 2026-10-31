@@ -209,7 +209,7 @@ def _optional_float(value: Any) -> float | None:
     return _parse_number(str(value))
 
 
-def _normalise_choice(value: Any, aliases: Mapping[str, str], allowed: tuple, *, strict: bool) -> str | None:
+def _normalize_choice(value: Any, aliases: Mapping[str, str], allowed: tuple, *, strict: bool) -> str | None:
     if value is None or value == "":
         return None
     text = fold(_clean(value) or "").lower()
@@ -224,21 +224,21 @@ def _normalise_choice(value: Any, aliases: Mapping[str, str], allowed: tuple, *,
     return None
 
 
-def _normalise_condition(value: Any, *, strict: bool) -> Condition | None:
-    result = _normalise_choice(value, _CONDITION_ALIASES, CONDITION_VALUES, strict=strict)
+def _normalize_condition(value: Any, *, strict: bool) -> Condition | None:
+    result = _normalize_choice(value, _CONDITION_ALIASES, CONDITION_VALUES, strict=strict)
     return Condition(result) if result is not None else None
 
 
-def _normalise_shipping(value: Any, *, strict: bool) -> str | None:
-    return _normalise_choice(value, _SHIPPING_ALIASES, SHIPPING_VALUES, strict=strict)
+def _normalize_shipping(value: Any, *, strict: bool) -> str | None:
+    return _normalize_choice(value, _SHIPPING_ALIASES, SHIPPING_VALUES, strict=strict)
 
 
-def _normalise_sort(value: Any, *, strict: bool) -> str | None:
-    return _normalise_choice(value, _SORT_ALIASES, SORT_VALUES, strict=strict)
+def _normalize_sort(value: Any, *, strict: bool) -> str | None:
+    return _normalize_choice(value, _SORT_ALIASES, SORT_VALUES, strict=strict)
 
 
-def _normalise_seller(value: Any, *, strict: bool) -> str | None:
-    return _normalise_choice(value, _SELLER_ALIASES, SELLER_TYPE_VALUES, strict=strict)
+def _normalize_seller(value: Any, *, strict: bool) -> str | None:
+    return _normalize_choice(value, _SELLER_ALIASES, SELLER_TYPE_VALUES, strict=strict)
 
 
 @dataclass(frozen=True)
@@ -361,12 +361,12 @@ def from_cli(
     return SearchFilters(
         min_price=_optional_float(min_price),
         max_price=_optional_float(max_price),
-        condition=_normalise_condition(condition, strict=True),
+        condition=_normalize_condition(condition, strict=True),
         brand=_clean(brand),
         location=_clean(location),
-        shipping=_normalise_shipping(shipping, strict=True),
-        seller_type=_normalise_seller(seller_type, strict=True),
-        sort=_normalise_sort(sort, strict=True),
+        shipping=_normalize_shipping(shipping, strict=True),
+        seller_type=_normalize_seller(seller_type, strict=True),
+        sort=_normalize_sort(sort, strict=True),
         extras=extras,
     ).validate()
 
@@ -409,12 +409,12 @@ def filters_from_mapping(data: Mapping[str, Any] | None) -> SearchFilters:
     result = SearchFilters(
         min_price=_optional_float(data.get("min_price", data.get("price_min"))),
         max_price=_optional_float(data.get("max_price", data.get("price_max"))),
-        condition=_normalise_condition(data.get("condition"), strict=False),
+        condition=_normalize_condition(data.get("condition"), strict=False),
         brand=_clean(data.get("brand")),
         location=_clean(data.get("location")),
-        shipping=_normalise_shipping(data.get("shipping"), strict=False),
-        seller_type=_normalise_seller(data.get("seller_type"), strict=False),
-        sort=_normalise_sort(data.get("sort"), strict=False),
+        shipping=_normalize_shipping(data.get("shipping"), strict=False),
+        seller_type=_normalize_seller(data.get("seller_type"), strict=False),
+        sort=_normalize_sort(data.get("sort"), strict=False),
         extras=extras,
     )
     return result.validate()
@@ -508,7 +508,7 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
     seller_match = _SELLER_RE.search(text)
     sort_match = _SORT_RE.search(text)
     if sort_match:
-        sort = _normalise_sort(sort_match.group(1), strict=False) or sort
+        sort = _normalize_sort(sort_match.group(1), strict=False) or sort
 
     extras: dict[str, str] = {}
     for raw_key, value in _EXTRA_RE.findall(text):
@@ -523,7 +523,7 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
         brand=_clean(brand_match.group(1)) if brand_match else None,
         location=_clean(location_match.group(1)) if location_match else None,
         shipping=shipping,
-        seller_type=_normalise_seller(seller_match.group(1), strict=False) if seller_match else None,
+        seller_type=_normalize_seller(seller_match.group(1), strict=False) if seller_match else None,
         sort=sort,
         extras=extras,
     ).validate()
@@ -572,7 +572,7 @@ class ResolvedRequest:
     category: str | None
 
 
-def _normalise_category(raw: Any) -> str | None:
+def _normalize_category(raw: Any) -> str | None:
     """Fold the model's category word; anything outside CATEGORIES is no answer."""
     if not isinstance(raw, str):
         return None
@@ -600,7 +600,7 @@ async def resolve_request(
         try:
             payload = await llm.extract_search_filters(prompt)
             if isinstance(payload, dict):
-                category = _normalise_category(payload.get("category"))
+                category = _normalize_category(payload.get("category"))
                 payload = {k: v for k, v in payload.items() if k != "category"}
             llm_filters = filters_from_mapping(payload)
         except Exception as exc:  # noqa: BLE001 - optional enrichment must not break the run

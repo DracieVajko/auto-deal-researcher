@@ -254,7 +254,7 @@ class LLMClient:
             "Bikes, scooters and outdoor gear are 'hobby'. "
             "Cars, motorcycles and vehicles are 'auto'. "
             "Furniture and home appliances are 'home' or 'appliances'. "
-            "Prices are EUR numbers. Do not invent values that are not in the request."
+            "Prices are EUR numbers. 'Up to X', 'under X', 'do X', 'max X' and 'su X eur' are price limits (max_price). 'Above X', 'from X', 'over X' and 'min X' are minimum price limits (min_price). Only set price limits for numbers that clearly refer to currency; voltage (V, volts), watts (W), amps (A), inches (inch, palec) and storage (GB) are NOT prices — extract them as extras (e.g. voltage_volt, wheel_size_inch, storage_gb). Do not invent values that are not in the request."
         )
         data = await self.chat_json(system, prompt, max_tokens=300)
         return data if isinstance(data, dict) else {}

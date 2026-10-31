@@ -9,7 +9,7 @@ so the searcher can skip the irrelevant ones before opening a browser tab.
 Status values:
   working  - adapter verified against the live DOM
   blocked  - anti-bot wall (Cloudflare / decoy); disabled by default
-  needs_auth - requires a logged-in session (facebook)
+  needs_login - requires a logged-in session (facebook)
   planned  - no adapter yet; listed so the user knows it is on the roadmap
 """
 
@@ -26,7 +26,7 @@ class SiteSpec:
     adapter_class: str
     categories: tuple[str, ...]
     conditions: tuple[str, ...]
-    status: str  # working | blocked | needs_auth | planned
+    status: str  # working | blocked | needs_login | planned
     seller_type: str = "retailer"   # retailer | marketplace | classifieds | auction
     has_warranty: bool = False
     warranty_note: str = ""
@@ -71,7 +71,7 @@ SITES: list[SiteSpec] = [
     # --- needs auth ------------------------------------------------------
     SiteSpec("facebook", "Facebook Marketplace", "https://www.facebook.com/marketplace",
              "facebook", ("electronics", "appliances", "auto", "general", "home", "hobby"),
-             ("used", "marketplace"), "needs_auth",
+             ("used", "marketplace"), "needs_login",
              seller_type="classifieds", has_warranty=False,
              warranty_note="Private sellers; warranty depends on the seller.",
              notes="Requires a logged-in CDP session. Use scripts/login.py first.",

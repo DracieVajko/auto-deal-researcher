@@ -205,7 +205,7 @@ def run(
         import logging
         logging.basicConfig(level=logging.DEBUG, format='%(name)s: %(message)s')
     asyncio.run(
-        _run_async(
+        run_async(
             prompt,
             prompt_file,
             condition,
@@ -383,7 +383,7 @@ async def run_search(
     )
 
 
-async def _run_async(
+async def run_async(
     prompt,
     prompt_file,
     condition,

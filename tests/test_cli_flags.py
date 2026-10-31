@@ -21,7 +21,7 @@ def captured(monkeypatch):
         calls["kwargs"] = kwargs
         return None
 
-    for name in ("_run_async", "_search_async", "_diamond_search_async"):
+    for name in ("run_async", "_search_async", "_diamond_search_async"):
         monkeypatch.setattr(app_module, name, fake)
     return calls
 

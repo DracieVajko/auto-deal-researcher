@@ -228,6 +228,3 @@ class BrowserManager:
             await self._playwright.stop()
             self._playwright = None
 
-    # Backward compatibility
-    async def connect(self):
-        return await self.get_browser()

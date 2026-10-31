@@ -116,17 +116,15 @@ async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool
             # record price history for trend charts
             if info.get("price") is not None:
                 try:
-                    from src.searcher.models import Deal
+                    from src.storage.models import Deal
                     deal = Deal(
                         url=url, title=info["title"], price_eur=info["price"],
                         site_name="watchlist", condition="any",
                     )
                     storage.record_price_sighting(deal, "watch")
-                except Exception:
-                    pass
-            # record price history
-            # record price history (best effort) - skip if Deal construction fails
-            pass
+                except Exception as exc:
+                    import logging
+                    logging.getLogger(__name__).debug("Price recording failed: %s", exc)
         await browser.close()
 
     # Build report

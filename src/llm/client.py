@@ -325,35 +325,6 @@ class LLMClient:
             else:
                 logger.warning(f"Cloud API ({api.provider}) skipped: no API key in env {api.api_key_env}")
 
-        # Legacy fallback with correct models per provider.
-        #
-        # Defaults must be model IDs that exist *today*: the old
-        # "mistralai/mistral-7b-instruct" was retired by OpenRouter, so that
-        # branch could only ever answer 404. Configured models win when present
-        # so the legacy path no longer drifts from config.yaml.
-        legacy_models = {
-            "openrouter": "google/gemma-4-26b-a4b-it:free",
-            "gemini": "gemini-2.5-flash",
-            "mistral": "mistral-small-latest",
-        }
-        for api in self.llm_config.api_fallback:
-            if api.model:
-                legacy_models[api.provider] = api.model
-        for provider in ["openrouter", "gemini", "mistral"]:
-            api_key = getattr(self.llm_config, provider, None)
-            if api_key:
-                model = legacy_models.get(provider, "mistralai/mistral-7b-instruct")
-                try:
-                    logger.info(f"Trying legacy {provider} with model {model}")
-                    reply = await self._call_cloud_llm_async(
-                        provider, api_key, model, system, user, max_tokens, temperature
-                    )
-                    if reply.strip():
-                        return reply
-                    logger.warning(f"Legacy {provider} returned an empty response")
-                except (requests.RequestException, ValueError, KeyError, IndexError) as e:
-                    logger.warning(f"Legacy {provider} failed: {e}")
-
         logger.error("All LLM providers failed, falling back to prompt as search query")
         # Fallback: return the user prompt as search query
         return user

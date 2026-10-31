@@ -1,6 +1,7 @@
 """Monitor command - continuous monitoring with change detection."""
 
 import asyncio
+import logging
 import os
 
 import typer
@@ -16,6 +17,8 @@ from src.notifications.manager import NotificationManager
 from src.notifications.base import Alert
 from src.notifications.channels.console import ConsoleChannel
 from src.utils.time import utcnow_stamp
+
+logger = logging.getLogger(__name__)
 
 
 def _load_prompt_from_file(prompt_file: str) -> str:
@@ -63,13 +66,13 @@ async def _monitor_async(
     try:
         from src.notifications.channels.system import SystemChannel
         notif.add_channel(SystemChannel())
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Email channel init skipped: %s", exc)
     try:
         from src.notifications.channels.email import EmailChannel
         notif.add_channel(EmailChannel())
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Webhook channel init skipped: %s", exc)
     try:
         from src.notifications.channels.webhook import WebhookChannel
         for ch in getattr(config.notifications, "channels", []) or []:
@@ -82,8 +85,8 @@ async def _monitor_async(
         for ch in getattr(config.notifications, "channels", []) or []:
             if ch.type == "discord":
                 notif.add_channel(DiscordChannel(ch.name))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Discord channel init skipped: %s", exc)
 
     # Resolve prompt
     if prompt_file:
@@ -129,6 +132,11 @@ async def _monitor_async(
             # Print report
             typer.echo(report.to_markdown())
 
+            # Save report to file
+            report_path = os.path.join(output_dir, f"{run_id}.md")
+            await asyncio.to_thread(_write_text_file, report_path, report.to_markdown())
+            typer.echo(f"Report saved to: {report_path}")
+
             # Send notification
             try:
                 alert = Alert(
@@ -137,13 +145,8 @@ async def _monitor_async(
                     severity="info",
                 )
                 await notif.send_alert(alert)
-            except Exception:
-                pass
-
-            # Save report to file
-            report_path = os.path.join(output_dir, f"{run_id}.md")
-            await asyncio.to_thread(_write_text_file, report_path, report.to_markdown())
-            typer.echo(f"Report saved to: {report_path}")
+            except Exception as exc:
+                logger.debug("Notification failed: %s", exc)
 
             # Save new deals
             for deal in deals:

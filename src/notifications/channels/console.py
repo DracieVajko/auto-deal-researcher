@@ -1,6 +1,10 @@
 """Console notification channel."""
 
+import logging
+
 from src.notifications.base import Alert, NotificationChannel
+
+logger = logging.getLogger(__name__)
 
 
 class ConsoleChannel(NotificationChannel):
@@ -12,5 +16,5 @@ class ConsoleChannel(NotificationChannel):
             "warning": "⚠️",
             "critical": "🚨",
         }.get(alert.severity, "📢")
-        print(f"{prefix} [{alert.severity.upper()}] {alert.title}: {alert.message}")
+        logger.info(f"{prefix} [{alert.severity.upper()}] {alert.title}: {alert.message}")
         return True

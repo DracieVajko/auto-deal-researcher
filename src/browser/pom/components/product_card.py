@@ -4,7 +4,12 @@ import re
 
 
 class ProductCard:
-    """Reusable product card parser."""
+    """Reusable product card parser.
+
+    Intentionally a stateless parser (not a BasePage subclass) because it
+    operates on already-fetched HTML strings rather than a live page, so it
+    needs no browser context or selectors registry.
+    """
 
     @staticmethod
     def extract_from_html(html: str) -> dict | None:

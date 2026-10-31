@@ -11,6 +11,17 @@ from src.agents.base import AgentBase, AgentResult, AgentRole, MessageBus
 logger = logging.getLogger(__name__)
 
 
+def __extract_result(result):
+    """Hoisted helper: unwrap an AgentResult/Exception/dict into a payload."""
+    if isinstance(result, AgentResult):
+        return result.payload if result.success else str(result.error)
+    if isinstance(result, Exception):
+        return str(result)
+    if isinstance(result, dict):
+        return result
+    return result
+
+
 class CoordinatorAgent(AgentBase[dict, dict]):
     """Meta-agent that orchestrates the Diamond Search pipeline."""
 
@@ -110,7 +121,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         self._record_llm_usage(calls=3, tokens=3000)
 
-        def extract_result(result):
+        def _extract_result(result):
             if isinstance(result, AgentResult):
                 return result.payload if result.success else str(result.error)
             elif isinstance(result, Exception):
@@ -121,7 +132,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
                 return str(result)
 
         return {
-            agent.name: extract_result(result)
+            agent.name: _extract_result(result)
             for agent, result in zip([self.agents["query_expansion"], self.agents["site_selection"], self.agents["market_intel"]], results)
             if agent
         }
@@ -144,7 +155,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         self._record_llm_usage(calls=2, tokens=4000)
 
-        def extract_result(result):
+        def _extract_result(result):
             if isinstance(result, AgentResult):
                 return result.payload if result.success else str(result.error)
             elif isinstance(result, Exception):
@@ -155,8 +166,8 @@ class CoordinatorAgent(AgentBase[dict, dict]):
                 return str(result)
 
         return {
-            "domain_expert": extract_result(results[0]),
-            "latest_tech": extract_result(results[1]),
+            "domain_expert": _extract_result(results[0]),
+            "latest_tech": _extract_result(results[1]),
         }
 
     async def _run_price_layer(self, prompt: str, research_results: dict, expertise_results: dict,
@@ -175,7 +186,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         })
         self._record_llm_usage(calls=2, tokens=5000)
 
-        def extract_result(result):
+        def _extract_result(result):
             if isinstance(result, AgentResult):
                 return result.payload if result.success else str(result.error)
             elif isinstance(result, Exception):
@@ -185,7 +196,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
             else:
                 return str(result)
 
-        return {"price_hunter": extract_result(result)}
+        return {"price_hunter": _extract_result(result)}
 
     async def _synthesize_results(self, prompt: str, all_results: dict, run_id: str) -> dict:
         """Synthesize final recommendation."""
@@ -200,7 +211,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         })
         self._record_llm_usage(calls=1, tokens=3000)
 
-        def extract_result(result):
+        def _extract_result(result):
             if isinstance(result, AgentResult):
                 return result.payload if result.success else str(result.error)
             elif isinstance(result, Exception):
@@ -210,4 +221,4 @@ class CoordinatorAgent(AgentBase[dict, dict]):
             else:
                 return str(result)
 
-        return extract_result(result)
+        return _extract_result(result)

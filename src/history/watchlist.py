@@ -191,20 +191,23 @@ class WatchlistManager:
                 if len(item.price_history) > 100:
                     item.price_history = item.price_history[-100:]
                 
+                previous_price = item.last_price_eur
                 item.current_price_eur = best_match.price_eur
                 item.last_checked = datetime.now().isoformat()
-                item.last_price_eur = best_match.price_eur
-                
-                # Check for price drop
-                if item.last_price_eur and best_match.price_eur < item.last_price_eur:
-                    drop_pct = ((item.last_price_eur - best_match.price_eur) / item.last_price_eur) * 100
-                    
+
+                # Check for price drop (compare against previous price)
+                if previous_price is not None and best_match.price_eur < previous_price:
+                    drop_pct = ((previous_price - best_match.price_eur) / previous_price) * 100
+
                     if drop_pct >= item.alert_threshold_pct and best_match.price_eur <= item.target_price_eur:
                         # Price dropped significantly AND at or below target
                         await self._send_alert(item, best_match, drop_pct)
                         item.target_price_reached = True
                         item.last_notified_price = best_match.price_eur
-                
+
+                # Update last price after comparison
+                item.last_price_eur = best_match.price_eur
+
                 # Check if target price reached
                 if best_match.price_eur <= item.target_price_eur and not item.target_price_reached:
                     item.target_price_reached = True

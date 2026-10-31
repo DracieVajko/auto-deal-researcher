@@ -20,8 +20,6 @@ logger = logging.getLogger(__name__)
 # APIs, but an unbounded wait lets a dead backend stall a whole run. 180 s
 # covers a warm model; a model that is not loaded should be started with
 # `llm-check` or LM Studio first. Override with ADS_LOCAL_LLM_TIMEOUT.
-LOCAL_TIMEOUT = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "900"))
-CLOUD_TIMEOUT = float(os.environ.get("ADS_CLOUD_LLM_TIMEOUT", "120"))
 
 # Gemini thinking models spend output tokens on reasoning before they emit any
 # text. With a 16-token budget the answer was cut off entirely and the provider
@@ -32,12 +30,20 @@ GEMINI_MIN_OUTPUT_TOKENS = int(os.environ.get("ADS_GEMINI_MIN_OUTPUT_TOKENS", "5
 PERMANENT_AUTH_ERRORS = frozenset({401, 403})
 
 
-def _timeout_from_env(name: str = "ADS_LOCAL_LLM_TIMEOUT", default: float = LOCAL_TIMEOUT) -> float:
+def _timeout_from_env(name: str = "ADS_LOCAL_LLM_TIMEOUT", default: float = 900.0) -> float:
     """Read a timeout override from the environment, ignoring invalid values."""
     try:
         return float(os.environ[name])
     except (KeyError, TypeError, ValueError):
         return default
+
+def __getattr__(name: str):
+    if name == "LOCAL_TIMEOUT":
+        return _timeout_from_env("ADS_LOCAL_LLM_TIMEOUT", 900.0)
+    if name == "CLOUD_TIMEOUT":
+        return _timeout_from_env("ADS_CLOUD_LLM_TIMEOUT", 120.0)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 
 class LocalCircuitBreaker:
@@ -571,7 +577,7 @@ class LLMClient:
         }
         # Local inference may need a long prefill/load window (see LOCAL_TIMEOUT).
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or LOCAL_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or _timeout_from_env()))
         response.raise_for_status()
         return _content_from(response.json())
 
@@ -617,7 +623,7 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or CLOUD_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or _timeout_from_env("ADS_CLOUD_LLM_TIMEOUT", 120.0)))
         response.raise_for_status()
         return _content_from(response.json())
 
@@ -639,7 +645,7 @@ class LLMClient:
             }
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or CLOUD_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or _timeout_from_env("ADS_CLOUD_LLM_TIMEOUT", 120.0)))
         response.raise_for_status()
         return _content_from_gemini(response.json())
 
@@ -662,7 +668,7 @@ class LLMClient:
             "max_tokens": max_tokens
         }
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or CLOUD_TIMEOUT))
+        response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or _timeout_from_env("ADS_CLOUD_LLM_TIMEOUT", 120.0)))
         response.raise_for_status()
         return _content_from(response.json())
 

@@ -68,12 +68,6 @@ class MockLLMClient:
         ranked = sorted(deals, key=score, reverse=True)
         return ranked[:top_n]
 
-    # === Sync methods (backward compatibility) ===
-    def generate_search_query_sync(self, product_description):
-        return asyncio.run(self._generate_search_query_async(product_description))
-
-    def judge_results_sync(self, results, query):
-        return asyncio.run(self._judge_results_async(results, query))
 
     async def _judge_results_async(self, results, query):
         """Legacy format compatibility."""

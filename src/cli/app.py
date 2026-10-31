@@ -764,7 +764,7 @@ def doctor(
     asyncio.run(_doctor_async(site, offline))
 
 
-async def _doctor_async(site: str | None, offline: bool):
+async def doctor_async(site: str | None, offline: bool):
     config = load_config()
     doctor = Doctor(config)
     

@@ -7,9 +7,9 @@ def doctor(site: str | None = None, offline: bool = False):
     """Run site health diagnostics (importable function for tests)."""
     import asyncio
 
-    from src.cli.app import _doctor_async
+    from src.cli.app import doctor_async
 
-    return asyncio.run(_doctor_async(site, offline))
+    return asyncio.run(doctor_async(site, offline))
 
 
 def typer_doctor(

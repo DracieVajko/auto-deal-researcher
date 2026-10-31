@@ -95,6 +95,10 @@ class StorageManager:
         self.db = get_db(db_path)
 
     def get_deal(self, url: str) -> StoredDeal | None:
+        """Alias for get_deal_by_url (backward compatibility)."""
+        return self.get_deal_by_url(url)
+
+    def get_deal_by_url(self, url: str) -> StoredDeal | None:
         row = self.db.execute("SELECT * FROM deals WHERE url = ?", (url,)).fetchone()
         return _row_to_stored_deal(row) if row else None
 
@@ -103,7 +107,7 @@ class StorageManager:
         return _row_to_stored_deal(row) if row else None
 
     def save_deal(self, deal: Deal, run_id: str = ""):
-        existing = self.get_deal(deal.url)
+        existing = self.get_deal_by_url(deal.url)
         today = today_iso()
 
         deal_data = {
@@ -362,7 +366,7 @@ class StorageManager:
         return [_row_to_stored_deal(row) for row in rows]
 
     def is_known(self, url: str) -> bool:
-        return self.get_deal(url) is not None
+        return self.get_deal_by_url(url) is not None
 
     # Run tracking
     def create_run(self, run_id: str, prompt: str, condition: str, category: str) -> None:

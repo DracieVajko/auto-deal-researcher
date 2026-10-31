@@ -221,22 +221,6 @@ class LLMClient:
         """Human-readable state of both local backends (read-only)."""
         return self._coordinator.describe() if self._coordinator else "not configured"
 
-    # === Sync methods (backward compatibility) ===
-    def generate_search_query(self, product_description):
-        """Generate search queries using LLM (sync version)."""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-        
-        if loop and loop.is_running():
-            # We're in an async context, run in thread pool
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, self._generate_search_query_async(product_description))
-                return future.result()
-        else:
-            return asyncio.run(self._generate_search_query_async(product_description))
-
     async def chat_json(self, system: str, user: str, max_tokens: int = 400):
         """Chat and parse a JSON object/list from the reply."""
         raw = await self._chat(system, user, max_tokens)
@@ -274,7 +258,6 @@ class LLMClient:
     async def _chat(self, system: str, user: str, max_tokens: int = 100,
                     temperature: float = 0.3) -> str:
         """Unified chat method with fallback chain."""
-        # Try local LLMs first
         # Try local LLMs first, but only when the backend is free.
         our_models = {getattr(model, "model", "") for model in self.llm_config.local}
         if self._coordinator is not None:

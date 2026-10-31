@@ -614,6 +614,6 @@ async def resolve_request(
 async def resolve_filters(
     prompt: str, cli_filters: SearchFilters | None, llm: Any = None
 ) -> SearchFilters:
-    """Filters only, for callers that have no use for the inferred category."""
+    """Thin alias for callers that only need filters (no inferred category)."""
     resolved = await resolve_request(prompt, cli_filters, llm)
     return resolved.filters

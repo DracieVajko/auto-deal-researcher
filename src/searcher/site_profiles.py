@@ -25,17 +25,25 @@ FilterSource = Literal["heuristic", "llm", "manual", "adapter"]
 UiKind = Literal["input", "select", "checkbox", "radio", "button"]
 
 SECRET_KEYS = {
+    "access_token",
+    "api_key",
+    "auth",
     "authorization",
     "cookie",
     "cookies",
     "credential",
     "credentials",
+    "csrf",
     "header",
     "headers",
     "html",
+    "key",
     "password",
     "screenshot",
     "screenshots",
+    "session",
+    "sid",
+    "signature",
     "storage_state",
     "token",
 }

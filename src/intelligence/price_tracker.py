@@ -62,7 +62,7 @@ class PriceTracker:
     def __init__(self, storage: StorageManager):
         self.storage = storage
 
-    def record_sighting(self, deal: Deal, run_id: str) -> int:
+    def record_sighting(self, deal: Deal, run_id: str) -> int | None:
         """Record a price sighting, return the history entry ID."""
         return self.storage.record_price_sighting(deal, run_id)
 

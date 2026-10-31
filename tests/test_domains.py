@@ -73,13 +73,13 @@ def test_detect_folds_case_and_diacritics():
     assert detect("kávovar", extra=[probe]).name == "probe"
 
 
-def test_normalise_specs_maps_aliases_and_drops_unknown():
+def test_normalize_specs_maps_aliases_and_drops_unknown():
     from src.output.domains import DomainProfile
 
     profile = DomainProfile(
         name="probe", key_specs=("storage",), aliases={"storage_gb": "storage"}
     )
-    assert profile.normalise_specs(
+    assert profile.normalize_specs(
         {"storage_gb": "128", "price_eur": "300", "color": "pink"}
     ) == {"storage": "128"}
 
@@ -181,7 +181,7 @@ def test_phone_does_not_match_on_the_word_telefon_alone():
 
 
 def test_phone_aliases_map_llm_keys():
-    specs = get("phone").normalise_specs(
+    specs = get("phone").normalize_specs(
         {"storage_gb": "128", "battery_percentage": "89", "price_eur": "219"}
     )
     assert specs == {"storage": "128", "battery_health": "89"}

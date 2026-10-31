@@ -446,7 +446,7 @@ class ResultProcessor:
                 analysis.profile = profile
         if profile.matches(source_text) > 0:
             # proposal.specs describe the listing that was sent, not the others.
-            for key, value in profile.normalise_specs(proposal.specs).items():
+            for key, value in profile.normalize_specs(proposal.specs).items():
                 source.specs.setdefault(key, value)
 
     async def _llm_analyze_batch(
@@ -657,7 +657,7 @@ class ResultProcessor:
             # Map through aliases, keep only the domain's vocabulary and never
             # a second price. A generic profile has no vocabulary to enforce.
             profile = analysis.profile or get(analysis.domain)
-            for key, value in profile.normalise_specs(filtered).items():
+            for key, value in profile.normalize_specs(filtered).items():
                 # The deterministic parser reads the listing itself; the model
                 # may fill gaps but must not overwrite a verified value.
                 analysis.specs.setdefault(key, value)

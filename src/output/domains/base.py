@@ -74,7 +74,7 @@ class DomainProfile:
                 specs[key] = cleaned
         return specs
 
-    def normalise_specs(self, specs: Mapping[str, str]) -> dict[str, str]:
+    def normalize_specs(self, specs: Mapping[str, str]) -> dict[str, str]:
         """Apply aliases and drop keys this profile does not define."""
         normalised: dict[str, str] = {}
         for key, value in specs.items():

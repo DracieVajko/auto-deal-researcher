@@ -2,6 +2,7 @@ version: 1
 site_id: mall
 base_url: https://www.mall.sk
 status: draft
+currency: EUR
 search:
   url_template: https://www.mall.sk/search?q={query}
   query_param: q
@@ -10,9 +11,9 @@ search:
 filters:
   extras: {}
 extraction:
-  item_selector: .product-item, .product-card
-  title_selector: .product-title, .product-name
-  price_selector: .price, .price-final
-  link_selector: a.product-link, h3 a
-  condition_selector: .condition
+  item_selector: .product-item, .product-card, .product-tile
+  title_selector: .product-title, .product-name, h3 a, h2 a
+  price_selector: .price, .product-price, .price-final, .price-box__price
+  link_selector: a.product-link, h3 a, h2 a
+  condition_selector: .condition, .product-condition, .badge
 notes: Search page captured, but no result cards matched the selector.

@@ -30,4 +30,3 @@ def price_history_svg(points: list[tuple[str, float]], title: str = "Price histo
         f'  <text x="5" y="{h-pad}" font-size="9">{lo:.0f}</text>\n'
         f'</svg>'
     )
-"

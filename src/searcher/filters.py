@@ -19,7 +19,7 @@ from src.text.normalize import fold
 
 logger = logging.getLogger(__name__)
 
-CONDITION_VALUES = ("new", "used", "refurbished", "open_box", "marketplace")
+CONDITION_VALUES = (Condition.NEW, Condition.USED, Condition.REFURBISHED, Condition.OPEN_BOX, Condition.MARKETPLACE)
 SHIPPING_VALUES = ("free", "paid")
 SELLER_TYPE_VALUES = ("retailer", "marketplace", "classifieds", "auction", "private")
 SORT_VALUES = ("relevance", "price_asc", "price_desc", "newest")
@@ -209,7 +209,7 @@ def _optional_float(value: Any) -> float | None:
     return _parse_number(str(value))
 
 
-def _normalise_choice(value: Any, aliases: Mapping[str, str], allowed: tuple[str, ...], *, strict: bool) -> str | None:
+def _normalise_choice(value: Any, aliases: Mapping[str, str], allowed: tuple, *, strict: bool) -> str | None:
     if value is None or value == "":
         return None
     text = fold(_clean(value) or "").lower()
@@ -224,8 +224,9 @@ def _normalise_choice(value: Any, aliases: Mapping[str, str], allowed: tuple[str
     return None
 
 
-def _normalise_condition(value: Any, *, strict: bool) -> str | None:
-    return _normalise_choice(value, _CONDITION_ALIASES, CONDITION_VALUES, strict=strict)
+def _normalise_condition(value: Any, *, strict: bool) -> Condition | None:
+    result = _normalise_choice(value, _CONDITION_ALIASES, CONDITION_VALUES, strict=strict)
+    return Condition(result) if result is not None else None
 
 
 def _normalise_shipping(value: Any, *, strict: bool) -> str | None:
@@ -246,7 +247,7 @@ class SearchFilters:
 
     min_price: float | None = None
     max_price: float | None = None
-    condition: str | None = None
+    condition: Condition | None = None
     brand: str | None = None
     location: str | None = None
     shipping: str | None = None

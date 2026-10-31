@@ -4,29 +4,20 @@ base_url: https://www.obi.sk
 status: draft
 currency: EUR
 search:
-  url_template: https://www.obi.sk/search/vrtak/
+  url_template: https://www.obi.sk/search?search={query}
+  query_param: search
   input_selector: '#find-suchfeld'
   category_urls:
-    home: https://www.obi.sk/search/vrtak/
+    home: https://www.obi.sk/search?search={query}
 filters:
   condition:
     ui:
       kind: button
-      selector: div.find-quick-filter-root.tw-relative > div.find-quick-filter-container.tw-flex
-        > div.tw-flex.tw-gap-2 > button.tw-bg-white.tw-text-gray-900:nth-of-type(4)
+      selector: button[aria-label="pozastaviť\ automatickú\ animáciu"]
       value_map: {}
     source: heuristic
     confidence: 0.4
-    sample_value: Technika Kúpeľňa Záhrada a voľný čas Bývanie Stavba Kuchyňa
-  brand:
-    ui:
-      kind: button
-      selector: div.find-quick-filter-root.tw-relative > div.find-quick-filter-container.tw-flex
-        > div.tw-flex.tw-gap-2 > button.tw-bg-white.tw-text-gray-900:nth-of-type(5)
-      value_map: {}
-    source: heuristic
-    confidence: 0.4
-    sample_value: Značka
+    sample_value: pozastaviť automatickú animáciu
   extras: {}
 extraction:
   item_selector: .product, .item, .product-card, .item-card, [data-product]

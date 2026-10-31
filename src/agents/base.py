@@ -126,7 +126,7 @@ class MessageBus:
         for handler in self._subscribers.get(message.payload.__class__.__name__, []):
             await handler(message)
 
-    def get_history(self, message_type: str = None) -> list[AgentMessage]:
-        if message_type:
-            return [m for m in self._message_history if isinstance(m.payload, type(message_type))]
+    def get_history(self, message_type: type | None = None) -> list[AgentMessage]:
+        if message_type is not None:
+            return [m for m in self._message_history if isinstance(m.payload, message_type)]
         return self._message_history.copy()

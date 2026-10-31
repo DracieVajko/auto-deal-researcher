@@ -4,7 +4,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from playwright.async_api import Browser, BrowserContext, async_playwright
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from playwright.async_api import Error as PlaywrightError
 
 from src.browser.fingerprint import FingerprintRotator, apply_fingerprint
@@ -153,7 +153,7 @@ class BrowserManager:
         context.set_default_timeout(30000)
         context.set_default_navigation_timeout(30000)
 
-    async def get_page(self, session_id: str | None = None, browser_type: str = "chromium"):
+    async def get_page(self, session_id: str | None = None, browser_type: str = "chromium") -> Page:
         """Get a new page with fingerprint rotation and cookie consent handling."""
         browser = await self.get_browser()
         page = await browser.new_page()

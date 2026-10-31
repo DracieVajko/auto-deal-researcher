@@ -2,17 +2,35 @@ version: 1
 site_id: idealo
 base_url: https://www.idealo.de
 status: draft
+currency: EUR
 search:
-  url_template: https://www.idealo.de/preisvergleich/SearchProduct?query={query}
-  query_param: query
+  url_template: https://www.idealo.de/preisvergleich/ProductCategory/3751.html?q={query}&qd=notebook
+  query_param: q
+  input_selector: '#i-search-input'
   category_urls:
-    electronics: https://www.idealo.de/preisvergleich/SearchProduct?query={query}
+    electronics: https://www.idealo.de/preisvergleich/ProductCategory/3751.html?q={query}&qd=notebook
 filters:
+  location:
+    ui:
+      kind: checkbox
+      selector: '#MyidealoToggle'
+      value_map: {}
+    source: heuristic
+    confidence: 0.4
+    sample_value: MyidealoToggle /*<![CDATA[*/ @keyframes fx-fade-and-scale{0%{opacity:1;transform:scale(0)}to{opacity:0;transform:scale(1
+  sort:
+    ui:
+      kind: select
+      selector: '#SortBox'
+      value_map: {}
+    source: heuristic
+    confidence: 0.4
+    sample_value: 'Sortieren nach: SortBox'
   extras: {}
 extraction:
-  item_selector: .product-card, .product-item, .offer
-  title_selector: .product-title, .product-name, h3 a
-  price_selector: .price, .price-value, .offer-price
-  link_selector: a[href*='/angebot/'], a.product-link
-  condition_selector: .condition, .offer-condition
+  item_selector: .product-card, .product-item, .offer, .product
+  title_selector: .product-title, .product-name, h3 a, h2 a, .offer-title
+  price_selector: .price, .price-value, .offer-price, .product-price
+  link_selector: a[href*='/angebot/'], a.product-link, h3 a, h2 a
+  condition_selector: .condition, .offer-condition, .product-condition
 notes: Search page captured, but no result cards matched the selector.

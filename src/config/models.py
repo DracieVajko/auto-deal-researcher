@@ -70,24 +70,8 @@ class LLMConfig(BaseModel):
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
     reasoning_token_budget: int = 4096  # Max tokens for reasoning
     context_window: int = 32768  # Max context window (model dependent)
-    # Dynamic context sizing based on available RAM
     auto_context_sizing: bool = True
-    # Token budget for the entire pipeline
     total_token_budget: int = 128000
-    # Reasoning token budget within total budget
-    reasoning_token_budget: int = 8192
-    # LLM optimization settings
-    llm_optimization: dict = {
-        "reasoning_enabled": True,
-        "reasoning_effort": "medium",
-        "reasoning_token_budget": 4096,
-        "context_window": 32768,
-        "total_token_budget": 128000,
-        "auto_context_sizing": True,
-    }
-    # Legacy fields
-    local: list["LLMLocalConfig"] = []
-    api_fallback: list["LLMAPIConfig"] = []
     local_coordination: "LocalCoordinationConfig" = None
     # Legacy fields for backward compatibility
     local_endpoint: str = "http://localhost:11434"

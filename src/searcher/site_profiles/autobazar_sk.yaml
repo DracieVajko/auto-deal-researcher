@@ -1,0 +1,31 @@
+version: 1
+site_id: autobazar_sk
+base_url: https://www.autobazar.sk
+status: draft
+currency: EUR
+search:
+  url_template: https://www.autobazar.sk/
+  category_urls:
+    auto: https://www.autobazar.sk/
+filters:
+  location:
+    url:
+      param: p[location]
+      value_map: {}
+    ui:
+      kind: select
+      selector: '#location'
+      value_map: {}
+    source: heuristic
+    confidence: 0.55
+    sample_value: 'p[location] location Lokalita:'
+  extras: {}
+extraction:
+  item_selector: .product, .item, .product-card, .item-card, [data-product]
+  title_selector: h1, h2, h3, .title, .product-title, .name
+  price_selector: .price, .price-box__price, .product-price, [class*='price']
+  link_selector: a[href]
+  image_selector: img
+  condition_selector: .condition, .badge, .label
+  seller_selector: .seller, .shop, .merchant
+notes: Cards found, but the search query is not present in the URL.

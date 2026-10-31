@@ -8,6 +8,23 @@ search:
   category_urls:
     auto: https://www.mobile.de/
 filters:
+  brand:
+    ui:
+      kind: button
+      selector: button[data-testid="home-brandportal-button"]
+      value_map: {}
+    source: heuristic
+    confidence: 0.4
+    sample_value: 'mobile.de und unser Partner Kia präsentieren: das exklusive Kia
+      Brand Portal. Entdecke exklusive Modelle, spannende Prem'
+  location:
+    ui:
+      kind: input
+      selector: '#geolocation-autosuggest'
+      value_map: {}
+    source: heuristic
+    confidence: 0.4
+    sample_value: Beliebig geolocation-autosuggest
   extras: {}
 extraction:
   item_selector: .product, .item, .product-card, .item-card, [data-product]

@@ -592,16 +592,17 @@ python -m src.cli llm-check
 ```
 src/
 ├── cli/
-│   ├── app.py                    # Typer CLI (run, monitor, doctor, diamond-search,
+│   ├── app.py                    # Typer CLI (run, ask, watch, monitor, doctor, diamond-search,
 │   │                             #   config-check, llm-check, schedule-*, selector-health)
-│   └── commands/                 # monitor, doctor, config_check, history
+│   └── commands/                 # monitor, doctor, config_check, history, watch
 ├── config/                       # Pydantic models + YAML loader with ${VAR} support
 ├── browser/                      # BrowserManager (CDP + persistent context) + fingerprint
 │   └── pom/                      # Page objects and reusable components
 ├── llm/                          # LLMClient (local-first fallback chain) + MockLLMClient
+├── text/                         # Text normalisation shared by detection, extraction and filters
 ├── searcher/
 │   ├── playwright_searcher.py    # Multi-round search + Diamond orchestration
-│   ├── filters.py                # Canonical filters, CLI/prompt parsing
+│   ├── filters.py                # Canonical filters, CLI/prompt parsing, SearchRequest
 │   ├── filter_engine.py          # URL → UI → post-filter application
 │   ├── site_profiles.py          # Profile schema, loader, sanitizer
 │   ├── site_registry.py          # 30 sites, categories, markets and discovery seeds
@@ -626,9 +627,9 @@ src/
 ├── intelligence/                 # change_detector, price_tracker
 ├── diagnostics/                  # doctor, selector_health (JSON + JSONL)
 ├── history/                      # watchlist, trends
-├── notifications/                # console/webhook/discord/email channels + rules
+├── notifications/                # console/webhook/discord/email/system channels + rules
 ├── storage/                      # StorageManager, schema migrations
-├── output/                       # ResultProcessor (JSON + Markdown)
+├── output/                       # ResultProcessor (JSON + MD + CSV + XLSX + SVG charts)
 ├── scheduler/                    # Cross-platform task installation
 └── utils/
 ```

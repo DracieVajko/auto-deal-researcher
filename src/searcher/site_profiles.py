@@ -230,8 +230,15 @@ def load_profiles(directory: Path | None = None) -> dict[str, SiteProfile]:
     profiles: dict[str, SiteProfile] = {}
     for path in sorted(root.glob("*.yaml")):
         profile = load_profile(path.stem, root)
-        if profile is not None:
-            profiles[profile.site_id] = profile
+        if profile is None:
+            continue
+        if profile.site_id in profiles:
+            logger.warning(
+                "Duplicate site_id %r in %s; keeping first occurrence",
+                profile.site_id, path,
+            )
+            continue
+        profiles[profile.site_id] = profile
     return profiles
 
 

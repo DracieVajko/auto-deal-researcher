@@ -183,43 +183,19 @@ class BaseAdapter(ABC):
 
     @staticmethod
     def parse_price_eur(text: str) -> float | None:
-        """Parse the first euro price out of adapter text.
+        """Parse the first price out of adapter text.
 
-        Handles NBSP/thin spaces (SK/CZ/German listings) and both European
-        ("1.299,50") and US ("1,299.50") thousand separators. The rightmost
-        separator is treated as decimal only when followed by 1-2 digits.
+        Delegates to the shared currency parser so there is a single
+        implementation of the EU/US separator handling.
         """
-        import re
+        from src.searcher.currency import _parse_number
 
         if not text:
             return None
         cleaned = text.replace("\u00a0", " ").replace("\u202f", " ")
+        import re
         match = re.search(r"\d[\d\s.,]*", cleaned)
         if not match:
             return None
+        return _parse_number(match.group(0))
 
-        num = match.group(0).replace(" ", "").rstrip(".,")
-        if not num:
-            return None
-
-        dec_pos = max(num.rfind("."), num.rfind(","))
-        if dec_pos == -1:
-            try:
-                return float(num)
-            except ValueError:
-                return None
-
-        tail = num[dec_pos + 1 :]
-        if len(tail) in (1, 2):
-            head = num[:dec_pos].replace(".", "").replace(",", "")
-            frac = tail.replace(".", "").replace(",", "")
-            try:
-                return float(f"{head}.{frac}")
-            except ValueError:
-                return None
-
-        # No decimal digits after the separator -> it was a thousands group.
-        try:
-            return float(num.replace(".", "").replace(",", ""))
-        except ValueError:
-            return None

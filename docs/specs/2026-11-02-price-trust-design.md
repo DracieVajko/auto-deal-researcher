@@ -106,6 +106,7 @@ class PriceQuote:
     price_max_eur: float | None = None
     regular_price_eur: float | None = None
     trust: float = 1.0
+    confidence: float = 1.0         # how sure the classifier is about the kind
     evidence: tuple[str, ...] = ()
     source: str = "regex"           # regex | llm | default
     warnings: tuple[str, ...] = ()

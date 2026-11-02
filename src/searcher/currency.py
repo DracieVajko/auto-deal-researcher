@@ -66,7 +66,7 @@ _SPACES = (" ", _NBSP, _NNBSP)
 _NUMBER_RE = re.compile(r"\d[\d\s.,]*")
 
 
-def _parse_number(text: str) -> float | None:
+def parse_number(text: str) -> float | None:
     """Parse the first number out of *text*, honouring EU/US separators."""
     if not text:
         return None
@@ -183,17 +183,17 @@ def parse_price_detail(
             pattern = rf"(?<![0-9A-Za-z])(\d[\d\s.,]*)\s*{token_escaped}"
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                num = _parse_number(match.group(1))
+                num = parse_number(match.group(1))
                 if num is not None:
                     return num, to_eur(num, code), code
             # If no number before, try after the currency symbol
             after = text[idx + len(token):]
-            num = _parse_number(after)
+            num = parse_number(after)
             if num is not None:
                 return num, to_eur(num, code), code
 
     # Fallback: no currency symbol found, use first number and default currency
-    amount = _parse_number(text)
+    amount = parse_number(text)
     if amount is None:
         return None
     currency = (default_currency or "EUR").upper()

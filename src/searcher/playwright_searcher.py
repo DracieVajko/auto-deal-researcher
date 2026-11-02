@@ -253,7 +253,7 @@ class PlaywrightSearcher:
         # zero even though "mini pc ryzen" finds the right products.
         attempts: list[str] = []
         for raw_candidate in (
-            await self.llm._generate_search_query_async(prompt),
+            await self.llm.generate_search_query_async(prompt),
             self.llm.keyword_query(prompt, max_words=5),
             self.llm.keyword_query(prompt, max_words=2),
         ):

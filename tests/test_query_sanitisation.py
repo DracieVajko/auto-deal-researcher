@@ -62,7 +62,7 @@ async def test_generate_query_is_sanitised(monkeypatch):
         return 'Here is a query: *"DJI Neo 2 under 350" OR "DJI Mini"'
 
     monkeypatch.setattr(llm, "_chat", fake_chat)
-    out = await llm._generate_search_query_async("dji drone")
+    out = await llm.generate_search_query_async("dji drone")
     assert out == "DJI Neo 2 under 350"
 
 

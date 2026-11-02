@@ -188,7 +188,7 @@ class BaseAdapter(ABC):
         Delegates to the shared currency parser so there is a single
         implementation of the EU/US separator handling.
         """
-        from src.searcher.currency import _parse_number
+        from src.searcher.currency import parse_number
 
         if not text:
             return None
@@ -197,5 +197,5 @@ class BaseAdapter(ABC):
         match = re.search(r"\d[\d\s.,]*", cleaned)
         if not match:
             return None
-        return _parse_number(match.group(0))
+        return parse_number(match.group(0))
 

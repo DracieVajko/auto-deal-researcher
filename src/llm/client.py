@@ -447,7 +447,7 @@ class LLMClient:
                 return executor.submit(_run).result()
         return _run()
 
-    async def _generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
+    async def generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
         system = (
             "You convert a product request into a SHORT marketplace search query. "
             "Reply with 2-5 plain words only, for example 'mini pc ryzen' or "

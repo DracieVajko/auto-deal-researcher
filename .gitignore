@@ -102,3 +102,6 @@ flows/
 
 # Desloppify local state
 .desloppify/
+
+# Desloppify scorecard export
+/scorecard.png

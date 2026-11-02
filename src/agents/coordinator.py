@@ -11,15 +11,15 @@ from src.agents.base import AgentBase, AgentResult, AgentRole, MessageBus
 logger = logging.getLogger(__name__)
 
 
-def __extract_result(result):
-    """Hoisted helper: unwrap an AgentResult/Exception/dict into a payload."""
+def _extract_result(result):
+    """Unwrap an AgentResult/Exception/dict into a payload."""
     if isinstance(result, AgentResult):
         return result.payload if result.success else str(result.error)
     if isinstance(result, Exception):
         return str(result)
     if isinstance(result, dict):
         return result
-    return result
+    return str(result)
 
 
 class CoordinatorAgent(AgentBase[dict, dict]):
@@ -121,16 +121,6 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         self._record_llm_usage(calls=3, tokens=3000)
 
-        def _extract_result(result):
-            if isinstance(result, AgentResult):
-                return result.payload if result.success else str(result.error)
-            elif isinstance(result, Exception):
-                return str(result)
-            elif isinstance(result, dict):
-                return result
-            else:
-                return str(result)
-
         return {
             agent.name: _extract_result(result)
             for agent, result in zip([self.agents["query_expansion"], self.agents["site_selection"], self.agents["market_intel"]], results)
@@ -155,16 +145,6 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         self._record_llm_usage(calls=2, tokens=4000)
 
-        def _extract_result(result):
-            if isinstance(result, AgentResult):
-                return result.payload if result.success else str(result.error)
-            elif isinstance(result, Exception):
-                return str(result)
-            elif isinstance(result, dict):
-                return result
-            else:
-                return str(result)
-
         return {
             "domain_expert": _extract_result(results[0]),
             "latest_tech": _extract_result(results[1]),
@@ -186,16 +166,6 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         })
         self._record_llm_usage(calls=2, tokens=5000)
 
-        def _extract_result(result):
-            if isinstance(result, AgentResult):
-                return result.payload if result.success else str(result.error)
-            elif isinstance(result, Exception):
-                return str(result)
-            elif isinstance(result, dict):
-                return result
-            else:
-                return str(result)
-
         return {"price_hunter": _extract_result(result)}
 
     async def _synthesize_results(self, prompt: str, all_results: dict, run_id: str) -> dict:
@@ -203,6 +173,14 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         if not self._check_budget(estimated_calls=1, estimated_tokens=3000):
             logger.warning(f"[run_id={run_id}] Budget exceeded, skipping synthesis")
             return {"error": "Budget exceeded, synthesis skipped"}
+
+        result = await self.agents["recommendation"].run({
+            "prompt": prompt,
+            "all_results": all_results,
+            "run_id": run_id,
+        })
+        self._record_llm_usage(calls=1, tokens=3000)
+        return _extract_result(result)
 
     async def score_deals(self, prompt, research, deals, run_id):
         """Public entry point: run expertise, price and synthesis phases on already-fetched deals.
@@ -225,22 +203,3 @@ class CoordinatorAgent(AgentBase[dict, dict]):
             prompt, {"research": research, "expertise": expertise, "price": price}, run_id
         )
         return scored, final
-
-        result = await self.agents["recommendation"].run({
-            "prompt": prompt,
-            "all_results": all_results,
-            "run_id": run_id,
-        })
-        self._record_llm_usage(calls=1, tokens=3000)
-
-        def _extract_result(result):
-            if isinstance(result, AgentResult):
-                return result.payload if result.success else str(result.error)
-            elif isinstance(result, Exception):
-                return str(result)
-            elif isinstance(result, dict):
-                return result
-            else:
-                return str(result)
-
-        return _extract_result(result)

@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from playwright.async_api import Page
+
+if TYPE_CHECKING:
+    from src.searcher.pricing import PriceQuote
 
 from src.searcher.currency import parse_price_detail
 from src.searcher.filters import SearchFilters
@@ -42,6 +45,14 @@ class Deal:
     metadata: dict = field(default_factory=dict)  # extra: shipping, seller, location, etc.
     original_price: float | None = None  # amount as listed, in original_currency
     original_currency: str = "EUR"
+    price_quote: "PriceQuote | None" = None
+
+    @property
+    def comparable_price_eur(self) -> float:
+        """Price used for ranking: effective when a quote exists, else listed."""
+        if self.price_quote is not None and self.price_quote.effective_price_eur > 0:
+            return self.price_quote.effective_price_eur
+        return self.price_eur
 
 
 class BaseAdapter(ABC):

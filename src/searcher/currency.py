@@ -118,7 +118,7 @@ def detect_currency(text: str) -> str | None:
 
 
 def to_eur(
-    amount: float,
+    amount: float | None,
     currency: str | None = "EUR",
     rates: dict[str, float] | None = None,
 ) -> float:

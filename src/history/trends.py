@@ -42,7 +42,7 @@ class TrendsAnalyzer:
             return {"category": category, "trend": "insufficient_data", "data_points": 0}
         
         # Group by product (URL)
-        product_prices = {}
+        product_prices: dict[str, list[dict[str, object]]] = {}
         for row in rows:
             url = row["url"]
             if url not in product_prices:
@@ -137,7 +137,7 @@ class TrendsAnalyzer:
         """, (cutoff,)).fetchall()
 
         # Group by URL
-        url_prices = {}
+        url_prices: dict[str, list[dict[str, object]]] = {}
         for row in rows:
             url = row["url"]
             if url not in url_prices:
@@ -192,7 +192,7 @@ class TrendsAnalyzer:
         """, (cutoff,)).fetchall()
 
         # Group by URL and find min price
-        url_min = {}
+        url_min: dict[str, dict[str, object]] = {}
         for row in rows:
             url = row["url"]
             if url not in url_min or row["price_eur"] < url_min[url]["price"]:

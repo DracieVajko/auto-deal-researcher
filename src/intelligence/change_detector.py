@@ -260,7 +260,7 @@ class ChangeDetector:
         """, (run_id,)).fetchall()
 
         # Deduplicate by URL (keep latest)
-        result = {}
+        result: dict[str, dict] = {}
         for row in rows:
             url = row["url"]
             if url not in result or row["timestamp"] > result[url]["timestamp"]:

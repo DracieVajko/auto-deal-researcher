@@ -7,7 +7,7 @@ from playwright.async_api import Page
 if TYPE_CHECKING:
     from src.searcher.pricing import PriceQuote
 
-from src.searcher.currency import parse_price_detail
+from src.searcher.currency import parse_number, parse_price_detail
 from src.searcher.filters import SearchFilters
 from src.searcher.site_profiles import SiteProfile
 
@@ -194,19 +194,6 @@ class BaseAdapter(ABC):
 
     @staticmethod
     def parse_price_eur(text: str) -> float | None:
-        """Parse the first price out of adapter text.
-
-        Delegates to the shared currency parser so there is a single
-        implementation of the EU/US separator handling.
-        """
-        from src.searcher.currency import parse_number
-
-        if not text:
-            return None
-        cleaned = text.replace("\u00a0", " ").replace("\u202f", " ")
-        import re
-        match = re.search(r"\d[\d\s.,]*", cleaned)
-        if not match:
-            return None
-        return parse_number(match.group(0))
+        """Parse the first price out of adapter text via the shared parser."""
+        return parse_number(text)
 

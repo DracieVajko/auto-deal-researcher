@@ -519,7 +519,7 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
     return SearchFilters(
         min_price=min_price,
         max_price=max_price,
-        condition=condition,
+        condition=_normalize_condition(condition, strict=False),
         brand=_clean(brand_match.group(1)) if brand_match else None,
         location=_clean(location_match.group(1)) if location_match else None,
         shipping=shipping,

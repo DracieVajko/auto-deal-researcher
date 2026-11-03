@@ -65,7 +65,7 @@ class BazosAdapter(BaseAdapter):
                 logger.debug(f"[{self.name}] filtered results not found: {e}")
                 return []
 
-        deals = []
+        deals: list[Deal] = []
         # Items are split across 5 divs per listing in .inzeraty > div
         # Group them: [title/link, price, location, views, actions]
         elements = await page.query_selector_all(self.item_selector)

@@ -254,7 +254,7 @@ class StorageManager:
         """, (cutoff,)).fetchall()
 
         # Group by URL and find drops
-        url_prices = {}
+        url_prices: dict[str, list[dict]] = {}
         for row in rows:
             url = row["url"]
             if url not in url_prices:

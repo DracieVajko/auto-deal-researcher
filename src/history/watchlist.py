@@ -158,13 +158,11 @@ class WatchlistManager:
         url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
         return self.items.get(url_hash)
     
-    def get_all(self) -> list:
+    def get_all(self) -> list["WatchlistItem"]:
         return list(self.items.values())
-    
+
     async def check_prices(self, searcher, llm) -> list[dict]:
         """Check all watchlist items for price changes."""
-        alerts = []
-        
         for item in self.items.values():
             if not item.alert_enabled:
                 continue

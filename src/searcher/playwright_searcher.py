@@ -15,6 +15,7 @@ from src.diagnostics.selector_health import SelectorHealthTracker
 from src.llm.client import LLMClient
 from src.searcher.adapters import Deal, get_adapter
 from src.searcher.adapters.base import SiteBlockedError
+from src.searcher import sessions
 from src.searcher.filter_engine import FilterEngine
 from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
@@ -27,7 +28,7 @@ from src.searcher.pricing import (
 from src.searcher.query_language import language_for_country, localise_query
 from src.searcher.sessions import apply_session
 from src.searcher.site_profiles import SiteProfile, load_profiles
-from src.searcher.site_registry import by_id
+from src.searcher.site_registry import SITES, by_id
 from src.searcher.site_selection import SiteCandidate, SiteSelector
 from src.storage.manager import StorageManager
 from src.utils.time import utcnow_stamp
@@ -84,8 +85,10 @@ class PlaywrightSearcher:
         self.health = SelectorHealthTracker()
         self._diamond_coordinator = None
         self._site_selector = SiteSelector(llm=llm)
-        self._site_selection_cache: dict[tuple[str, str], list[WebsiteConfig]] = {}
+        self._site_selection_cache: dict[tuple, list[WebsiteConfig]] = {}
         self._site_selection_reason = ""
+        self._skipped_sites: list[dict] = []
+        self._last_selected_sites: list[WebsiteConfig] = []
         self._query_language_cache: dict[tuple[str, str], str] = {}
         if self.diamond_search_enabled:
             self._init_diamond_agents()
@@ -138,31 +141,105 @@ class PlaywrightSearcher:
             return False
         return True
 
-    def _filter_sites(self, user_condition: str, user_category: str) -> list[WebsiteConfig]:
-        """Return only enabled sites matching condition + category.
+    def _site_status(self, site: WebsiteConfig) -> str:
+        spec = by_id(site.name)
+        return spec.status if spec is not None else "working"
+
+    def _skip_reason(self, site: WebsiteConfig) -> str | None:
+        status = self._site_status(site)
+        if status == "blocked":
+            return "blocked by the site (anti-bot or geo-block)"
+        if status == "planned":
+            profile = self._profile_for(site)
+            try:
+                get_adapter(site.adapter_class)
+                has_adapter = True
+            except ValueError:
+                has_adapter = False
+            if not has_adapter and (profile is None or not profile.is_runtime_ready):
+                return "no validated profile or adapter yet"
+        if status == "needs_login" and not sessions.has_session(site.name):
+            return "needs a saved login session"
+        return None
+
+    def _resolve_requested_sites(self, names: list[str] | None) -> set[str]:
+        """Map user-supplied ids/names to canonical site names."""
+        if not names:
+            return set()
+        known: dict[str, str] = {}
+        for spec in SITES:
+            known[spec.id.lower()] = spec.id
+            known[spec.name.lower()] = spec.id
+        for site in self.config.search.websites:
+            known[site.name.lower()] = site.name
+        picked: set[str] = set()
+        unknown: list[str] = []
+        for raw in names:
+            key = str(raw or "").strip().lower()
+            if not key:
+                continue
+            canonical = known.get(key)
+            if canonical is None:
+                unknown.append(str(raw).strip())
+            else:
+                picked.add(canonical)
+        if unknown:
+            known_ids = ", ".join(sorted({spec.id for spec in SITES}))
+            raise ValueError(
+                f"Unknown site(s): {', '.join(unknown)}. Known ids: {known_ids}"
+            )
+        return picked
+
+    def _filter_sites(
+        self,
+        user_condition: str,
+        user_category: str,
+        requested: set[str] | None = None,
+    ) -> list[WebsiteConfig]:
+        """Return only enabled, runnable sites matching condition + category.
 
         Registered adapters are selected by their declared capabilities.
         Sites without an adapter are accepted only when a validated profile
         exists, so a planned site cannot silently run an empty search.
         """
+        requested = requested or set()
         sites = []
         for site in self.config.search.websites:
             if not site.enabled:
                 continue
+
+            reason = self._skip_reason(site)
+            if reason:
+                # An explicit --sites request may still try a login-gated site;
+                # blocked and profile-less planned sites are never opened.
+                try_login_request = (
+                    site.name in requested and self._site_status(site) == "needs_login"
+                )
+                if not try_login_request:
+                    self._skipped_sites.append({"name": site.name, "reason": reason})
+                    continue
+
             profile = self._profile_for(site)
             try:
                 adapter_cls = get_adapter(site.adapter_class)
             except ValueError:
-                if (
+                if not (
                     profile is not None
                     and profile.is_runtime_ready
                     and self._site_matches(site, user_condition, user_category)
                 ):
-                    sites.append(site)
-                continue
-            adapter = adapter_cls(base_url=site.base_url)
-            if adapter.matches_condition(user_condition) and adapter.matches_category(user_category):
-                sites.append(site)
+                    self._skipped_sites.append(
+                        {"name": site.name, "reason": "no adapter or validated profile"}
+                    )
+                    continue
+            else:
+                adapter = adapter_cls(base_url=site.base_url)
+                if not (
+                    adapter.matches_condition(user_condition)
+                    and adapter.matches_category(user_category)
+                ):
+                    continue
+            sites.append(site)
         return sites
 
     def _site_market(self, site: WebsiteConfig) -> tuple[str, str]:
@@ -181,26 +258,31 @@ class PlaywrightSearcher:
         user_condition: str,
         user_category: str,
         prompt: str = "",
+        requested_sites: list[str] | None = None,
     ) -> list[WebsiteConfig]:
         """Pick the shops to visit for this search.
 
-        The deterministic filter decides what is *possible*; the location-aware
-        ranking and the LLM decide what is *worth* visiting. The result is
-        cached per (condition, category) so it is computed once per run.
+        The deterministic filter decides what is *possible*; an explicit
+        ``--sites`` list or the LLM decides what is *worth* visiting. The
+        result is cached per condition, category, prompt and requested list.
         """
-        cache_key = (user_condition, user_category)
+        requested = self._resolve_requested_sites(requested_sites)
+        cache_key = (user_condition, user_category, prompt, frozenset(requested))
         cached = self._site_selection_cache.get(cache_key)
         if cached is not None:
+            self._last_selected_sites = cached
             return cached
 
-        base = self._filter_sites(user_condition, user_category)
+        base = self._filter_sites(user_condition, user_category, requested=requested)
         if not base:
             self._site_selection_cache[cache_key] = []
+            self._last_selected_sites = []
             return []
 
         candidates = []
         for site in base:
             country, currency = self._site_market(site)
+            spec = by_id(site.name)
             candidates.append(
                 SiteCandidate(
                     id=site.name,
@@ -214,18 +296,29 @@ class PlaywrightSearcher:
                         getattr(c, "value", str(c)) for c in site.conditions
                     ),
                     adapter_class=site.adapter_class,
+                    notes=spec.notes if spec is not None else "",
+                    specialties=spec.specialties if spec is not None else (),
                 )
             )
 
-        user_country = getattr(self.config.search, "user_country", "SK") or "SK"
-        max_sites = getattr(self.config.search, "max_sites", 8) or 8
-        picked, reasoning = await self._site_selector.select(
-            candidates, prompt=prompt, user_country=user_country, max_sites=max_sites
-        )
-        self._site_selection_reason = reasoning
+        if requested:
+            by_name = {site.name: site for site in base}
+            selected = [by_name[name] for name in sorted(requested) if name in by_name]
+            reasoning = "Requested by the user: " + ", ".join(sorted(requested))
+        else:
+            user_country = getattr(self.config.search, "user_country", "SK") or "SK"
+            max_sites = getattr(self.config.search, "max_sites", 0) or 0
+            picked, reasoning = await self._site_selector.select(
+                candidates,
+                prompt=prompt,
+                user_country=user_country,
+                max_sites=max_sites,
+            )
+            by_name = {site.name: site for site in base}
+            selected = [by_name[c.id] for c in picked if c.id in by_name]
 
-        by_name = {site.name: site for site in base}
-        selected = [by_name[c.id] for c in picked if c.id in by_name]
+        self._site_selection_reason = reasoning
+        self._last_selected_sites = selected
         logger.info(
             "Site selection: %s of %d candidate(s) -> %s (%s)",
             len(selected),
@@ -243,11 +336,14 @@ class PlaywrightSearcher:
         category: str = Category.ANY,
         filters: SearchFilters | None = None,
         on_sites: Callable[[list[str]], None] | None = None,
+        sites: list[str] | None = None,
     ) -> list[Deal]:
         """Main search entry point — multi-round with LLM query refinement."""
         all_deals: list[Deal] = []
         seen_urls = set()
         rounds: list[SearchRound] = []
+        self._skipped_sites = []
+        self._last_selected_sites = []
 
         max_rounds = getattr(self.config.search, "max_rounds", 3)
         retry_on_empty = getattr(self.config.search, "retry_on_empty", True)
@@ -278,6 +374,8 @@ class PlaywrightSearcher:
                 seen_urls,
                 filters,
                 on_sites=on_sites if round_num == 1 else None,
+                selection_prompt=prompt,
+                requested_sites=sites,
             )
             rounds.append(SearchRound(round_num, query, len(round_deals), round_deals))
             for deal in round_deals:
@@ -291,7 +389,15 @@ class PlaywrightSearcher:
         while all_deals and round_num < max_rounds:
             round_num += 1
             query = await self.llm.refine_query(prompt, all_deals, round_num)
-            round_deals = await self._execute_round(query, condition, category, seen_urls, filters)
+            round_deals = await self._execute_round(
+                query,
+                condition,
+                category,
+                seen_urls,
+                filters,
+                selection_prompt=prompt,
+                requested_sites=sites,
+            )
             rounds.append(SearchRound(round_num, query, len(round_deals), round_deals))
             if not round_deals:
                 break
@@ -481,8 +587,15 @@ class PlaywrightSearcher:
         seen_urls: set,
         filters: SearchFilters | None = None,
         on_sites: Callable[[list[str]], None] | None = None,
+        selection_prompt: str = "",
+        requested_sites: list[str] | None = None,
     ) -> list[Deal]:
-        sites = await self._select_sites(condition, category, prompt=query)
+        sites = await self._select_sites(
+            condition,
+            category,
+            prompt=selection_prompt,
+            requested_sites=requested_sites,
+        )
         if on_sites and sites:
             on_sites([site.name for site in sites])
         all_deals = []

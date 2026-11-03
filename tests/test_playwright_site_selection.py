@@ -19,6 +19,22 @@ def _site(name, country, currency="EUR", categories=None, conditions=None, enabl
     )
 
 
+def _real_site(name, *, enabled=True):
+    from src.searcher.site_registry import by_id
+
+    spec = by_id(name)
+    return WebsiteConfig(
+        name=name,
+        base_url=spec.base_url,
+        enabled=enabled,
+        adapter_class=spec.adapter_class,
+        categories=[Category(c) for c in spec.categories],
+        conditions=[Condition(c) for c in spec.conditions],
+        country=spec.country,
+        currency=spec.currency,
+    )
+
+
 def _searcher(config):
     return PlaywrightSearcher(config, llm=object(), storage=object(), browser_manager=object())
 
@@ -94,7 +110,157 @@ async def test_selection_is_cached_per_condition_and_category():
     first = await searcher._select_sites("used", "auto", "auto")
     second = await searcher._select_sites("used", "auto", "auto")
     assert first == second
-    assert ("used", "auto") in searcher._site_selection_cache
+    assert ("used", "auto", "auto", frozenset()) in searcher._site_selection_cache
+
+
+@pytest.mark.asyncio
+async def test_zero_max_sites_selects_every_candidate():
+    config = AppConfig(search=SearchConfig(
+        websites=[_site(f"shop{i}", "SK") for i in range(12)],
+        user_country="SK",
+        max_sites=0,
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+    _profiles(searcher, *[f"shop{i}" for i in range(12)])
+
+    selected = await searcher._select_sites("used", "auto", "auto")
+    assert len(selected) == 12
+
+
+@pytest.mark.asyncio
+async def test_requested_sites_bypass_the_llm():
+    class ExplodingLLM:
+        async def chat_json(self, *args, **kwargs):
+            raise AssertionError("the LLM must not be called")
+
+    config = AppConfig(search=SearchConfig(
+        websites=[_site("shop_a", "SK"), _site("shop_b", "SK")],
+        user_country="SK",
+        max_sites=0,
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = PlaywrightSearcher(
+        config, llm=ExplodingLLM(), storage=object(), browser_manager=object()
+    )
+    _profiles(searcher, "shop_a", "shop_b")
+
+    selected = await searcher._select_sites(
+        "used", "auto", "auto", requested_sites=["shop_b"]
+    )
+    assert [s.name for s in selected] == ["shop_b"]
+
+
+@pytest.mark.asyncio
+async def test_unknown_requested_site_raises():
+    config = AppConfig(search=SearchConfig(websites=[], user_country="SK"))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+
+    with pytest.raises(ValueError, match="Unknown site"):
+        await searcher._select_sites(
+            "used", "auto", "auto", requested_sites=["nope"]
+        )
+
+
+@pytest.mark.asyncio
+async def test_blocked_site_is_skipped_with_a_reason():
+    config = AppConfig(search=SearchConfig(
+        websites=[_real_site("solaro_sk")],
+        user_country="SK",
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+
+    selected = await searcher._select_sites("new", "electronics", "solar")
+    assert selected == []
+    assert any(
+        item["name"] == "solaro_sk" and "blocked" in item["reason"]
+        for item in searcher._skipped_sites
+    )
+
+
+@pytest.mark.asyncio
+async def test_requested_blocked_site_is_still_skipped():
+    config = AppConfig(search=SearchConfig(
+        websites=[_real_site("solaro_sk")],
+        user_country="SK",
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+
+    selected = await searcher._select_sites(
+        "new", "electronics", "solar", requested_sites=["solaro_sk"]
+    )
+    assert selected == []
+    assert any(
+        item["name"] == "solaro_sk" and "blocked" in item["reason"]
+        for item in searcher._skipped_sites
+    )
+
+
+@pytest.mark.asyncio
+async def test_planned_site_without_profile_is_skipped(monkeypatch):
+    from types import SimpleNamespace
+
+    import src.searcher.playwright_searcher as module
+
+    monkeypatch.setattr(
+        module,
+        "by_id",
+        lambda name: SimpleNamespace(status="planned", notes="", specialties=())
+        if name == "shop_planned"
+        else None,
+    )
+    config = AppConfig(search=SearchConfig(
+        websites=[_site("shop_planned", "SK")],
+        user_country="SK",
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+    searcher.profiles = {}
+
+    assert await searcher._select_sites("used", "auto", "auto") == []
+    assert any(
+        item["name"] == "shop_planned" and "profile" in item["reason"]
+        for item in searcher._skipped_sites
+    )
+
+
+@pytest.mark.asyncio
+async def test_needs_login_without_session_is_skipped(monkeypatch):
+    from src.searcher import sessions
+
+    monkeypatch.setattr(sessions, "has_session", lambda name: False)
+    config = AppConfig(search=SearchConfig(
+        websites=[_real_site("ebay")],
+        user_country="SK",
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+
+    assert await searcher._select_sites("used", "electronics", "phone") == []
+    assert any(
+        item["name"] == "ebay" and "login" in item["reason"].lower()
+        for item in searcher._skipped_sites
+    )
+
+
+@pytest.mark.asyncio
+async def test_cache_key_includes_the_prompt():
+    config = AppConfig(search=SearchConfig(
+        websites=[_site("shop_a", "SK")],
+        user_country="SK",
+        max_sites=0,
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+    _profiles(searcher, "shop_a")
+
+    await searcher._select_sites("used", "auto", "battery")
+    await searcher._select_sites("used", "auto", "laptop")
+    assert ("used", "auto", "battery", frozenset()) in searcher._site_selection_cache
+    assert ("used", "auto", "laptop", frozenset()) in searcher._site_selection_cache
 
 
 @pytest.mark.asyncio

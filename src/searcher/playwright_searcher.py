@@ -13,9 +13,9 @@ from playwright.async_api import BrowserContext, Page
 from src.config.models import AppConfig, Category, Condition, WebsiteConfig
 from src.diagnostics.selector_health import SelectorHealthTracker
 from src.llm.client import LLMClient
+from src.searcher import sessions
 from src.searcher.adapters import Deal, get_adapter
 from src.searcher.adapters.base import SiteBlockedError
-from src.searcher import sessions
 from src.searcher.filter_engine import FilterEngine
 from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
@@ -89,6 +89,7 @@ class PlaywrightSearcher:
         self._site_selection_reason = ""
         self._skipped_sites: list[dict] = []
         self._last_selected_sites: list[WebsiteConfig] = []
+        self._site_selection_requested = False
         self._query_language_cache: dict[tuple[str, str], str] = {}
         if self.diamond_search_enabled:
             self._init_diamond_agents()
@@ -185,7 +186,7 @@ class PlaywrightSearcher:
                 picked.add(canonical)
         if unknown:
             known_ids = ", ".join(sorted({spec.id for spec in SITES}))
-            raise ValueError(
+            raise ValueError(  # noqa: TRY003
                 f"Unknown site(s): {', '.join(unknown)}. Known ids: {known_ids}"
             )
         return picked
@@ -206,6 +207,13 @@ class PlaywrightSearcher:
         sites = []
         for site in self.config.search.websites:
             if not site.enabled:
+                if site.name in requested:
+                    self._skipped_sites.append(
+                        {
+                            "name": site.name,
+                            "reason": self._skip_reason(site) or "disabled in config",
+                        }
+                    )
                 continue
 
             reason = self._skip_reason(site)
@@ -267,6 +275,7 @@ class PlaywrightSearcher:
         result is cached per condition, category, prompt and requested list.
         """
         requested = self._resolve_requested_sites(requested_sites)
+        self._site_selection_requested = bool(requested)
         cache_key = (user_condition, user_category, prompt, frozenset(requested))
         cached = self._site_selection_cache.get(cache_key)
         if cached is not None:
@@ -274,7 +283,24 @@ class PlaywrightSearcher:
             return cached
 
         base = self._filter_sites(user_condition, user_category, requested=requested)
+        configured = {site.name for site in self.config.search.websites}
+        for name in sorted(requested - configured):
+            spec = by_id(name)
+            if spec is not None and spec.status == "blocked":
+                reason = "blocked by the site (anti-bot or geo-block)"
+            elif spec is not None and spec.status == "planned":
+                reason = "no validated profile or adapter yet"
+            elif spec is not None and spec.status == "needs_login":
+                reason = "needs a saved login session"
+            else:
+                reason = "not in config.yaml"
+            self._skipped_sites.append({"name": name, "reason": reason})
+
         if not base:
+            if requested:
+                self._site_selection_reason = (
+                    "Requested by the user: " + ", ".join(sorted(requested))
+                )
             self._site_selection_cache[cache_key] = []
             self._last_selected_sites = []
             return []
@@ -336,6 +362,7 @@ class PlaywrightSearcher:
             selected=[site.name for site in self._last_selected_sites],
             reasoning=self._site_selection_reason,
             skipped=list(self._skipped_sites),
+            requested=self._site_selection_requested,
         )
 
     async def search(
@@ -621,6 +648,11 @@ class PlaywrightSearcher:
                 await apply_session(page.context, site.name)
 
                 profile = self._profile_for(site)
+                adapter_profile = (
+                    profile
+                    if profile is not None and profile.is_runtime_ready
+                    else None
+                )
                 country, currency = self._site_market(site)
                 site_query = await localise_query(
                     self.llm,
@@ -652,7 +684,7 @@ class PlaywrightSearcher:
                     max_results=20,
                     filters=filters,
                     category=category,
-                    profile=profile,
+                    profile=adapter_profile,
                 )
                 latency = (time.perf_counter() - started) * 1000
                 self.health.record_search_result(
@@ -668,6 +700,7 @@ class PlaywrightSearcher:
             except SiteBlockedError as e:
                 # Anti-bot interstitial: expected for some sites, not a bug.
                 logger.warning(f"[{site.name}] Blocked: {e}")
+                self._skipped_sites.append({"name": site.name, "reason": str(e)})
                 self.health.record_search_result(
                     site.name, False, 0, (time.perf_counter() - started) * 1000, blocked=True
                 )

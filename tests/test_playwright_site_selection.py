@@ -114,6 +114,20 @@ async def test_selection_is_cached_per_condition_and_category():
 
 
 @pytest.mark.asyncio
+async def test_default_config_without_max_sites_is_unlimited():
+    config = AppConfig(search=SearchConfig(
+        websites=[_site(f"shop{i}", "SK") for i in range(9)],
+        user_country="SK",
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+    _profiles(searcher, *[f"shop{i}" for i in range(9)])
+
+    selected = await searcher._select_sites("used", "auto", "auto")
+    assert len(selected) == 9
+
+
+@pytest.mark.asyncio
 async def test_zero_max_sites_selects_every_candidate():
     config = AppConfig(search=SearchConfig(
         websites=[_site(f"shop{i}", "SK") for i in range(12)],
@@ -132,7 +146,7 @@ async def test_zero_max_sites_selects_every_candidate():
 async def test_requested_sites_bypass_the_llm():
     class ExplodingLLM:
         async def chat_json(self, *args, **kwargs):
-            raise AssertionError("the LLM must not be called")
+            raise AssertionError("the LLM must not be called")  # noqa: TRY003
 
     config = AppConfig(search=SearchConfig(
         websites=[_site("shop_a", "SK"), _site("shop_b", "SK")],
@@ -200,6 +214,42 @@ async def test_requested_blocked_site_is_still_skipped():
 
 
 @pytest.mark.asyncio
+async def test_disabled_requested_site_is_reported_as_blocked():
+    config = AppConfig(search=SearchConfig(
+        websites=[_real_site("solaro_sk", enabled=False)],
+        user_country="SK",
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+
+    selected = await searcher._select_sites(
+        "new", "electronics", "solar", requested_sites=["solaro_sk"]
+    )
+    assert selected == []
+    assert any(
+        item["name"] == "solaro_sk" and "blocked" in item["reason"]
+        for item in searcher.site_plan.skipped
+    )
+    assert "Requested by the user" in searcher.site_plan.reasoning
+
+
+@pytest.mark.asyncio
+async def test_known_requested_site_missing_from_config_is_reported():
+    config = AppConfig(search=SearchConfig(websites=[], user_country="SK"))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+
+    selected = await searcher._select_sites(
+        "new", "electronics", "solar", requested_sites=["solaro_sk"]
+    )
+    assert selected == []
+    assert any(
+        item["name"] == "solaro_sk" and "blocked" in item["reason"]
+        for item in searcher.site_plan.skipped
+    )
+
+
+@pytest.mark.asyncio
 async def test_planned_site_without_profile_is_skipped(monkeypatch):
     from types import SimpleNamespace
 
@@ -225,6 +275,31 @@ async def test_planned_site_without_profile_is_skipped(monkeypatch):
         item["name"] == "shop_planned" and "profile" in item["reason"]
         for item in searcher._skipped_sites
     )
+
+
+@pytest.mark.asyncio
+async def test_planned_site_with_working_profile_is_intentionally_allowed(monkeypatch):
+    from types import SimpleNamespace
+
+    import src.searcher.playwright_searcher as module
+
+    monkeypatch.setattr(
+        module,
+        "by_id",
+        lambda name: SimpleNamespace(status="planned", notes="", specialties=())
+        if name == "shop_planned"
+        else None,
+    )
+    config = AppConfig(search=SearchConfig(
+        websites=[_site("shop_planned", "SK")],
+        user_country="SK",
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+    _profiles(searcher, "shop_planned")
+
+    selected = await searcher._select_sites("used", "auto", "auto")
+    assert [site.name for site in selected] == ["shop_planned"]
 
 
 @pytest.mark.asyncio

@@ -57,12 +57,14 @@ class SitePlan:
     selected: list[str]
     reasoning: str = ""
     skipped: list[dict] = field(default_factory=list)
+    requested: bool = False
 
     def as_dict(self) -> dict:
         return {
             "selected": list(self.selected),
             "reasoning": self.reasoning,
             "skipped": list(self.skipped),
+            "requested": self.requested,
         }
 
 
@@ -149,7 +151,7 @@ class SiteSelector:
             for c in ranked
         )
         system = (
-            "You choose which online shops are worth searching for a product. "
+            "You choose which online shops are worth searching for a product. "  # noqa: S608
             "The user shops in this market: "
             f"{user_country}. Prefer local shops, then neighbouring markets. "
             "Use the specialties and notes: a battery request belongs on "

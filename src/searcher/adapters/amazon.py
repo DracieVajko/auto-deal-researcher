@@ -89,11 +89,18 @@ class AmazonAdapter(BaseAdapter):
         try:
             url = (page.url or "").lower()
             title = ((await page.title()) or "").lower()
+            body = ""
+            try:
+                body = (await page.inner_text("body")).lower()
+            except Exception:  # noqa: BLE001 - body may not be readable
+                body = ""
         except Exception:  # noqa: BLE001 - page may already be closed
             return None
-        if "validatecaptcha" in url or "robot check" in title:
-            return "amazon captcha"
-        if "enter the characters you see below" in title:
+        if (
+            "validatecaptcha" in url
+            or "robot check" in title
+            or "enter the characters you see below" in body
+        ):
             return "amazon captcha"
         return None
 
@@ -105,16 +112,37 @@ class AmazonAdapter(BaseAdapter):
             )
             price_el = await element.query_selector(".a-price .a-offscreen")
             link_el = (
-                await element.query_selector("h2 a")
+                await element.query_selector('a[href*="/dp/"]')
+                or await element.query_selector("h2 a")
                 or await element.query_selector("a.a-link-normal")
             )
-            if not title_el or not price_el or not link_el:
+            if not title_el or not link_el:
                 return None
 
             title = " ".join((await title_el.inner_text()).split())
-            price_text = await price_el.inner_text()
+            price_text = ""
+            if price_el is not None:
+                price_text = await price_el.inner_text()
+            if not price_text:
+                whole = await element.query_selector(".a-price-whole")
+                fraction = await element.query_selector(".a-price-fraction")
+                if whole is not None:
+                    whole_text = (await whole.inner_text()).strip()
+                    fraction_text = (
+                        (await fraction.inner_text()).strip() if fraction else ""
+                    )
+                    price_text = (
+                        f"{whole_text},{fraction_text}"
+                        if fraction_text
+                        else whole_text
+                    )
+            if not price_text:
+                return None
+
             url = await link_el.get_attribute("href")
             if not title or not url:
+                return None
+            if "/sspa/click" in url:
                 return None
             if url.startswith("/"):
                 url = f"{self.base_url}{url}"

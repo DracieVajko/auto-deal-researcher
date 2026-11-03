@@ -66,6 +66,18 @@ class EbayAdapter(BaseAdapter):
     def default_search_url(self, query: str) -> str:
         return f"{self.base_url}/sch/i.html?_nkw={quote_plus(query)}&_sacat=0"
 
+    async def detect_block(self, page: Page) -> str | None:
+        base = await super().detect_block(page)
+        if base:
+            return base
+        try:
+            title = ((await page.title()) or "").lower()
+        except Exception:  # noqa: BLE001 - page may already be closed
+            return None
+        if "error page" in title:
+            return "ebay bot block"
+        return None
+
     async def _collect_cards(
         self,
         page: Page,
@@ -84,8 +96,9 @@ class EbayAdapter(BaseAdapter):
             logger.debug(f"[{self.name}] direct navigation failed: {e}")
             return []
 
-        if await self.detect_block(page):
-            return []
+        blocked = await self.detect_block(page)
+        if blocked:
+            raise SiteBlockedError(f"{self.name}: {blocked}")  # noqa: TRY003
 
         cards = await self._wait_for_cards(page)
         if cards:

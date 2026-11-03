@@ -40,6 +40,6 @@ def test_example_config_declares_user_location_and_rates():
     data = yaml.safe_load((ROOT / "config.example.yaml").read_text(encoding="utf-8"))
     search = data["search"]
     assert search["user_country"] == "SK"
-    assert search["max_sites"] >= 1
+    assert search["max_sites"] == 0
     assert search["currency_rates"]["EUR"] == 1.0
     assert search["currency_rates"]["CZK"] > 0

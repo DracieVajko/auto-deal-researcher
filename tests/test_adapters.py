@@ -179,3 +179,20 @@ async def test_ebay_error_page_is_blocked():
         FakePage(url="https://www.ebay.de/sch/i.html", title="Error Page | eBay")
     )
     assert reason == "ebay bot block"
+
+
+@pytest.mark.asyncio
+async def test_ebay_direct_search_raises_on_block():
+    from src.searcher.adapters.base import SiteBlockedError
+
+    class BlockedPage:
+        url = "https://www.ebay.de/sch/i.html"
+
+        async def goto(self, *args, **kwargs):
+            return None
+
+        async def title(self):
+            return "Error Page | eBay"
+
+    with pytest.raises(SiteBlockedError):
+        await EbayAdapter()._collect_cards(BlockedPage(), "battery")

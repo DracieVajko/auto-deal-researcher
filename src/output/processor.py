@@ -1709,7 +1709,12 @@ class ResultProcessor:
     def _site_plan_lines(site_plan: SitePlan) -> list[str]:
         lines = ["## Shops searched", ""]
         if site_plan.selected:
-            lines.append("Selected: " + ", ".join(site_plan.selected) + ".")
+            label = (
+                "Selected (requested by the user)"
+                if site_plan.requested
+                else "Selected automatically"
+            )
+            lines.append(label + ": " + ", ".join(site_plan.selected) + ".")
         else:
             lines.append("No shop was selected.")
         if site_plan.reasoning:

@@ -775,8 +775,22 @@ def test_report_lists_selected_and_skipped_shops(tmp_path):
     assert payload["site_plan"]["selected"] == ["alza", "nkon_nl"]
     markdown = Path(md_path).read_text(encoding="utf-8")
     assert "## Shops searched" in markdown
+    assert "Selected automatically" in markdown
     assert "nkon_nl" in markdown
     assert "solaro_sk" in markdown and "blocked" in markdown
+
+
+def test_report_marks_user_requested_shops(tmp_path):
+    from src.searcher.site_selection import SitePlan
+
+    processor = ResultProcessor(load_config())
+    plan = SitePlan(selected=["alza"], requested=True)
+    _, md_path = asyncio.run(
+        processor.save_results([], str(tmp_path), prompt="x", site_plan=plan)
+    )
+
+    markdown = Path(md_path).read_text(encoding="utf-8")
+    assert "requested by the user" in markdown.lower()
 
 
 def test_report_shows_shipping_breakdown():

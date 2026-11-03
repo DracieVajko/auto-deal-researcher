@@ -25,7 +25,6 @@ BLOCK_MARKERS = (
     ("checking your browser", "bot challenge"),
     ("are you a robot", "captcha"),
     ("something went wrong on our end", "ebay bot block"),
-    ("error page", "ebay bot block"),
     ("pardon our interruption", "bot block"),
     ("unusual traffic", "rate limited"),
     ("_____tmd_____", "aliExpress anti-bot challenge"),

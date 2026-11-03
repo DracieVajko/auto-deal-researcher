@@ -131,13 +131,23 @@ def check(site: str) -> bool:
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        ctx = browser.new_context(storage_state=str(path),
-                                  viewport={"width": 1440, "height": 900})
+        ctx = browser.new_context(viewport={"width": 1440, "height": 900})
+        ctx.add_cookies(cookies)
         page = ctx.new_page()
         page.goto(base_url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(3000)
         body = page.inner_text("body").lower()
-        still_login = any(s in body for s in ("log in", "log into", "prihlásiť"))
+        still_login = any(
+            marker in body
+            for marker in (
+                "log in",
+                "log into",
+                "sign in",
+                "anmelden",
+                "prihlásiť",
+                "přihlásit",
+            )
+        )
         print(f"cookies on disk : {len(cookies)}")
         print(f"visits login    : {still_login}")
         print("VERDICT:", "session expired — log in again" if still_login

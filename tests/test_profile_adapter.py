@@ -132,6 +132,21 @@ async def test_nkon_profile_extracts_a_battery_card():
 
 
 @pytest.mark.asyncio
+async def test_condition_falls_back_to_the_full_card_text():
+    element = FakeElement(
+        mapping={
+            ".title": FakeChild("18650 battery"),
+            ".price": FakeChild("4,99 €"),
+            "a": FakeChild(href="/p/1"),
+        },
+        text="18650 battery used 4,99 €",
+    )
+    deal = await ProfileAdapter(profile=_profile()).extract_deal(None, element)
+    assert deal is not None
+    assert deal.condition == "used"
+
+
+@pytest.mark.asyncio
 async def test_profile_adapter_attaches_price_quote():
     element = FakeElement(
         mapping={

@@ -206,6 +206,42 @@ async def test_execute_round_forwards_filters_to_adapter(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_draft_profile_is_not_forwarded_to_an_adapter(monkeypatch):
+    from src.searcher.site_profiles import SiteProfile
+
+    config = _config(
+        WebsiteConfig(
+            name="amazon_de",
+            base_url="https://www.amazon.de",
+            adapter_class="amazon",
+            categories=[Category.ELECTRONICS],
+            conditions=[Condition.NEW],
+        )
+    )
+    searcher = _searcher(config)
+    searcher.profiles = {
+        "amazon_de": SiteProfile.model_validate(
+            {
+                "site_id": "amazon_de",
+                "base_url": "https://www.amazon.de",
+                "status": "draft",
+                "search": {"url_template": "https://www.amazon.de/"},
+                "extraction": {"item_selector": ".product"},
+            }
+        )
+    }
+    searcher.browser_manager = FakeBrowserManager()
+    FakeAdapter.instances = []
+    monkeypatch.setattr(
+        "src.searcher.playwright_searcher.get_adapter", lambda name: FakeAdapter
+    )
+
+    await searcher._execute_round("18650", "new", "electronics", set())
+
+    assert FakeAdapter.instances[-1].calls[0][1]["profile"] is None
+
+
+@pytest.mark.asyncio
 async def test_execute_round_reports_selected_sites(monkeypatch):
     """The wizard's plan hook must receive the site names once."""
     config = _config(
@@ -229,3 +265,34 @@ async def test_execute_round_reports_selected_sites(monkeypatch):
     )
 
     assert names == ["alza_cz"]
+
+@pytest.mark.asyncio
+async def test_blocked_adapter_is_recorded_in_the_site_plan(monkeypatch):
+    from src.searcher.adapters.base import SiteBlockedError
+
+    class BlockedAdapter(FakeAdapter):
+        async def search(self, page, query, **kwargs):
+            raise SiteBlockedError("ebay: ebay bot block")  # noqa: TRY003
+
+    config = _config(
+        WebsiteConfig(
+            name="alza_cz",
+            base_url="https://www.alza.cz",
+            adapter_class="alza",
+            categories=[Category.ELECTRONICS],
+            conditions=[Condition.NEW],
+        )
+    )
+    searcher = _searcher(config)
+    searcher.profiles = {}
+    searcher.browser_manager = FakeBrowserManager()
+    monkeypatch.setattr(
+        "src.searcher.playwright_searcher.get_adapter", lambda name: BlockedAdapter
+    )
+
+    await searcher._execute_round("pc", "new", "electronics", set())
+
+    assert any(
+        item["name"] == "alza_cz" and "block" in item["reason"].lower()
+        for item in searcher.site_plan.skipped
+    )

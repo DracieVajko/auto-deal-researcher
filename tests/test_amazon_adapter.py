@@ -55,8 +55,61 @@ async def test_amazon_captcha_is_a_block():
     assert reason == "amazon captcha"
 
 
+@pytest.mark.asyncio
+async def test_amazon_captcha_body_is_a_block():
+    class FakePage:
+        url = "https://www.amazon.de/s?k=battery"
+
+        async def title(self):
+            return "Amazon.de"
+
+        async def inner_text(self, selector):
+            assert selector == "body"
+            return "Enter the characters you see below"
+
+    reason = await AmazonAdapter().detect_block(FakePage())
+    assert reason == "amazon captcha"
+
+
 def test_amazon_search_url_encodes_the_query():
     adapter = AmazonAdapter()
     assert adapter.default_search_url("18650 battery") == (
         "https://www.amazon.de/s?k=18650+battery"
     )
+
+
+@pytest.mark.asyncio
+async def test_amazon_price_whole_and_fraction_fallback():
+    class WholePriceCard:
+        async def query_selector(self, selector):
+            mapping = {
+                "h2 a span": FakeChild("18650 battery"),
+                ".a-price-whole": FakeChild("19"),
+                ".a-price-fraction": FakeChild("99"),
+                "h2 a": FakeChild(href="/dp/B000TEST"),
+            }
+            return mapping.get(selector)
+
+        async def inner_text(self):
+            return "18650 battery 19,99 €"
+
+    deal = await AmazonAdapter().extract_deal(None, WholePriceCard())
+    assert deal is not None
+    assert deal.price_eur == 19.99
+
+
+@pytest.mark.asyncio
+async def test_amazon_sponsored_redirect_is_skipped():
+    class SponsoredCard:
+        async def query_selector(self, selector):
+            mapping = {
+                "h2 a span": FakeChild("18650 battery"),
+                ".a-price .a-offscreen": FakeChild("19,99 €"),
+                "h2 a": FakeChild(href="/sspa/click?url=https%3A%2F%2Fexample.com"),
+            }
+            return mapping.get(selector)
+
+        async def inner_text(self):
+            return "18650 battery 19,99 €"
+
+    assert await AmazonAdapter().extract_deal(None, SponsoredCard()) is None

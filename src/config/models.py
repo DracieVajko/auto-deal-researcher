@@ -151,7 +151,8 @@ class SearchConfig(BaseModel):
     user_country: str = "SK"
     user_city: str = ""
     # Upper bound on how many shops are opened per search round.
-    max_sites: int = 8
+    # 0 means unlimited: the LLM selects every suitable shop.
+    max_sites: int = 0
     # Currency in which the user wants to see prices (output currency).
     # Defaults to the currency of the user's country if not specified.
     default_currency: str = ""

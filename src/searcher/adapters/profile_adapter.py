@@ -143,7 +143,7 @@ class ProfileAdapter(BaseAdapter):
             url = urljoin(f"{self.base_url}/", url)
 
             condition_text = await self._text(element, extraction.condition_selector)
-            condition = self._detect_condition(condition_text or title)
+            condition = self._detect_condition(condition_text or full_text)
 
             metadata: dict[str, str] = {
                 "source": "profile",

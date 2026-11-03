@@ -147,3 +147,29 @@ def test_run_search_returns_outcome_and_fires_brief(monkeypatch, tmp_path):
     assert seen_briefs[0].category == "hobby"
     assert seen_briefs[0].filters.max_price == 300.0
     assert seen_sites == ["alza"]
+
+
+def test_search_command_passes_site_plan(monkeypatch, tmp_path):
+    import asyncio
+
+    _setup(monkeypatch, tmp_path, {})
+    captured = {}
+
+    class FakeProcessor:
+        def __init__(self, config, llm=None):
+            pass
+
+        async def save_results(self, deals, output_dir, prompt=None, site_plan=None):
+            captured["site_plan"] = site_plan
+            return ("j", "m")
+
+    monkeypatch.setattr(app_module, "ResultProcessor", FakeProcessor)
+
+    asyncio.run(
+        app_module._search_async(
+            "notebook", "any", "any", 3, str(tmp_path), 5, True
+        )
+    )
+
+    assert captured["site_plan"] is not None
+    assert captured["site_plan"].selected == ["alza"]

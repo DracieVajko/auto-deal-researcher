@@ -901,6 +901,7 @@ async def _search_async(
             deals = await searcher.search(
                 prompt, condition, category, filters, sites=sites
             )
+            site_plan = searcher.site_plan
         finally:
             await browser_mgr.close()
 
@@ -908,7 +909,9 @@ async def _search_async(
     for deal in deals:
         storage.save_deal(deal)
     processor = ResultProcessor(config, llm)
-    await processor.save_results(deals, output_dir, prompt=prompt)
+    await processor.save_results(
+        deals, output_dir, prompt=prompt, site_plan=site_plan
+    )
 
     typer.echo(f"Found {len(deals)} deals")
     for d in deals[:winners]:

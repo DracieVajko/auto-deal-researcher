@@ -146,11 +146,14 @@ Add/enable entries in both `config.yaml` and `config.example.yaml`:
 1. it is enabled in config;
 2. its adapter matches the requested condition and category, or its profile is
    runtime-ready;
-3. its registry status is `working` or `needs_login`; and
+3. its registry status is `working` or `needs_login`, or it is `planned` but
+   already has a registered adapter or a validated profile; and
 4. a `needs_login` site has a saved session
    (`src/searcher/sessions.has_session(site.name)`).
 
-`blocked` and `planned` sites are never runnable. `needs_login` without a
+`planned` therefore means "no verified route yet", not "never runnable": a
+validated profile or an adapter is the route that promotes it. `blocked` sites
+are never runnable. `needs_login` without a
 session is runnable only when the user explicitly lists it in `--sites`; in
 that case the adapter still tries, and a block is reported. `_filter_sites`
 therefore accepts the requested set and enforces the session gate only for

@@ -8,7 +8,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-SESSION_DIR = Path("data/sessions")
+SESSION_DIR = Path(__file__).resolve().parents[2] / "data" / "sessions"
 
 
 def session_path(site_id: str) -> Path:
@@ -28,7 +28,7 @@ def load_cookies(site_id: str) -> list[dict]:
         return []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         logger.warning("Ignoring malformed session for %s: %s", site_id, exc)
         return []
     return data if isinstance(data, list) else []

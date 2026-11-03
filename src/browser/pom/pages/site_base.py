@@ -18,8 +18,8 @@ class SiteHome(BasePage):
         self.base_url = base_url
         self.search_bar = SearchBar(page)
 
-    async def goto(self):
-        await super().goto(self.base_url)
+    async def goto(self, url: str | None = None) -> None:
+        await super().goto(url or self.base_url)
 
 
 class SiteSearchResults(BasePage):

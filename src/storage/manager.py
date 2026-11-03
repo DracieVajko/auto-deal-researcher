@@ -112,7 +112,7 @@ class StorageManager:
         row = self.db.execute("SELECT * FROM deals WHERE id = ?", (deal_id,)).fetchone()
         return _row_to_stored_deal(row) if row else None
 
-    def save_deal(self, deal: Deal, run_id: str = ""):
+    def save_deal(self, deal: Deal, run_id: str = "") -> None:
         existing = self.get_deal_by_url(deal.url)
         today = today_iso()
         quote = getattr(deal, "price_quote", None)
@@ -352,7 +352,7 @@ class StorageManager:
             "data_points": len(prices),
         }
 
-    def mark_seen_today(self, urls: list[str]):
+    def mark_seen_today(self, urls: list[str]) -> None:
         """Call after each run for all URLs found in this run."""
         today = today_iso()
         with self.db.conn:

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from pathlib import Path
+from typing import Literal
 
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 from playwright.async_api import Error as PlaywrightError
@@ -58,6 +59,7 @@ class BrowserManager:
         return self._browser
 
     async def _create_browser(self) -> Browser | BrowserContext:
+        assert self._playwright is not None
         browser_config = self.config.browser
         
         # Try CDP connection first (attach to an already-running browser so the
@@ -151,7 +153,11 @@ class BrowserManager:
         context.set_default_timeout(30000)
         context.set_default_navigation_timeout(30000)
 
-    async def get_page(self, session_id: str | None = None, browser_type: str = "chromium") -> Page:
+    async def get_page(
+        self,
+        session_id: str | None = None,
+        browser_type: Literal["chromium", "firefox", "webkit"] = "chromium",
+    ) -> Page:
         """Get a new page with fingerprint rotation and cookie consent handling."""
         browser = await self.get_browser()
         page = await browser.new_page()
@@ -207,7 +213,7 @@ class BrowserManager:
         # Attach handler for navigation
         page.on("framenavigated", lambda frame: asyncio.create_task(handle_cookies()))
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the browser and Playwright, without killing a CDP-attached browser."""
         if self._cdp_connected:
             # Only disconnect. Closing the context would close the user's own

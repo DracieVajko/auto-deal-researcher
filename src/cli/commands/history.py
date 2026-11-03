@@ -103,9 +103,9 @@ watchlist_app = typer.Typer(help="Manage watchlist and price alerts")
 @watchlist_app.command()
 def watchlist_cmd(
     action: str = typer.Argument(..., help="Action: add, remove, list, check, trends"),
-    url: str = typer.Option(None, "--url", "-u", help="Product URL"),
-    title: str = typer.Option(None, "--title", "-t", help="Product title (for add)"),
-    target_price: float = typer.Option(None, "--target-price", "-p", help="Target price in EUR"),
+    url: str | None = typer.Option(None, "--url", "-u", help="Product URL"),
+    title: str | None = typer.Option(None, "--title", "-t", help="Product title (for add)"),
+    target_price: float | None = typer.Option(None, "--target-price", "-p", help="Target price in EUR"),
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
     category: str = typer.Option("any", "--category", "-cat", help="Category filter"),
     threshold: float = typer.Option(5.0, "--threshold", help="Alert threshold % for price drops"),
@@ -181,7 +181,7 @@ def watchlist_cmd(
             async def run():
                 from src.searcher.playwright_searcher import PlaywrightSearcher
                 browser2 = BrowserManager(load_config())
-                async with PlaywrightSearcher(load_config(), MockLLMClient(load_config()), None, browser2) as searcher:
+                async with PlaywrightSearcher(load_config(), MockLLMClient(load_config()), db_storage, browser2) as searcher:  # type: ignore[arg-type]
                     await wl_manager_async.check_prices(searcher, None)
             
             asyncio.run(run())
@@ -223,7 +223,7 @@ selector_app = typer.Typer(help="Selector health monitoring and diagnostics")
 
 @selector_app.command()
 def health(
-    site: str = typer.Option(None, "--site", "-s", help="Check specific site only"),
+    site: str | None = typer.Option(None, "--site", "-s", help="Check specific site only"),
     live: bool = typer.Option(False, "--live", "-l", help="Run live health check (requires browser)"),
 ):
     """Show selector health report."""
@@ -297,7 +297,7 @@ def unhealthy():
 
 @selector_app.command()
 def clear(
-    site: str = typer.Option(None, "--site", "-s", help="Clear health data for specific site"),
+    site: str | None = typer.Option(None, "--site", "-s", help="Clear health data for specific site"),
     all: bool = typer.Option(False, "--all", help="Clear all health data"),
 ):
     """Clear selector health data (use with caution)."""

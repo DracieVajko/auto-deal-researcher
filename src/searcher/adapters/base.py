@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from typing import Any, Literal
 
-from playwright.async_api import Page
+from playwright.async_api import ElementHandle, Page
 
 if TYPE_CHECKING:
     from src.searcher.pricing import PriceQuote
@@ -48,6 +48,8 @@ class Deal:
     original_price: float | None = None  # amount as listed, in original_currency
     original_currency: str = "EUR"
     price_quote: "PriceQuote | None" = None
+    expert_score: float | None = None
+    expert_analysis: str = ""
 
     @property
     def comparable_price_eur(self) -> float:
@@ -151,7 +153,7 @@ class BaseAdapter(ABC):
         return await FilterEngine.apply_ui(page, profile, filters)
 
     @abstractmethod
-    async def extract_deal(self, page: Page, element) -> Deal | None:
+    async def extract_deal(self, page: Page, element: ElementHandle) -> Deal | None:
         """Extract Deal from a single result element on search results page."""
         ...
 

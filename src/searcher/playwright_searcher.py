@@ -83,7 +83,7 @@ class PlaywrightSearcher:
             config.search.diamond_search.enabled
         )
         self.health = SelectorHealthTracker()
-        self._diamond_coordinator = None
+        self._diamond_coordinator: CoordinatorAgent | None = None
         self._site_selector = SiteSelector(llm=llm)
         self._site_selection_cache: dict[tuple, list[WebsiteConfig]] = {}
         self._site_selection_reason = ""
@@ -748,7 +748,7 @@ class PlaywrightSearcher:
                 await page.close()
 
     @staticmethod
-    def _diamond_research(payload: dict) -> dict:
+    def _diamond_research(payload: dict | None) -> dict:
         """Read the research layer from RecommendationAgent's nested payload."""
         if not isinstance(payload, dict):
             return {}

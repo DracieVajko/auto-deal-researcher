@@ -77,11 +77,19 @@ class AgentBase(ABC, Generic[T, R]):
     def is_running(self) -> bool:
         return self._running
 
-    def register_handler(self, message_type: str, handler: Callable[[AgentMessage], Any]):
+    def register_handler(
+        self, message_type: str, handler: Callable[[AgentMessage], Any]
+    ) -> None:
         """Register a message handler for a specific message type."""
         self._message_handlers[message_type] = handler
 
-    async def send_message(self, recipient: str, message_type: str, payload: Any, correlation_id: str = ""):
+    async def send_message(
+        self,
+        recipient: str,
+        message_type: str,
+        payload: Any,
+        correlation_id: str = "",
+    ) -> None:
         """Send a message to another agent (via message bus)."""
         pass
 
@@ -119,10 +127,12 @@ class MessageBus:
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
         self._message_history: list[AgentMessage] = []
 
-    def subscribe(self, message_type: str, handler: Callable[[AgentMessage], Any]):
+    def subscribe(
+        self, message_type: str, handler: Callable[[AgentMessage], Any]
+    ) -> None:
         self._subscribers[message_type].append(handler)
 
-    async def publish(self, message: AgentMessage):
+    async def publish(self, message: AgentMessage) -> None:
         self._message_history.append(message)
         for handler in self._subscribers.get(message.payload.__class__.__name__, []):
             await handler(message)

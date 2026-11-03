@@ -192,7 +192,7 @@ async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool
 
 
 def watch(
-    urls: list[str] = typer.Option(None, "--url", "-u", help="Product URL to watch (repeatable)"),
+    urls: list[str] | None = typer.Option(None, "--url", "-u", help="Product URL to watch (repeatable)"),
     watchlist: str | None = typer.Option(None, "--watchlist", "-w", help="File with one URL per line"),
     output_dir: str = typer.Option("results/watch", "--output-dir", help="Output directory"),
     alternatives: bool = typer.Option(True, "--alternatives/--no-alternatives", help="Search for 2-3 counter-products"),

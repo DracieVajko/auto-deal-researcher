@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from typing import Any
 
 from src.agents.base import AgentBase, AgentResult, AgentRole, MessageBus
 
@@ -25,7 +26,7 @@ def _extract_result(result):
 class CoordinatorAgent(AgentBase[dict, dict]):
     """Meta-agent that orchestrates the Diamond Search pipeline."""
 
-    def __init__(self, agents: list[AgentBase], config: dict | None = None):
+    def __init__(self, agents: list[Any], config: dict | None = None):
         super().__init__("coordinator", AgentRole.COORDINATOR, config)
         self.agents = {agent.name: agent for agent in agents}
         self.agent_order = [a.name for a in agents]
@@ -182,7 +183,9 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         self._record_llm_usage(calls=1, tokens=3000)
         return _extract_result(result)
 
-    async def score_deals(self, prompt, research, deals, run_id):
+    async def score_deals(
+        self, prompt, research, deals, run_id
+    ) -> tuple[list[dict], dict]:
         """Public entry point: run expertise, price and synthesis phases on already-fetched deals.
 
         Wraps the private _run_expertise_layer / _run_price_layer / _synthesize_results

@@ -138,6 +138,15 @@ def test_detects_price_from_and_range():
     assert signals.price_max_eur == 18.99
 
 
+def test_detects_pack_quantity_and_unit_price():
+    signals = extract_price_signals("Samsung 30Q 2-pack 10 €", 10.0)
+    assert signals.bundle.min_quantity == 2
+    quote = build_price_quote(
+        10.0, kind=signals.kind, bundle=signals.bundle
+    )
+    assert quote.effective_price_eur == 5.0
+
+
 def test_plain_card_has_no_signals():
     signals = extract_price_signals("Notebook Lenovo 1299 €", 1299.0)
     assert signals.kind == PriceKind.REGULAR

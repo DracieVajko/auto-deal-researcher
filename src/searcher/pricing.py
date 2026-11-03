@@ -248,8 +248,11 @@ _BUNDLE_PATTERNS = (
     r"\b(?:buy|k[úu]p|kup|objednaj)\s*(\d{1,3})\b",
     r"\b(\d{1,3})\s*(?:ks|pcs|pieces|stk)\s*(?:za|for|/|:)\b",
     r"\b(\d{1,3})\s*(?:for|za)\s*\d",
-    r"\b(?:balenie|pack|set|set\s+of|pack\s+of)\D{0,12}(\d{1,3})\b",
+    r"\b(?:balenie|set\s+of|pack\s+of)\D{0,12}(\d{1,3})\b",
     r"\b(\d{1,3})er[-\s]?(?:pack|set)\b",
+    r"\b(\d{1,3})[-\s]?pack\b",
+    r"\bpack\s+of\s+(\d{1,3})\b",
+    r"\bset\s+of\s+(\d{1,3})\b",
 )
 
 _FREE_SHIPPING_PATTERNS = (

@@ -76,6 +76,10 @@ class PriceTracker:
             return self.storage.get_price_trend(deal.url, days)
         return {"trend": "insufficient_data", "data_points": 0}
 
+    def get_price_history(self, url: str, days: int = 30) -> list[dict]:
+        """Return the stored price history for one URL."""
+        return self.storage.get_price_history(url, days)
+
     def get_deals_nearing_target(self, target_price_eur: float, margin_pct: float = 5.0) -> list[dict]:
         """Find deals within margin_pct% of target price."""
         deals = self.storage.get_all_deals()

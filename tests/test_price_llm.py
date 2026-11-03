@@ -30,28 +30,33 @@ def _client():
 @pytest.mark.asyncio
 async def test_classify_price_quotes_parses_batch(monkeypatch):
     client = _client()
+    calls = []
 
     async def fake_chat(system, user, max_tokens=100):
+        calls.append(user)
         return (
-            '{"quotes": [{"id": "L1", "kind": "account_gated", '
+            '{"quotes": [{"id": "L0", "kind": "account_gated", '
             '"shipping_cost_eur": 4.99, "bundle_min_quantity": 1, '
             '"warnings": ["new user"], "confidence": 0.9, '
             '"evidence": ["New user price"]}]}'
         )
 
     monkeypatch.setattr(client, "_chat", fake_chat)
-    result = await client.classify_price_quotes(
-        [
-            {
-                "id": "L1",
-                "text": "New user price 9.99",
-                "listed_price_eur": 9.99,
-                "currency": "EUR",
-            }
-        ]
-    )
-    assert result["L1"]["kind"] == "account_gated"
-    assert result["L1"]["shipping_cost_eur"] == 4.99
+    items = [
+        {
+            "id": "L0",
+            "text": "New user price 9.99",
+            "listed_price_eur": 9.99,
+            "currency": "EUR",
+        }
+    ]
+    result = await client.classify_price_quotes(items)
+    assert result["L0"]["kind"] == "account_gated"
+    assert result["L0"]["shipping_cost_eur"] == 4.99
+
+    again = await client.classify_price_quotes(items)
+    assert again["L0"]["kind"] == "account_gated"
+    assert len(calls) == 1
 
 
 def test_hallucinated_evidence_is_rejected():

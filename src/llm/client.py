@@ -178,6 +178,10 @@ class LLMClient:
             threshold=int(os.environ.get("ADS_LOCAL_BREAKER_THRESHOLD", "2")),
         )
         self._coordinator = self._build_coordinator()
+        # Ambiguous card text -> validated price classification. Repeated
+        # rounds and repeated sites often send the same card; do not pay for it
+        # twice in one run.
+        self._price_quote_cache: dict[tuple, dict] = {}
 
     def _apply_env_overrides(self) -> None:
         """Environment wins over config.yaml.
@@ -307,29 +311,47 @@ class LLMClient:
             }
             for item in items[:10]
         ]
+        result: dict[str, dict] = {}
+        pending: list[tuple[dict, tuple]] = []
+        for card in cards:
+            key = (
+                card["text"],
+                card["listed_price_eur"],
+                card["currency"],
+            )
+            cached = self._price_quote_cache.get(key)
+            if cached is not None:
+                result[card["id"]] = dict(cached)
+            else:
+                pending.append((card, key))
+        if not pending:
+            return result
+
+        cards = [card for card, _key in pending]
         user = json.dumps({"cards": cards}, ensure_ascii=False)
         try:
             data = await self.chat_json(system, user, max_tokens=1200)
         except Exception as exc:  # noqa: BLE001 - optional enrichment
             logger.info("Price classification unavailable: %s", exc)
-            return {}
+            return result
 
         quotes = data.get("quotes") if isinstance(data, dict) else data
         if not isinstance(quotes, list):
-            return {}
+            return result
 
-        by_id = {card["id"]: card["text"] for card in cards}
-        result: dict[str, dict] = {}
+        by_id = {card["id"]: (card["text"], key) for card, key in pending}
         for quote in quotes:
             if not isinstance(quote, dict):
                 continue
             quote_id = str(quote.get("id", ""))
-            card_text = by_id.get(quote_id)
-            if card_text is None:
+            entry = by_id.get(quote_id)
+            if entry is None:
                 continue
+            card_text, key = entry
             validated = validate_price_classification(quote, card_text)
             if validated is not None:
                 result[quote_id] = validated
+                self._price_quote_cache[key] = validated
         return result
 
 

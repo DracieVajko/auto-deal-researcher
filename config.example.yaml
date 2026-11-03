@@ -103,6 +103,30 @@ search:
       conditions: ["new", "used", "refurbished", "open_box"]
       country: "DE"
       currency: "EUR"
+    - name: "nkon_nl"
+      base_url: "https://www.nkon.nl"
+      enabled: false
+      adapter_class: "nkon_nl"
+      categories: ["electronics", "hobby"]
+      conditions: ["new", "used", "refurbished"]
+      country: "NL"
+      currency: "EUR"
+    - name: "ecoprodukt_sk"
+      base_url: "https://ecoprodukt.sk"
+      enabled: false
+      adapter_class: "ecoprodukt_sk"
+      categories: ["electronics", "home", "hobby"]
+      conditions: ["new", "used", "open_box"]
+      country: "SK"
+      currency: "EUR"
+    - name: "solaro_sk"
+      base_url: "https://solaro.sk"
+      enabled: false
+      adapter_class: "solaro_sk"
+      categories: ["electronics", "home", "hobby"]
+      conditions: ["new"]
+      country: "SK"
+      currency: "EUR"
     - name: "alza_cz"
       base_url: "https://www.alza.cz"
       enabled: false

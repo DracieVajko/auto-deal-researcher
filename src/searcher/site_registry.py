@@ -31,6 +31,7 @@ class SiteSpec:
     has_warranty: bool = False
     warranty_note: str = ""
     notes: str = ""
+    specialties: tuple[str, ...] = ()
     discovery_queries: tuple[str, ...] = ()
     country: str = "SK"              # market the site belongs to: SK | CZ | DE | EU
     currency: str = "EUR"            # currency the site lists prices in
@@ -62,10 +63,11 @@ SITES: list[SiteSpec] = [
              country="SK", currency="EUR"),
     SiteSpec("ebay", "eBay.de/co.uk", "https://www.ebay.de", "ebay",
              ("electronics", "appliances", "auto", "general", "home", "hobby"),
-             ("used", "refurbished", "new", "open_box"), "blocked",
+             ("used", "refurbished", "new", "open_box"), "needs_login",
              seller_type="marketplace", has_warranty=False,
              warranty_note="eBay Money Back Guarantee; manufacturer warranty only if the seller provides it.",
-             notes="Rate-limited and serves decoy listings. HTML scraper kept as fallback only.",
+             notes="Rate-limited and serves decoy listings. Use a saved cookie session.",
+             specialties=("marketplace", "used", "refurbished"),
              country="DE", currency="EUR"),
 
     # --- needs auth ------------------------------------------------------
@@ -89,6 +91,7 @@ SITES: list[SiteSpec] = [
              seller_type="retailer", has_warranty=True,
              warranty_note="Retailer warranty on new items.",
              notes="Electronics retailer.",
+             specialties=("electronics", "retailer"),
              country="SK", currency="EUR"),
     SiteSpec("heureka", "Heureka.sk", "https://www.heureka.sk", "heureka",
              ("electronics", "appliances", "auto", "general", "home", "hobby"), ("new", "used", "refurbished"), "planned",
@@ -120,8 +123,30 @@ SITES: list[SiteSpec] = [
              ("new", "used", "refurbished", "open_box"), "planned",
              seller_type="marketplace", has_warranty=False,
              warranty_note="Amazon's own returns; third-party warranty varies.",
-             notes="Official Product Advertising API is the supported route.",
+             notes="Browser scraping with the user's cookies; captcha is detected.",
+             specialties=("marketplace", "broad"),
              country="DE", currency="EUR"),
+    SiteSpec("nkon_nl", "NKON.nl", "https://www.nkon.nl", "nkon_nl",
+             ("electronics", "hobby"), ("new", "used", "refurbished"), "planned",
+             seller_type="retailer", has_warranty=False,
+             warranty_note="Used cells carry the seller warranty; check each listing.",
+             notes="Magento battery specialist. Search: /en/catalogsearch/result/?q=.",
+             specialties=("battery", "18650", "lifepo4", "charger", "used"),
+             country="NL", currency="EUR"),
+    SiteSpec("ecoprodukt_sk", "Ecoprodukt.sk", "https://ecoprodukt.sk", "ecoprodukt_sk",
+             ("electronics", "home", "hobby"), ("new", "used", "open_box"), "planned",
+             seller_type="retailer", has_warranty=True,
+             warranty_note="Retailer warranty; used/open-box terms vary by listing.",
+             notes="WooCommerce photovoltaics and batteries; has a used/open-box section.",
+             specialties=("solar", "photovoltaic", "battery", "inverter", "used", "open_box"),
+             country="SK", currency="EUR"),
+    SiteSpec("solaro_sk", "Solaro.sk", "https://solaro.sk", "solaro_sk",
+             ("electronics", "home", "hobby"), ("new",), "blocked",
+             seller_type="retailer", has_warranty=True,
+             warranty_note="Retailer warranty on new items.",
+             notes="Cloudflare challenge blocks automated sessions; needs a real session.",
+             specialties=("solar", "photovoltaic", "battery", "inverter"),
+             country="SK", currency="EUR"),
     SiteSpec("alza_cz", "Alza.cz", "https://www.alza.cz", "alza",
              ("electronics", "appliances"), ("new", "open_box"), "planned",
              seller_type="retailer", has_warranty=True,

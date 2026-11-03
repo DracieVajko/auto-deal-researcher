@@ -8,6 +8,28 @@ def test_registry_has_working_sites():
     assert {s.id for s in working} == {"alza", "bazos"}
 
 
+def test_specialty_sites_are_registered():
+    ids = {s.id for s in SITES}
+    assert {"nkon_nl", "ecoprodukt_sk", "solaro_sk"} <= ids
+
+
+def test_specialties_are_lowercase_keywords():
+    for site in SITES:
+        assert all(value == value.lower() for value in site.specialties), site.id
+
+
+def test_new_sites_have_honest_status():
+    assert by_id("nkon_nl").status == "planned"
+    assert by_id("ecoprodukt_sk").status == "planned"
+    assert by_id("solaro_sk").status == "blocked"
+
+
+def test_new_specialty_sites_declare_their_niche():
+    assert "battery" in by_id("nkon_nl").specialties
+    assert "solar" in by_id("ecoprodukt_sk").specialties
+    assert "solar" in by_id("solaro_sk").specialties
+
+
 def test_drone_is_not_searched_on_irrelevant_sites():
     """Category filtering must keep pharmacies and bookshops out of a drone run."""
     sites = sites_for("electronics", "any")
@@ -31,8 +53,10 @@ def test_category_filter_drops_auto_only_sites_for_electronics():
 
 def test_condition_filter():
     refurbished = sites_for("electronics", "refurbished")
-    # aukro also advertises refurbished; it was missing from the original list
-    assert {s.id for s in refurbished} == {"backmarket", "ebay", "heureka", "idealo", "amazon_de", "aukro"}
+    assert {s.id for s in refurbished} == {
+        "backmarket", "ebay", "heureka", "idealo", "amazon_de", "aukro",
+        "nkon_nl",
+    }
 
 
 def test_used_filter_excludes_new_only_sites():
@@ -56,8 +80,8 @@ def test_summary_counts():
     s = summary()
     assert s["working"] == 2
     assert s["blocked"] == 4
-    assert s["needs_login"] == 1
-    assert s["planned"] == 23
+    assert s["needs_login"] == 2
+    assert s["planned"] == 25
     assert sum(s.values()) == len(SITES)
 
 

@@ -93,6 +93,7 @@ async def test_site_selection_filters_by_condition():
         "idealo",
         "amazon_de",
         "aukro",
+        "nkon_nl",
     }
     assert "alza" not in out["selected_sites"]
     assert "reasoning" in out

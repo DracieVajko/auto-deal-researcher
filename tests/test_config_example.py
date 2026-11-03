@@ -30,8 +30,10 @@ def test_example_config_currencies_match_the_registry():
 
 
 def test_example_config_only_enables_verified_sites():
-    enabled = [name for name, site in _example_sites().items() if site.get("enabled")]
-    assert enabled == ["alza", "bazos"]
+    from src.searcher.site_registry import by_status
+
+    enabled = {name for name, site in _example_sites().items() if site.get("enabled")}
+    assert enabled == {site.id for site in by_status("working")}
 
 
 def test_example_config_declares_user_location_and_rates():

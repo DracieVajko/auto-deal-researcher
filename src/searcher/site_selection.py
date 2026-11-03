@@ -40,6 +40,8 @@ class SiteCandidate:
     conditions: tuple[str, ...]
     status: str = "planned"
     adapter_class: str = ""
+    notes: str = ""
+    specialties: tuple[str, ...] = ()
 
     def carries(self, category: str, condition: str) -> bool:
         """True when the site can serve this category/condition."""

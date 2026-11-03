@@ -73,7 +73,7 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
     _load_dotenv()
 
     # Check if config file exists
-    if not os.path.exists(config_path):
+    if not Path(config_path).exists():
         # Return default configuration
         config = AppConfig()
     else:

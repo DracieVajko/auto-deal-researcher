@@ -1,6 +1,7 @@
 """CLI commands for history, trends, watchlist, and monitoring."""
 
 import asyncio
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -297,12 +298,11 @@ def clear(
         typer.echo("Error: specify --site or --all", err=True)
         raise typer.Exit(1)
     
-    import os
-    path = "data/selector_health.json"
-    
+    path = Path("data/selector_health.json")
+
     if all:
-        if os.path.exists(path):
-            os.remove(path)
+        if path.exists():
+            path.unlink()
             typer.echo("✅ Cleared all selector health data")
         else:
             typer.echo("No health data file found")

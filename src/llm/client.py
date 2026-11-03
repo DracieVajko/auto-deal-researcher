@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 # Gemini thinking models spend output tokens on reasoning before they emit any
 # text. With a 16-token budget the answer was cut off entirely and the provider
-# looked "empty" even though it answered 200 OK.
-GEMINI_MIN_OUTPUT_TOKENS = int(os.environ.get("ADS_GEMINI_MIN_OUTPUT_TOKENS", "512"))
+# looked "empty" even though it answered 200 OK. The floor is read from the
+# environment on each call; see _gemini_min_output_tokens().
 
 # HTTP statuses that mean "this credential will never work in this run".
 PERMANENT_AUTH_ERRORS = frozenset({401, 403})
@@ -38,12 +38,19 @@ def _timeout_from_env(name: str = "ADS_LOCAL_LLM_TIMEOUT", default: float = 900.
     except (KeyError, TypeError, ValueError):
         return default
 
+
+def _gemini_min_output_tokens() -> int:
+    return max(1, int(_timeout_from_env("ADS_GEMINI_MIN_OUTPUT_TOKENS", 512)))
+
+
 def __getattr__(name: str):
     if name == "LOCAL_TIMEOUT":
         return _timeout_from_env("ADS_LOCAL_LLM_TIMEOUT", 900.0)
     if name == "CLOUD_TIMEOUT":
         return _timeout_from_env("ADS_CLOUD_LLM_TIMEOUT", 120.0)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    if name == "GEMINI_MIN_OUTPUT_TOKENS":
+        return _gemini_min_output_tokens()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")  # noqa: TRY003
 
 
 
@@ -702,7 +709,7 @@ class LLMClient:
         # Gemini doesn't support system prompt separately, combine them.
         # Thinking models burn the output budget on internal reasoning first,
         # so a small max_tokens returns finishReason=MAX_TOKENS with no answer.
-        budget = max(max_tokens, GEMINI_MIN_OUTPUT_TOKENS)
+        budget = max(max_tokens, _gemini_min_output_tokens())
         payload = {
             "contents": [{"parts": [{"text": f"{system}\n\n{user}"}]}],
             "generationConfig": {

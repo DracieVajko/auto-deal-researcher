@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-import os
+from pathlib import Path
 
 import typer
 
@@ -11,11 +11,11 @@ from src.config import load_config
 from src.intelligence.change_detector import ChangeDetector
 from src.intelligence.price_tracker import PriceTracker
 from src.llm.client import LLMClient
-from src.searcher.playwright_searcher import PlaywrightSearcher
-from src.storage.manager import StorageManager
-from src.notifications.manager import NotificationManager
 from src.notifications.base import Alert
 from src.notifications.channels.console import ConsoleChannel
+from src.notifications.manager import NotificationManager
+from src.searcher.playwright_searcher import PlaywrightSearcher
+from src.storage.manager import StorageManager
 from src.utils.time import utcnow_stamp
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ async def _monitor_async(
     output_dir: str,
     price_drop_threshold: float,
 ):
-    os.makedirs(output_dir, exist_ok=True)
+    await asyncio.to_thread(Path(output_dir).mkdir, parents=True, exist_ok=True)
 
     config = load_config()
 
@@ -67,19 +67,19 @@ async def _monitor_async(
         from src.notifications.channels.system import SystemChannel
         notif.add_channel(SystemChannel())
     except Exception as exc:
-        logger.debug("Email channel init skipped: %s", exc)
+        logger.debug("System channel init skipped: %s", exc)
     try:
         from src.notifications.channels.email import EmailChannel
         notif.add_channel(EmailChannel())
     except Exception as exc:
-        logger.debug("Webhook channel init skipped: %s", exc)
+        logger.debug("Email channel init skipped: %s", exc)
     try:
         from src.notifications.channels.webhook import WebhookChannel
         for ch in getattr(config.notifications, "channels", []) or []:
             if ch.type == "webhook":
                 notif.add_channel(WebhookChannel(ch.name))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Webhook channel init skipped: %s", exc)
     try:
         from src.notifications.channels.discord import DiscordChannel
         for ch in getattr(config.notifications, "channels", []) or []:
@@ -133,7 +133,7 @@ async def _monitor_async(
             typer.echo(report.to_markdown())
 
             # Save report to file
-            report_path = os.path.join(output_dir, f"{run_id}.md")
+            report_path = Path(output_dir) / f"{run_id}.md"
             await asyncio.to_thread(_write_text_file, report_path, report.to_markdown())
             typer.echo(f"Report saved to: {report_path}")
 

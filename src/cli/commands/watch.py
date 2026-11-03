@@ -1,7 +1,6 @@
 """Watch specific product URLs: track price/stock and find 2-3 alternatives."""
 
 import asyncio
-import os
 from pathlib import Path
 
 import typer
@@ -100,7 +99,7 @@ async def _fetch_product(page, url: str) -> dict:
 
 
 async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool):
-    os.makedirs(output_dir, exist_ok=True)
+    await asyncio.to_thread(Path(output_dir).mkdir, parents=True, exist_ok=True)
     config = load_config()
     storage = StorageManager(config.storage.db_path)
 
@@ -181,7 +180,7 @@ async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool
                 lines.append(f"### Alternatives for {r['title'][:60]}: skipped ({type(exc).__name__})")
                 lines.append("")
 
-    report_path = os.path.join(output_dir, "watchlist_report.md")
+    report_path = Path(output_dir) / "watchlist_report.md"
     with open(report_path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
     typer.echo(f"Report saved to: {report_path}")

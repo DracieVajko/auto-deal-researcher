@@ -70,6 +70,26 @@ async def test_gemini_output_budget_has_a_floor(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_gemini_floor_reads_the_environment_each_call(monkeypatch):
+    captured = {}
+
+    def fake_post(url, *, headers, json_body, timeout, attempts=3):
+        captured.update(json_body)
+        return gemini_response('[{"text": "OK"}]')
+
+    monkeypatch.setenv("ADS_GEMINI_MIN_OUTPUT_TOKENS", "1024")
+    monkeypatch.setattr(mod, "_post_with_retry", fake_post)
+    client = LLMClient(Cfg())
+
+    await client._call_gemini_async(
+        "key", "gemini-2.5-flash", "system", "user", 16, 0.0, 5
+    )
+
+    budget = captured["generationConfig"]["maxOutputTokens"]
+    assert budget >= 1024
+
+
+@pytest.mark.asyncio
 async def test_gemini_thought_only_reply_is_empty_not_a_crash(monkeypatch):
     def fake_post(url, *, headers, json_body, timeout, attempts=3):
         return gemini_response('[{"text": "thinking...", "thought": true}]')

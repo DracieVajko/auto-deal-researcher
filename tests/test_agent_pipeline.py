@@ -4,6 +4,7 @@ import pytest
 
 from src.agents.price.price_hunter import PriceHunterAgent
 from src.agents.synthesis.recommendation import RecommendationAgent
+from src.searcher.playwright_searcher import PlaywrightSearcher
 
 
 def _deal(url, title, price, condition="used", site="bazos", shipping=0.0, **meta):
@@ -12,6 +13,17 @@ def _deal(url, title, price, condition="used", site="bazos", shipping=0.0, **met
         "category": "electronics", "site_name": site,
         "shipping_cost_eur": shipping, "metadata": meta,
     }
+
+
+def test_diamond_research_reads_the_recommendation_payload():
+    payload = {
+        "final_recommendation": {"best_deal": {"title": "X"}},
+        "all_candidates": {
+            "research": {"query_expansion": {"expanded_queries": ["dji drone"]}}
+        },
+    }
+    research = PlaywrightSearcher._diamond_research(payload)
+    assert research["query_expansion"]["expanded_queries"] == ["dji drone"]
 
 
 @pytest.mark.asyncio

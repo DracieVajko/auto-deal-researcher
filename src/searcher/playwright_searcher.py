@@ -747,6 +747,17 @@ class PlaywrightSearcher:
             if page:
                 await page.close()
 
+    @staticmethod
+    def _diamond_research(payload: dict) -> dict:
+        """Read the research layer from RecommendationAgent's nested payload."""
+        if not isinstance(payload, dict):
+            return {}
+        candidates = payload.get("all_candidates")
+        if not isinstance(candidates, dict):
+            return {}
+        research = candidates.get("research")
+        return research if isinstance(research, dict) else {}
+
     async def search_with_diamond(
         self,
         prompt: str,
@@ -792,7 +803,7 @@ class PlaywrightSearcher:
         # Re-run the pipeline now that real deals exist, so the expertise,
         # price and synthesis agents actually receive something to score.
         run_id = f"diamond_{utcnow_stamp()}"
-        research = result.payload.get("research", {})
+        research = self._diamond_research(result.payload)
         queries = (research.get("query_expansion") or {}).get("expanded_queries") or []
         search_query = queries[0] if queries else prompt
         logger.info(f"[{run_id}] research layer -> searching for {search_query!r}")
@@ -804,7 +815,7 @@ class PlaywrightSearcher:
         )
 
         evaluated_deals = scored
-        best = final.get("recommendation") if isinstance(final, dict) else None
+        best = final.get("final_recommendation") if isinstance(final, dict) else None
 
         if evaluated_deals:
             # Merge expert scores with deals
@@ -814,8 +825,11 @@ class PlaywrightSearcher:
                     deal.expert_score = expert_by_url[deal.url].get("expert_score", 0)
                     deal.expert_analysis = expert_by_url[deal.url].get("expert_analysis", "")
 
+        best_title = "n/a"
+        if isinstance(best, dict):
+            best_title = (best.get("best_deal") or {}).get("title", "n/a")
         logger.info(
             f"Diamond Search completed [run_id={run_id}]: {len(deals)} deals, "
-            f"best={best.get('title') if best else 'n/a'}"
+            f"best={best_title}"
         )
         return deals

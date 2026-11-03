@@ -726,7 +726,13 @@ class PlaywrightSearcher:
         except SiteBlockedError as e:
             # Anti-bot interstitial: expected for some sites, not a bug.
             logger.warning(f"[{site.name}] Blocked: {e}")
-            self._skipped_sites.append({"name": site.name, "reason": str(e)})
+            reason = str(e)
+            if sessions.has_session(site.name):
+                reason += (
+                    " (saved session may be expired; run: "
+                    f"python scripts/login.py --site {site.name})"
+                )
+            self._skipped_sites.append({"name": site.name, "reason": reason})
             self.health.record_search_result(
                 site.name, False, 0, (time.perf_counter() - started) * 1000, blocked=True
             )

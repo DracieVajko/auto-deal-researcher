@@ -296,3 +296,37 @@ async def test_blocked_adapter_is_recorded_in_the_site_plan(monkeypatch):
         item["name"] == "alza_cz" and "block" in item["reason"].lower()
         for item in searcher.site_plan.skipped
     )
+
+@pytest.mark.asyncio
+async def test_blocked_site_with_saved_session_suggests_relogin(monkeypatch):
+    from src.searcher import sessions
+    from src.searcher.adapters.base import SiteBlockedError
+
+    monkeypatch.setattr(sessions, "has_session", lambda name: True)
+
+    class BlockedAdapter(FakeAdapter):
+        async def search(self, page, query, **kwargs):
+            raise SiteBlockedError("ebay: ebay bot block")
+
+    config = _config(
+        WebsiteConfig(
+            name="ebay",
+            base_url="https://www.ebay.de",
+            adapter_class="ebay",
+            categories=[Category.ELECTRONICS],
+            conditions=[Condition.NEW],
+        )
+    )
+    searcher = _searcher(config)
+    searcher.profiles = {}
+    searcher.browser_manager = FakeBrowserManager()
+    monkeypatch.setattr(
+        "src.searcher.playwright_searcher.get_adapter", lambda name: BlockedAdapter
+    )
+
+    await searcher._execute_round("pc", "new", "electronics", set())
+
+    reason = next(
+        item["reason"] for item in searcher.site_plan.skipped if item["name"] == "ebay"
+    )
+    assert "login.py" in reason

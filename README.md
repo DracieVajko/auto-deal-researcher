@@ -274,6 +274,11 @@ Built-in domains: `bike`, `computer`, `phone`, `car`, `furniture`. Anything
 unrecognised falls back to `generic`, which scores neutral on specs rather
 than guessing.
 
+`computer` now extracts GPU (`RTX`, `GTX`, Radeon, Arc, Iris Xe, Apple M-series)
+alongside CPU, RAM, SSD/HDD and connectivity. `phone` extracts camera
+megapixels, battery capacity in mAh, battery life in hours, charging wattage,
+battery health, storage, RAM and screen size.
+
 ```bash
 # Force the domain instead of auto-detecting it.
 python -m src.cli run --prompt "mini pc" --domain computer

@@ -25,6 +25,15 @@ _PORTS = (
     ("DisplayPort", r"displayport"),
 )
 
+_GPU_PATTERNS = (
+    r"\b(rtx\s*\d{4}(?:\s*ti)?)\b",
+    r"\b(gtx\s*\d{3,4}(?:\s*ti)?)\b",
+    r"\b(radeon\s*(?:rx\s*)?\d{3,4}[a-z]{0,3})\b",
+    r"\b(arc\s*a\d{3})\b",
+    r"\b(iris\s*xe)\b",
+    r"\b(apple\s*m[123]\s*(?:pro|max|ultra)?)\b",
+)
+
 
 def extract_cpu(text: str) -> str | None:
     for pattern in _CPU_PATTERNS:
@@ -36,6 +45,14 @@ def extract_cpu(text: str) -> str | None:
             elif cpu.startswith("ULTRA "):
                 cpu = f"INTEL CORE {cpu}"
             return cpu
+    return None
+
+
+def extract_gpu(text: str) -> str | None:
+    for pattern in _GPU_PATTERNS:
+        match = re.search(pattern, text)
+        if match:
+            return " ".join(match.group(1).split()).upper()
     return None
 
 
@@ -89,9 +106,10 @@ COMPUTER = DomainProfile(
         "rechner",
         "komputer",
     ),
-    key_specs=("cpu", "ram", "storage", "connectivity"),
+    key_specs=("cpu", "gpu", "ram", "storage", "connectivity"),
     extractors={
         "cpu": extract_cpu,
+        "gpu": extract_gpu,
         "ram": extract_ram,
         "storage": extract_storage,
         "connectivity": extract_connectivity,

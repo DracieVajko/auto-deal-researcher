@@ -555,7 +555,7 @@ def test_report_markdown_shows_domain_and_coverage(tmp_path):
     )
     markdown = Path(md_path).read_text(encoding="utf-8")
     assert "Domain: phone" in markdown
-    assert "2/4 specs stated" in markdown
+    assert "2/8 specs stated" in markdown
 
 
 def test_phone_report_has_no_bike_keys(tmp_path):
@@ -732,7 +732,10 @@ def test_llm_prompt_names_the_profile_keys():
         domain="phone",
     )
     asyncio.run(processor._llm_analyze_batch([analysis], "iphone 13"))
-    assert "storage, ram, battery_health, screen_size" in captured["user"]
+    assert (
+        "storage, ram, camera, battery_capacity, battery_life, charging, "
+        "battery_health, screen_size"
+    ) in captured["user"]
 
 
 def test_cheapest_pick_uses_effective_price():

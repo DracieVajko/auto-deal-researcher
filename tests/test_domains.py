@@ -94,6 +94,25 @@ def test_computer_extracts_cpu_ram_storage():
     assert specs["storage"] == "512 GB SSD"
 
 
+def test_computer_extracts_gpu():
+    specs = get("computer").extract("mini pc ryzen 7 5800h rtx 4060 32gb ddr5")
+    assert specs["gpu"] == "RTX 4060"
+
+
+def test_phone_extracts_camera_battery_and_charging():
+    specs = get("phone").extract(
+        "samsung galaxy s23 200 mp camera 5000 mah 45w nabijanie"
+    )
+    assert specs["camera"] == "200 MP"
+    assert specs["battery_capacity"] == "5000 mAh"
+    assert specs["charging"] == "45 W"
+
+
+def test_phone_extracts_battery_life():
+    specs = get("phone").extract("iphone 13 vydrz baterie 12 h")
+    assert specs["battery_life"] == "12 h"
+
+
 def test_bike_extracts_specs_from_description():
     specs = get("bike").extract(
         'horský bicykel 26" kolesá, rám 18", kotúčové brzdy, sram'
@@ -269,7 +288,7 @@ def test_phone_spec_match_is_coverage():
         "iPhone", "phone", {"storage": "128 GB", "battery_health": "89%"}
     )
     breakdown = processor._score_breakdown(analysis, 200.0, [analysis])
-    assert breakdown["Spec match"] == 50  # 2 of 4 key specs
+    assert breakdown["Spec match"] == 25  # 2 of 8 key specs
 
 
 def test_generic_spec_match_is_neutral():

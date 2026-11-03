@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- Product spec coverage: `computer` extracts GPU (RTX/GTX/Radeon/Arc/Iris Xe/
+  Apple M-series); `phone` extracts camera MP, battery mAh, battery life,
+  charging watts, health, storage, RAM and screen size.
 - Sourced comparison: the winner/runner-up block now cites DuckDuckGo (Bing RSS
   fallback) review and spec pages under `## Sources`, with a deterministic
   `Why the winner won` line. `search.sources` and `search.source_count` control

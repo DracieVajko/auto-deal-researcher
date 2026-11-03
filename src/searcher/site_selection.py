@@ -85,13 +85,13 @@ class SiteSelector:
         candidates: list[SiteCandidate],
         prompt: str = "",
         user_country: str = "SK",
-        max_sites: int = 8,
+        max_sites: int | None = None,
     ) -> tuple[list[SiteCandidate], str]:
         """Return ``(selected, reasoning)``.
 
         The deterministic ranking is the baseline. When an LLM is available
-        it may narrow the set further, but never widen it and never exceed
-        *max_sites*.
+        it may narrow the set further, but never widen it. ``max_sites`` is a
+        cap only when it is positive; ``0`` and ``None`` mean unlimited.
         """
         ranked = rank_by_location(candidates, user_country)
         if not ranked:
@@ -100,36 +100,51 @@ class SiteSelector:
             return ranked, "Only one site carries this category."
 
         picked, reasoning = await self._llm_pick(ranked, prompt, user_country)
-        if not picked:
-            picked = ranked[:max_sites]
+        if picked is None:
+            picked = ranked
             reasoning = "Ranked by market distance (no usable LLM selection)."
-        return picked[:max_sites], reasoning
+        if max_sites and max_sites > 0:
+            picked = picked[:max_sites]
+        return picked, reasoning
 
     async def _llm_pick(
         self,
         ranked: list[SiteCandidate],
         prompt: str,
         user_country: str,
-    ) -> tuple[list[SiteCandidate], str]:
-        """Ask the LLM which of the ranked candidates are worth visiting."""
+    ) -> tuple[list[SiteCandidate] | None, str]:
+        """Ask the LLM which of the ranked candidates are worth visiting.
+
+        ``None`` means the model was unavailable or answered nonsense, so the
+        caller should fall back to every candidate. An empty list is a valid
+        answer meaning no shop fits.
+        """
         if self.llm is None:
-            return [], ""
+            return None, ""
         chat_json = getattr(self.llm, "chat_json", None)
         if chat_json is None:
-            return [], ""
+            return None, ""
 
         catalogue = "\n".join(
             f"- {c.id}: {c.name} ({c.country}, {c.currency}, "
-            f"categories: {', '.join(c.categories)})"
+            f"categories: {', '.join(c.categories)}; "
+            f"specialties: {', '.join(c.specialties) or 'general'}; "
+            f"notes: {c.notes or 'none'})"
             for c in ranked
         )
         system = (
             "You choose which online shops are worth searching for a product. "
             "The user shops in this market: "
             f"{user_country}. Prefer local shops, then neighbouring markets. "
+            "Use the specialties and notes: a battery request belongs on "
+            "nkon/ecoprodukt, a solar request on solaro/ecoprodukt, a general "
+            "electronics request on amazon/nay/alza. "
+            "Select EVERY shop that is genuinely useful for this request. "
+            "The count is not limited; do not stop at six. "
             "Reply with ONLY a JSON object: "
             '{"selected": ["site_id", ...], "reasoning": "one short sentence"}. '
-            "Use only site ids from the list. Pick at most 6."
+            "Use only site ids from the list. An empty list is valid only when "
+            "no shop fits."
         )
         user = f"Request: {prompt}\n\nAvailable shops:\n{catalogue}"
 
@@ -137,13 +152,13 @@ class SiteSelector:
             data = await chat_json(system, user, max_tokens=300)
         except Exception as exc:  # noqa: BLE001 - selection must never break a search
             logger.warning("Site selection LLM call failed: %s", exc)
-            return [], ""
+            return None, ""
 
         if not isinstance(data, dict):
-            return [], ""
+            return None, ""
         raw_ids = data.get("selected")
         if not isinstance(raw_ids, list):
-            return [], ""
+            return None, ""
 
         allowed = {c.id: c for c in ranked}
         picked: list[SiteCandidate] = []
@@ -153,9 +168,9 @@ class SiteSelector:
             if candidate is not None and candidate not in picked:
                 picked.append(candidate)
 
-        if not picked:
-            return [], "The LLM returned no usable site."
         reasoning = str(data.get("reasoning") or "").strip()
+        if not picked and not reasoning:
+            reasoning = "The LLM selected no suitable shop."
         return picked, reasoning
 
 

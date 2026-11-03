@@ -101,15 +101,70 @@ async def test_llm_cannot_introduce_unknown_sites():
 
 
 @pytest.mark.asyncio
-async def test_llm_garbage_falls_back_to_ranking():
+async def test_select_without_cap_returns_every_candidate():
+    candidates = [_candidate(f"s{i}", "SK") for i in range(12)]
+    selected, _ = await SiteSelector().select(candidates, "battery", "SK", max_sites=0)
+    assert len(selected) == 12
+
+
+@pytest.mark.asyncio
+async def test_llm_may_select_every_candidate():
     class FakeLLM:
         async def chat_json(self, system, user, max_tokens=400):
-            return {"selected": [], "reasoning": ""}
+            return {"selected": ["a", "b", "c"], "reasoning": "all match"}
+
+    candidates = [_candidate("a", "SK"), _candidate("b", "SK"), _candidate("c", "SK")]
+    selected, _ = await SiteSelector(FakeLLM()).select(candidates, "battery", "SK")
+    assert [c.id for c in selected] == ["a", "b", "c"]
+
+
+@pytest.mark.asyncio
+async def test_valid_empty_selection_means_no_shops():
+    class FakeLLM:
+        async def chat_json(self, system, user, max_tokens=400):
+            return {"selected": [], "reasoning": "no suitable shop"}
 
     candidates = [_candidate("a", "SK"), _candidate("b", "CZ")]
-    selected, reasoning = await SiteSelector(FakeLLM()).select(candidates, "auto", "SK")
+    selected, reasoning = await SiteSelector(FakeLLM()).select(candidates, "battery", "SK")
+    assert selected == []
+    assert reasoning == "no suitable shop"
+
+
+@pytest.mark.asyncio
+async def test_malformed_selection_falls_back_to_all():
+    class FakeLLM:
+        async def chat_json(self, system, user, max_tokens=400):
+            return {"selected": "not-a-list", "reasoning": ""}
+
+    candidates = [_candidate("a", "SK"), _candidate("b", "CZ")]
+    selected, reasoning = await SiteSelector(FakeLLM()).select(candidates, "battery", "SK")
     assert [c.id for c in selected] == ["a", "b"]
     assert "Ranked by market distance" in reasoning
+
+
+@pytest.mark.asyncio
+async def test_prompt_includes_specialties_and_notes():
+    captured = {}
+
+    class FakeLLM:
+        async def chat_json(self, system, user, max_tokens=400):
+            captured["system"] = system
+            captured["user"] = user
+            return {"selected": ["a"], "reasoning": "ok"}
+
+    candidate = SiteCandidate(
+        id="a", name="A", country="SK", currency="EUR",
+        categories=("electronics",), conditions=("new",),
+        notes="battery specialist", specialties=("battery", "18650"),
+    )
+    other = SiteCandidate(
+        id="b", name="B", country="CZ", currency="EUR",
+        categories=("electronics",), conditions=("new",),
+    )
+    await SiteSelector(FakeLLM()).select([candidate, other], "18650", "SK")
+    assert "battery specialist" in captured["user"]
+    assert "18650" in captured["user"]
+    assert "at most 6" not in captured["system"].lower()
 
 
 @pytest.mark.asyncio

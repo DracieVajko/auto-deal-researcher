@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- Unlimited site selection: the LLM sees shop specialties and may select
+  every suitable shop; `--sites` overrides automatic selection. The `ask`
+  wizard no longer asks for a shop count.
+- Amazon.de adapter, eBay price quotes and login status, plus nkon.nl,
+  ecoprodukt.sk, Solaro.sk (blocked) and Nay.sk catalogue entries.
+- Saved cookie sessions under `data/sessions/` are applied before each site
+  search; blocked and planned shops are listed in the report with a reason.
 - Price trust and effective price: `PriceQuote` captures listed price, shipping,
   bundle minimum quantity, price ranges and account-gated/coupon promos.
   Filters and ranking use the shipping-inclusive, per-unit effective price;

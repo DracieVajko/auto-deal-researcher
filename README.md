@@ -230,21 +230,38 @@ The searcher does not open every registered shop. It works in three steps:
 
 1. **Deterministic filter** — enabled sites that carry the requested
    category and condition, and that have an adapter or a validated profile.
+   Blocked sites and sites without a working route are skipped with a reason.
 2. **Location ranking** — sites in your market (`search.user_country`) come
    first, neighbouring EU markets second, the rest last.
-3. **AI selection** — the LLM narrows the ranked list down to the shops worth
-   visiting for this prompt. It can only narrow the list, never widen it, and
-   it falls back to the ranking when it fails.
+3. **AI selection** — the LLM receives shop specialties and notes and selects
+   **every** shop that fits; there is no count limit. It can only pick from the
+   runnable list, never widen it, and falls back to the full list when it fails.
 
 ```bash
-# Prefer Slovak shops, open at most 5 of them.
-python -m src.cli run --prompt "stol" --category home --country SK --max-sites 5
+# Let the LLM choose every suitable shop.
+python -m src.cli run --prompt "18650 battery"
 
-# Prefer Czech shops and look at cars.
-python -m src.cli run --prompt "octavia" --category auto --country CZ
+# Or name the shops explicitly; this bypasses the LLM.
+python -m src.cli run --prompt "18650 battery" --sites nkon_nl,ecoprodukt_sk
+
+# Prefer Slovak shops and cap the run only when you really want to.
+python -m src.cli run --prompt "stol" --category home --country SK --max-sites 5
 ```
 
-`--country` overrides `search.user_country` for a single run.
+`--country` overrides `search.user_country` for a single run. `--max-sites`
+is an optional emergency cap; omit it for unlimited selection. The report's
+`Shops searched` section lists what was selected and what was skipped, with
+the reason.
+
+Sites that need a real session (eBay, Solaro, optionally Amazon) use:
+
+```bash
+python scripts/login.py --site ebay
+python scripts/login.py --site ebay --check
+```
+
+Cookies are stored under `data/sessions/` (git-ignored) and loaded
+automatically before the site search.
 
 ### Product domains
 

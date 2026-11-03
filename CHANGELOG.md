@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- `discover-web` CLI: DuckDuckGo/Bing discovery of domains outside the
+  catalogue; known shops are marked with status, new domains are written to
+  `data/discovered_sites.json` for review. Unknown domains are never opened
+  automatically.
 - Parallel site search with bounded `search.concurrency` (default 3); results
   are merged in site order and duplicate URLs are still collapsed.
 - Product spec coverage: `computer` extracts GPU (RTX/GTX/Radeon/Arc/Iris Xe/

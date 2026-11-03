@@ -12,13 +12,13 @@ from src.cli.commands.history import history_app
 from src.cli.commands.monitor import monitor as monitor_fn
 from src.cli.commands.watch import watch as watch_fn
 from src.config import load_config
+from src.config.models import Category, Condition
 from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.llm.client import LLMClient
 from src.llm.health import run_checks as run_llm_checks
 from src.output.domains import DOMAIN_REGISTRY, get
 from src.output.processor import ResultProcessor
 from src.scheduler.tasks import install_schedule, uninstall_schedule
-from src.config.models import Condition, Category
 from src.searcher.filters import (
     CATEGORIES,
     ResolvedRequest,
@@ -918,6 +918,37 @@ async def _search_async(
         typer.echo(f"  {d.site_name:<10} {d.price_eur:>9.2f} EUR {d.condition:<10} {d.title[:50]}")
 
     typer.echo(f"Results in {output_dir}/")
+
+
+@app.command("discover-web")
+def discover_web(
+    prompt: str = typer.Option(..., "--prompt", "-p", help="Product query to search for"),
+    limit: int = typer.Option(10, "--limit", help="Maximum result domains"),
+    output_dir: str = typer.Option("data", "--output-dir", help="Where to write the proposal JSON"),
+):
+    """Find shops outside the catalogue without opening them."""
+    from src.research.site_discovery import discover_domains, save_discovery_report
+
+    domains = discover_domains(prompt, max_results=limit)
+    if not domains:
+        typer.echo("No domains found.", err=True)
+        raise typer.Exit(1)
+
+    path = save_discovery_report(prompt, domains, output_dir)
+    known = [item for item in domains if item.known_id]
+    new = [item for item in domains if not item.known_id]
+    typer.echo(f"\nKnown catalogue shops ({len(known)}):")
+    for item in known:
+        typer.echo(f"  {item.known_id:<16} {item.status:<12} {item.url}")
+    typer.echo(f"\nNew domains ({len(new)}):")
+    for item in new:
+        typer.echo(f"  {item.domain:<28} {item.title[:60]}")
+        typer.echo(f"    {item.url}")
+    typer.echo(f"\nProposal written to: {path}")
+    typer.echo(
+        "Review a new domain, add a SiteSpec, then run: "
+        "python scripts/discover_sites.py discover --site <id>"
+    )
 
 
 @app.command()

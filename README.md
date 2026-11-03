@@ -405,6 +405,21 @@ The Markdown report is ordered for reading, not for raw listing order:
 Every deal appears once as a full card; the `All found` table is the only place
 where it is repeated. JSON/CSV/XLSX fields are unchanged.
 
+### Web discovery
+
+Find shops that are not in the catalogue without letting them run:
+
+```bash
+python -m src.cli discover-web --prompt "Samsung 18650 30Q battery" --limit 10
+```
+
+It searches DuckDuckGo (Bing RSS fallback), marks known catalogue domains with
+their status, lists new domains with a sample URL, and writes
+`data/discovered_sites.json`. Adding a new domain is still a deliberate step:
+review it, add a `SiteSpec`, then validate a profile with
+`scripts/discover_sites.py`. The searcher never opens an unknown domain
+automatically.
+
 ### Site discovery and profiles
 
 All 30 registered sites are listed in `config.example.yaml`. Sites without an

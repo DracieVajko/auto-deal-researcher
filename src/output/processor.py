@@ -17,8 +17,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from src.config.models import Condition, OutputConfig
-from src.output.dedup import collapse_duplicates
 from src.output.cross_site import cross_site_groups, product_key
+from src.output.dedup import collapse_duplicates
 from src.output.domains import DomainProfile, detect, get
 from src.output.domains.ai import proposal_to_profile, propose_domain
 from src.output.domains.cache import AI_DRAFT_DIR, load_drafts, save_draft

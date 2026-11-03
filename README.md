@@ -409,6 +409,10 @@ The Markdown report is ordered for reading, not for raw listing order:
 Every deal appears once as a full card; the `All found` table is the only place
 where it is repeated. JSON/CSV/XLSX fields are unchanged.
 
+Deals with the same normalized title on different sites are not collapsed (a
+cheaper copy may have worse shipping or condition). Their cards show a
+`🔗 Also at` list with the other shop, link and effective price.
+
 ### Web discovery
 
 Find shops that are not in the catalogue without letting them run:

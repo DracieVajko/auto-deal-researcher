@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- Cross-site product links: the same normalized title on another shop is shown
+  as `🔗 Also at` with a link and effective price; listings are not collapsed,
+  so a cheaper copy with worse shipping/condition stays visible.
 - `discover-web` CLI: DuckDuckGo/Bing discovery of domains outside the
   catalogue; known shops are marked with status, new domains are written to
   `data/discovered_sites.json` for review. Unknown domains are never opened

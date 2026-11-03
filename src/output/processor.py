@@ -18,6 +18,7 @@ from typing import ClassVar
 
 from src.config.models import Condition, OutputConfig
 from src.output.dedup import collapse_duplicates
+from src.output.cross_site import cross_site_groups, product_key
 from src.output.domains import DomainProfile, detect, get
 from src.output.domains.ai import proposal_to_profile, propose_domain
 from src.output.domains.cache import AI_DRAFT_DIR, load_drafts, save_draft
@@ -85,6 +86,7 @@ class DealAnalysis:
     # is not in DOMAIN_REGISTRY. Consumers resolve `profile or get(domain)`.
     profile: DomainProfile | None = None
     filter_reason: str = ""
+    also_at: list[dict] = field(default_factory=list)
 
 
 class ResultProcessor:
@@ -1093,7 +1095,25 @@ class ResultProcessor:
     # ------------------------------------------------------------------
     # Cross-deal scoring and alternatives
     # ------------------------------------------------------------------
+    def _populate_cross_site_links(self, analyses: list[DealAnalysis]) -> None:
+        groups = cross_site_groups([analysis.deal for analysis in analyses])
+        for analysis in analyses:
+            analysis.also_at = []
+            for other in groups.get(product_key(analysis.deal.title), []):
+                if other.url == analysis.deal.url:
+                    continue
+                analysis.also_at.append(
+                    {
+                        "title": other.title,
+                        "url": other.url,
+                        "site_name": other.site_name,
+                        "price_eur": comparable_price(other),
+                    }
+                )
+
     def _add_cross_alternatives(self, analyses: list[DealAnalysis]) -> None:
+        self._populate_cross_site_links(analyses)
+
         relevant = [
             analysis
             for analysis in analyses
@@ -1360,6 +1380,7 @@ class ResultProcessor:
             "specs": analysis.specs,
             "spec_coverage": analysis.spec_coverage,
             "alternatives": analysis.alternatives,
+            "also_at": analysis.also_at,
             "score_breakdown": analysis.score_breakdown,
         }
 
@@ -1447,6 +1468,7 @@ class ResultProcessor:
                 lines += self._filtered_lines(filtered)
             return "\n".join(lines) + "\n"
 
+        self._populate_cross_site_links(relevant)
         top = self._top_three(relevant, top_picks)
         lines += ["## Winner", ""]
         lines += self._deal_card(top[0][1], 1, top_picks, prompt, label=top[0][0])
@@ -1767,6 +1789,18 @@ class ResultProcessor:
                 price_text = f"{price:.0f} €" if isinstance(price, (int, float)) else "price n/a"
                 why = f" — {alt['why']}" if alt.get("why") else ""
                 lines.append(f"- **{alt['title']}** ({price_text}){why}")
+            lines.append("")
+
+        if analysis.also_at:
+            lines.append("**🔗 Also at**")
+            for other in analysis.also_at:
+                price = other.get("price_eur")
+                price_text = (
+                    f"{price:.2f} €" if isinstance(price, (int, float)) else "price n/a"
+                )
+                lines.append(
+                    f"- [{other['site_name']}]({other['url']}) — {price_text}"
+                )
             lines.append("")
 
         if analysis.score_breakdown:

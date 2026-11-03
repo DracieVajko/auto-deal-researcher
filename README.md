@@ -389,9 +389,11 @@ The Markdown report is ordered for reading, not for raw listing order:
    `Best price/performance` when they win that comparison.
 3. **All found** — one compact table with every relevant deal and its link.
 4. **Comparison** — winner and runner-ups side by side, including common specs.
-5. **Other deals** — full cards for everything not already shown at the top.
-6. **Shops searched** — selected and skipped shops with reasons.
-7. **Filtered out** — removed listings with the reason and link.
+5. **Sources** — DuckDuckGo/Bing review and spec pages with real links, plus a
+   `Why the winner won` line. Omitted when the search returns nothing.
+6. **Other deals** — full cards for everything not already shown at the top.
+7. **Shops searched** — selected and skipped shops with reasons.
+8. **Filtered out** — removed listings with the reason and link.
 
 Every deal appears once as a full card; the `All found` table is the only place
 where it is repeated. JSON/CSV/XLSX fields are unchanged.

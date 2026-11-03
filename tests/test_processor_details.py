@@ -860,6 +860,69 @@ def test_other_deals_contains_only_remaining_cards():
     assert "Deal 1" not in other_block
 
 
+def test_comparison_lists_external_sources(monkeypatch):
+    import src.output.processor as processor_module
+    from src.research.web_search import WebSource
+
+    monkeypatch.setattr(
+        processor_module,
+        "search_web",
+        lambda query, max_results=5: [
+            WebSource(
+                title="Battery review",
+                url="https://example.com/review",
+                snippet="Capacity and current test",
+            )
+        ],
+    )
+    processor = ResultProcessor(load_config())
+    analyses = [
+        DealAnalysis(
+            deal=Deal(url="https://x/1", title="Cell A", price_eur=5.0),
+            domain="generic",
+            score=90.0,
+            verdict="buy",
+        ),
+        DealAnalysis(
+            deal=Deal(url="https://x/2", title="Cell B", price_eur=6.0),
+            domain="generic",
+            score=80.0,
+            verdict="watch",
+        ),
+    ]
+
+    markdown = processor._to_markdown("x", analyses, [], "2026-11-03", set())
+
+    assert "## Sources" in markdown
+    assert "https://example.com/review" in markdown
+    assert "Why the winner won" in markdown
+
+
+def test_no_sources_section_without_results(monkeypatch):
+    import src.output.processor as processor_module
+
+    monkeypatch.setattr(processor_module, "search_web", lambda *args, **kwargs: [])
+    processor = ResultProcessor(load_config())
+    analyses = [
+        DealAnalysis(
+            deal=Deal(url="https://x/1", title="Cell A", price_eur=5.0),
+            domain="generic",
+            score=90.0,
+            verdict="buy",
+        ),
+        DealAnalysis(
+            deal=Deal(url="https://x/2", title="Cell B", price_eur=6.0),
+            domain="generic",
+            score=80.0,
+            verdict="watch",
+        ),
+    ]
+
+    markdown = processor._to_markdown("x", analyses, [], "2026-11-03", set())
+
+    assert "## Sources" not in markdown
+
+
 def test_report_shows_shipping_breakdown():
     processor = ResultProcessor(load_config())
     deal = Deal(

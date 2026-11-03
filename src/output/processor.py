@@ -26,6 +26,7 @@ from src.output.requirements import (
     extract_requirements,
     has_hard_defect,
 )
+from src.research.web_search import WebSource, comparison_query, search_web
 from src.searcher.adapters.base import Deal
 from src.searcher.listing_filter import is_laptop_title, wants_mini_pc_form_factor
 from src.searcher.pricing import PriceKind, comparable_price
@@ -1463,6 +1464,17 @@ class ResultProcessor:
 
         if len(top) >= 2:
             lines += self._comparison_lines([analysis for _, analysis in top])
+            sources = self._collect_sources([analysis for _, analysis in top])
+            if sources:
+                winner = top[0][1]
+                lines += [
+                    f"**Why the winner won:** score {winner.score:.0f}/100, "
+                    f"effective price {comparable_price(winner.deal):.2f} EUR, "
+                    f"condition {winner.deal.condition or 'unknown'}, "
+                    f"{len(sources)} external source(s).",
+                    "",
+                ]
+                lines += self._sources_lines(sources)
 
         shown_urls = {analysis.deal.url for _, analysis in top}
         others = [
@@ -1560,7 +1572,7 @@ class ResultProcessor:
             from src.storage.manager import StorageManager
 
             storage = StorageManager(self.full_config.storage.db_path)
-        except Exception:
+        except Exception:  # noqa: BLE001 - charts are optional
             return []
 
         charts: list[str] = []
@@ -1584,7 +1596,7 @@ class ResultProcessor:
                             svg,
                             "",
                         ]
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - charts are optional
             logger.debug("Price history chart failed: %s", exc)
             return []
         return ["## Price history", "", *charts] if charts else []
@@ -1630,6 +1642,45 @@ class ResultProcessor:
             + " | ".join(f"[open]({a.deal.url})" for a in analyses)
             + " |"
         )
+        lines.append("")
+        return lines
+
+    def _collect_sources(
+        self, analyses: list[DealAnalysis]
+    ) -> list[tuple[str, WebSource]]:
+        search_config = getattr(self.full_config, "search", None)
+        if not getattr(search_config, "sources", True):
+            return []
+        limit = max(1, int(getattr(search_config, "source_count", 5)))
+        collected: list[tuple[str, WebSource]] = []
+        seen: set[str] = set()
+        for analysis in analyses:
+            try:
+                found = search_web(
+                    comparison_query(analysis.deal.title), max_results=limit
+                )
+            except Exception as exc:  # noqa: BLE001 - sources are optional
+                logger.debug("Source search failed: %s", exc)
+                continue
+            for source in found:
+                if source.url in seen:
+                    continue
+                seen.add(source.url)
+                collected.append((analysis.deal.title, source))
+                if len(collected) >= limit:
+                    return collected
+        return collected
+
+    @staticmethod
+    def _sources_lines(sources: list[tuple[str, WebSource]]) -> list[str]:
+        lines = ["## Sources", ""]
+        for index, (product, source) in enumerate(sources, 1):
+            snippet = f" — {source.snippet[:160]}" if source.snippet else ""
+            lines.append(
+                f"{index}. [{ResultProcessor._escape(source.title)}]"
+                f"({source.url}) — for *{ResultProcessor._escape(product[:60])}*"
+                f"{snippet}"
+            )
         lines.append("")
         return lines
 

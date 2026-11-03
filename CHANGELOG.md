@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- Sourced comparison: the winner/runner-up block now cites DuckDuckGo (Bing RSS
+  fallback) review and spec pages under `## Sources`, with a deterministic
+  `Why the winner won` line. `search.sources` and `search.source_count` control
+  it; a failed search omits the section instead of inventing a source.
 - Winner-first Markdown report: the highest-scoring deal is the first section
   with its full card, followed by runner-ups, `All found`, a comparison table
   with common specs, `Other deals`, `Shops searched` and `Filtered out`.

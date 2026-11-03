@@ -153,6 +153,9 @@ class SearchConfig(BaseModel):
     # Upper bound on how many shops are opened per search round.
     # 0 means unlimited: the LLM selects every suitable shop.
     max_sites: int = 0
+    # Attach external review/spec sources to the comparison table.
+    sources: bool = True
+    source_count: int = 5
     # Currency in which the user wants to see prices (output currency).
     # Defaults to the currency of the user's country if not specified.
     default_currency: str = ""

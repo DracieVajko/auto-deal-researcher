@@ -107,6 +107,14 @@ def require_site(request, site_id: str) -> bool:
     return selected in (None, site_id)
 
 
+@pytest.fixture(autouse=True)
+def _no_network_sources(monkeypatch):
+    """Reports must never hit the network in the ordinary test suite."""
+    import src.output.processor as processor_module
+
+    monkeypatch.setattr(processor_module, "search_web", lambda *args, **kwargs: [])
+
+
 @pytest.fixture
 def env_flag(name: str) -> bool:
     """Read a boolean env flag (used to skip optional live checks)."""

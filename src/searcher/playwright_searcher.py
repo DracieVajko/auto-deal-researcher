@@ -231,21 +231,27 @@ class PlaywrightSearcher:
             try:
                 adapter_cls = get_adapter(site.adapter_class)
             except ValueError:
-                if not (
-                    profile is not None
-                    and profile.is_runtime_ready
-                    and self._site_matches(site, user_condition, user_category)
-                ):
-                    self._skipped_sites.append(
-                        {"name": site.name, "reason": "no adapter or validated profile"}
-                    )
+                if profile is None or not profile.is_runtime_ready:
+                    reason = "no adapter or validated profile"
+                elif not self._site_matches(site, user_condition, user_category):
+                    reason = "does not carry this category/condition"
+                else:
+                    sites.append(site)
                     continue
+                self._skipped_sites.append({"name": site.name, "reason": reason})
+                continue
             else:
                 adapter = adapter_cls(base_url=site.base_url)
                 if not (
                     adapter.matches_condition(user_condition)
                     and adapter.matches_category(user_category)
                 ):
+                    self._skipped_sites.append(
+                        {
+                            "name": site.name,
+                            "reason": "does not carry this category/condition",
+                        }
+                    )
                     continue
             sites.append(site)
         return sites

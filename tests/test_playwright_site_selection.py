@@ -303,6 +303,31 @@ async def test_planned_site_with_working_profile_is_intentionally_allowed(monkey
 
 
 @pytest.mark.asyncio
+async def test_category_mismatch_has_an_accurate_reason():
+    config = AppConfig(search=SearchConfig(
+        websites=[
+            WebsiteConfig(
+                name="nay",
+                base_url="https://www.nay.test",
+                adapter_class="nay",
+                categories=[Category.ELECTRONICS],
+                conditions=[Condition.NEW],
+            )
+        ],
+        user_country="SK",
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+    _profiles(searcher, "nay")
+
+    assert await searcher._select_sites("new", "home", "stol") == []
+    assert any(
+        item["name"] == "nay" and "category" in item["reason"]
+        for item in searcher._skipped_sites
+    )
+
+
+@pytest.mark.asyncio
 async def test_needs_login_without_session_is_skipped(monkeypatch):
     from src.searcher import sessions
 

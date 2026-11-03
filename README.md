@@ -344,6 +344,24 @@ site. A car at `242 000 Kč` is stored as `€6 413` with the original amount
 kept in `original_price` / `original_currency`. The rates are static and live
 in `search.currency_rates`; adjust them there when they drift.
 
+### Price trust and effective price
+
+Ranking uses an **effective price**, not the first number on the card:
+
+* known shipping is added (free shipping is a known `0.00`, unknown shipping is
+  never treated as free and lowers the price trust);
+* a bundle total is divided by its minimum quantity, so `30 € / 3 pcs` competes
+  as `10 €` per unit and the report still shows the total and the minimum;
+* `from 12.99 €` uses the lowest variant and is marked as a range;
+* newcomer, first-order, member and app-only prices stay in the ranking, but
+  they carry a warning and a trust penalty;
+* coupons and public promos are marked and penalised the same way.
+
+The report shows the breakdown (`Item 100.00 € + shipping 5.00 € = 105.00 €`)
+and the JSON/CSV add `effective_price_eur`, `price_kind`, `price_trust`,
+`price_warnings` and `price_breakdown`. A deal without a quote keeps the old
+behaviour: its listed price is the effective price.
+
 ### Site discovery and profiles
 
 All 30 registered sites are listed in `config.example.yaml`. Sites without an

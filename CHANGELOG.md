@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Added
+- Price trust and effective price: `PriceQuote` captures listed price, shipping,
+  bundle minimum quantity, price ranges and account-gated/coupon promos.
+  Filters and ranking use the shipping-inclusive, per-unit effective price;
+  unknown shipping is never treated as zero. Reports show the breakdown and
+  JSON/CSV gain `effective_price_eur`, `price_kind`, `price_trust`,
+  `price_warnings` and `price_breakdown`.
 - Profile-driven site auto-mapping: `scripts/discover_sites.py` records search
   pages and filter controls, writes sanitized `src/searcher/site_profiles/*.yaml`
   maps, and validates them by replay.

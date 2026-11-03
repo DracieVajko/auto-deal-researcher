@@ -363,13 +363,13 @@ async def run_search(
 
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
-    processor = ResultProcessor(config, llm)
+    processor = ResultProcessor(config, llm, brand_filter=filters.brand)
     # --domain beats output.domain; the config value is already loaded in __init__.
     if domain:
         processor.domain_override = domain
     # pass brand filter for hard filtering in the report
     if filters.brand:
-        processor._brand_filter = filters.brand
+        processor.brand_filter = filters.brand
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         try:
@@ -566,7 +566,7 @@ async def _diamond_search_async(
 
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
-    processor = ResultProcessor(config)
+    processor = ResultProcessor(config, brand_filter=filters.brand)
     config.search.winners_count = winners
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
@@ -947,7 +947,7 @@ async def _search_async(
     # Save results
     for deal in deals:
         storage.save_deal(deal)
-    processor = ResultProcessor(config, llm)
+    processor = ResultProcessor(config, llm, brand_filter=filters.brand)
     await processor.save_results(
         deals, output_dir, prompt=prompt, site_plan=site_plan
     )

@@ -156,7 +156,7 @@ def test_search_command_passes_site_plan(monkeypatch, tmp_path):
     captured = {}
 
     class FakeProcessor:
-        def __init__(self, config, llm=None):
+        def __init__(self, config, llm=None, brand_filter=None):
             pass
 
         async def save_results(self, deals, output_dir, prompt=None, site_plan=None):

@@ -958,3 +958,16 @@ def test_report_marks_account_gated_price():
     markdown = processor._to_markdown("x", [analysis], [], "2026-11-02", set())
 
     assert "new user" in markdown.lower()
+
+def test_brand_filter_constructor_filters_titles(tmp_path):
+    processor = ResultProcessor(load_config(), brand_filter="AMD")
+    deals = [
+        Deal(url="https://x/amd", title="AMD Ryzen mini pc", price_eur=300.0),
+        Deal(url="https://x/intel", title="Intel NUC mini pc", price_eur=300.0),
+    ]
+    json_path, _ = asyncio.run(
+        processor.save_results(deals, str(tmp_path), prompt="mini pc")
+    )
+    payload = json.loads(Path(json_path).read_text(encoding="utf-8"))
+    assert payload["count"] == 1
+    assert payload["deals"][0]["title"].startswith("AMD")

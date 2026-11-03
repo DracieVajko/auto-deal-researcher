@@ -371,6 +371,19 @@ def from_cli(
     ).validate()
 
 
+def _lenient_prices(
+    min_price: float | None, max_price: float | None
+) -> tuple[float | None, float | None]:
+    """Drop a negative or inverted price pair instead of rejecting everything."""
+    if min_price is not None and min_price < 0:
+        min_price = None
+    if max_price is not None and max_price < 0:
+        max_price = None
+    if min_price is not None and max_price is not None and min_price > max_price:
+        return None, None
+    return min_price, max_price
+
+
 def filters_from_mapping(data: Mapping[str, Any] | None) -> SearchFilters:
     """Build filters from LLM/config data, ignoring unknown or malformed values."""
     if not isinstance(data, Mapping):
@@ -406,9 +419,13 @@ def filters_from_mapping(data: Mapping[str, Any] | None) -> SearchFilters:
         if isinstance(value, (str, int, float, bool)):
             extras[normalized_key] = str(value).lower() if isinstance(value, bool) else str(value)
 
+    min_price, max_price = _lenient_prices(
+        _optional_float(data.get("min_price", data.get("price_min"))),
+        _optional_float(data.get("max_price", data.get("price_max"))),
+    )
     result = SearchFilters(
-        min_price=_optional_float(data.get("min_price", data.get("price_min"))),
-        max_price=_optional_float(data.get("max_price", data.get("price_max"))),
+        min_price=min_price,
+        max_price=max_price,
         condition=_normalize_condition(data.get("condition"), strict=False),
         brand=_clean(data.get("brand")),
         location=_clean(data.get("location")),
@@ -450,6 +467,8 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
         match = _MAX_RE.search(text)
         if match:
             max_price = _parse_number(match.group(1))
+
+    min_price, max_price = _lenient_prices(min_price, max_price)
 
     condition = None
     for patterned, value in (

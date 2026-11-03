@@ -110,10 +110,11 @@ class ResultProcessor:
         re.IGNORECASE,
     )
 
-    def __init__(self, config, llm=None):
+    def __init__(self, config, llm=None, brand_filter: str | None = None):
         self.config: OutputConfig = config.output
         self.full_config = config
         self.llm = llm
+        self.brand_filter = brand_filter
         # --domain / output.domain from the CLI; None means auto-detect.
         # The CLI value overrides this one when it is given.
         self.domain_override = getattr(self.config, "domain", "") or None
@@ -263,7 +264,7 @@ class ResultProcessor:
 
         # Hard brand filter: keep only deals whose title mentions one of the
         # requested brands (comma-separated). Applied before LLM analysis.
-        brand_filter = getattr(self, "_brand_filter", None)
+        brand_filter = self.brand_filter
         if brand_filter:
             brands = [b.strip().lower() for b in str(brand_filter).split(",") if b.strip()]
             if brands:

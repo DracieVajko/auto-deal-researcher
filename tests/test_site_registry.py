@@ -5,7 +5,9 @@ from src.searcher.site_registry import SITES, by_id, by_status, sites_for, summa
 
 def test_registry_has_working_sites():
     working = by_status("working")
-    assert {s.id for s in working} == {"alza", "amazon_de", "bazos"}
+    assert {s.id for s in working} == {
+        "alza", "amazon_de", "bazos", "ecoprodukt_sk", "nay", "nkon_nl",
+    }
 
 
 def test_specialty_sites_are_registered():
@@ -19,8 +21,8 @@ def test_specialties_are_lowercase_keywords():
 
 
 def test_new_sites_have_honest_status():
-    assert by_id("nkon_nl").status == "planned"
-    assert by_id("ecoprodukt_sk").status == "planned"
+    assert by_id("nkon_nl").status == "working"
+    assert by_id("ecoprodukt_sk").status == "working"
     assert by_id("solaro_sk").status == "blocked"
 
 
@@ -78,10 +80,10 @@ def test_by_id_returns_spec():
 
 def test_summary_counts():
     s = summary()
-    assert s["working"] == 3
+    assert s["working"] == 6
     assert s["blocked"] == 4
     assert s["needs_login"] == 2
-    assert s["planned"] == 24
+    assert s["planned"] == 21
     assert sum(s.values()) == len(SITES)
 
 

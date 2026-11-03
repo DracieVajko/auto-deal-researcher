@@ -58,6 +58,12 @@ def test_profile_round_trip(tmp_path):
     assert loaded.filters.price_max.url.param == "max"
 
 
+def test_new_profiles_load_with_expected_status():
+    assert load_profile("nkon_nl").status == "validated"
+    assert load_profile("ecoprodukt_sk").status == "validated"
+    assert load_profile("solaro_sk").status in {"blocked", "needs_login"}
+
+
 def test_missing_profile_returns_none(tmp_path):
     assert load_profile("does-not-exist", tmp_path) is None
 

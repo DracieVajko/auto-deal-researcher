@@ -1,0 +1,21 @@
+version: 1
+site_id: nkon_nl
+base_url: https://www.nkon.nl
+status: validated
+last_verified: '2026-11-03'
+currency: EUR
+search:
+  url_template: https://www.nkon.nl/en/catalogsearch/result/?q={query}
+  query_param: q
+  category_urls:
+    electronics: https://www.nkon.nl/en/catalogsearch/result/?q={query}
+filters:
+  extras: {}
+extraction:
+  item_selector: li.product-item
+  title_selector: .product-item-link
+  price_selector: .price
+  link_selector: .product-item-link
+  image_selector: .product-image-photo
+  condition_selector: .product-item-link
+notes: Magento battery specialist; verified search path 2026-11-03.

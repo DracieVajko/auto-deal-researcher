@@ -57,7 +57,7 @@ search:
       currency: "EUR"
     - name: "nay"
       base_url: "https://www.nay.sk"
-      enabled: false
+      enabled: true
       adapter_class: "nay"
       categories: ["electronics", "appliances"]
       conditions: ["new", "open_box"]
@@ -105,7 +105,7 @@ search:
       currency: "EUR"
     - name: "nkon_nl"
       base_url: "https://www.nkon.nl"
-      enabled: false
+      enabled: true
       adapter_class: "nkon_nl"
       categories: ["electronics", "hobby"]
       conditions: ["new", "used", "refurbished"]
@@ -113,7 +113,7 @@ search:
       currency: "EUR"
     - name: "ecoprodukt_sk"
       base_url: "https://ecoprodukt.sk"
-      enabled: false
+      enabled: true
       adapter_class: "ecoprodukt_sk"
       categories: ["electronics", "home", "hobby"]
       conditions: ["new", "used", "open_box"]

@@ -3,7 +3,7 @@
 import pytest
 
 from src.searcher.adapters.profile_adapter import ProfileAdapter
-from src.searcher.site_profiles import SiteProfile
+from src.searcher.site_profiles import SiteProfile, load_profile
 
 
 class FakeChild:
@@ -112,6 +112,23 @@ def test_profile_adapter_prefers_the_explicit_currency_over_the_profile():
 def test_profile_adapter_falls_back_to_the_profile_currency():
     adapter = ProfileAdapter(profile=_profile(currency="CZK"))
     assert adapter.currency == "CZK"
+
+
+@pytest.mark.asyncio
+async def test_nkon_profile_extracts_a_battery_card():
+    profile = load_profile("nkon_nl")
+    element = FakeElement(
+        mapping={
+            ".product-item-link": FakeChild("18650 battery", href="/en/18650"),
+            ".price": FakeChild("4,99 €"),
+        },
+        text="18650 battery 4,99 €",
+    )
+    deal = await ProfileAdapter(profile=profile).extract_deal(None, element)
+    assert deal is not None
+    assert deal.title == "18650 battery"
+    assert deal.price_eur == 4.99
+    assert deal.price_quote is not None
 
 
 @pytest.mark.asyncio

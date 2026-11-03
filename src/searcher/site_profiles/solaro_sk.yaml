@@ -1,0 +1,21 @@
+version: 1
+site_id: solaro_sk
+base_url: https://solaro.sk
+status: blocked
+last_verified: '2026-11-03'
+currency: EUR
+search:
+  url_template: https://solaro.sk/?s={query}&post_type=product
+  query_param: s
+  category_urls:
+    electronics: https://solaro.sk/?s={query}&post_type=product
+filters:
+  extras: {}
+extraction:
+  item_selector: ul.products li.product
+  title_selector: .woocommerce-loop-product__title
+  price_selector: .price
+  link_selector: a.woocommerce-LoopProduct-link
+  image_selector: img
+  condition_selector: .onsale
+notes: Cloudflare challenge; keep disabled until a real session passes.

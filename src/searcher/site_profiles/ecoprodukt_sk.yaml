@@ -1,0 +1,21 @@
+version: 1
+site_id: ecoprodukt_sk
+base_url: https://ecoprodukt.sk
+status: validated
+last_verified: '2026-11-03'
+currency: EUR
+search:
+  url_template: https://ecoprodukt.sk/?s={query}&post_type=product
+  query_param: s
+  category_urls:
+    electronics: https://ecoprodukt.sk/?s={query}&post_type=product
+filters:
+  extras: {}
+extraction:
+  item_selector: ul.products li.product
+  title_selector: .woocommerce-loop-product__title
+  price_selector: .price
+  link_selector: a.woocommerce-LoopProduct-link
+  image_selector: img
+  condition_selector: .product__badge, .onsale
+notes: WooCommerce photovoltaics and batteries; verified 2026-11-03.

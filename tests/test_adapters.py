@@ -138,3 +138,44 @@ async def test_bazos_quote_reads_shipping_from_card():
     assert deal.price_quote is not None
     assert deal.price_quote.shipping.cost_eur == 4.99
     assert deal.price_quote.effective_price_eur == 30.99
+
+
+@pytest.mark.asyncio
+async def test_ebay_card_attaches_a_price_quote():
+    class FakeChild:
+        def __init__(self, text="", href=None):
+            self.text = text
+            self.href = href
+
+        async def inner_text(self):
+            return self.text
+
+        async def get_attribute(self, name):
+            return self.href if name == "href" else None
+
+    class FakeCard:
+        mapping = {
+            ".s-card__title": FakeChild("18650 battery"),
+            ".s-card__price": FakeChild("19,99 €"),
+            'a[href*="/itm/"]': FakeChild(href="https://www.ebay.de/itm/1"),
+            ".s-card__subtitle": FakeChild("Used"),
+        }
+
+        async def query_selector(self, selector):
+            return self.mapping.get(selector)
+
+        async def inner_text(self):
+            return "18650 battery 19,99 € Used + shipping 4,99 €"
+
+    deal = await EbayAdapter().extract_deal(None, FakeCard())
+    assert deal is not None
+    assert deal.price_quote is not None
+    assert deal.price_quote.shipping.cost_eur == 4.99
+
+
+@pytest.mark.asyncio
+async def test_ebay_error_page_is_blocked():
+    reason = await EbayAdapter().detect_block(
+        FakePage(url="https://www.ebay.de/sch/i.html", title="Error Page | eBay")
+    )
+    assert reason == "ebay bot block"

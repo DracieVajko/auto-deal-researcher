@@ -7,6 +7,7 @@ from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
 from src.searcher.filters import SearchFilters
+from src.searcher.pricing import build_price_quote, extract_price_signals
 from src.searcher.site_profiles import SiteProfile
 
 from .base import BaseAdapter, Deal, SiteBlockedError
@@ -174,6 +175,8 @@ class EbayAdapter(BaseAdapter):
 
             subtitle = " ".join((await subtitle_el.inner_text()).split()) if subtitle_el else ""
             condition = self._detect_condition(f"{title} {subtitle}")
+            full_text = " ".join((await element.inner_text()).split())
+            signals = extract_price_signals(full_text, price_eur, original_currency)
 
             return Deal(
                 url=url.split("?")[0],
@@ -187,9 +190,23 @@ class EbayAdapter(BaseAdapter):
                     "subtitle": subtitle[:120],
                     "original_price": original_price,
                     "original_currency": original_currency,
+                    "card_text": full_text[:2000],
                 },
                 original_price=original_price,
                 original_currency=original_currency,
+                price_quote=build_price_quote(
+                    price_eur,
+                    kind=signals.kind,
+                    shipping=signals.shipping,
+                    bundle=signals.bundle,
+                    price_from=signals.price_from,
+                    price_max_eur=signals.price_max_eur,
+                    regular_price_eur=signals.regular_price_eur,
+                    evidence=signals.evidence,
+                    source="regex",
+                    confidence=signals.confidence,
+                    warnings=signals.warnings,
+                ),
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as e:
             logger.debug(f"[{self.name}] Extract error: {e}")

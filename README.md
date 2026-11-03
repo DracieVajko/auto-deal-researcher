@@ -407,7 +407,9 @@ The Markdown report is ordered for reading, not for raw listing order:
 8. **Filtered out** — removed listings with the reason and link.
 
 Every deal appears once as a full card; the `All found` table is the only place
-where it is repeated. JSON/CSV/XLSX fields are unchanged.
+where it is repeated. JSON/CSV/XLSX fields are unchanged. XLSX export is
+optional: install it with `pip install -e ".[excel]"`; without `openpyxl` the
+XLSX file is skipped and JSON/CSV/Markdown still work.
 
 Deals with the same normalized title on different sites are not collapsed (a
 cheaper copy may have worse shipping or condition). Their cards show a

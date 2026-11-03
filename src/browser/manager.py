@@ -92,14 +92,12 @@ class BrowserManager:
                 "slow_mo": browser_config.slow_mo,
                 "viewport": {'width': 1920, 'height': 1080},
                 "user_agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                "ignore_https_errors": True,
+                "ignore_https_errors": browser_config.ignore_https_errors,
                 "args": [
                     '--disable-blink-features=AutomationControlled',
                     '--disable-dev-shm-usage',
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
                 ],
             }
             # Point at the chosen real browser instead of bundled Chromium.
@@ -128,7 +126,7 @@ class BrowserManager:
         self._context = await browser.new_context(
             viewport={'width': 1920, 'height': 1080},
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            ignore_https_errors=True,
+            ignore_https_errors=browser_config.ignore_https_errors,
         )
         await self._setup_context(self._context)
         return self._context

@@ -118,6 +118,9 @@ class BrowserConfig(BaseModel):
     slow_mo: int = 0  # Slow down operations by N ms (useful for debugging)
     # Reuse cookies/credentials between runs instead of a fresh profile.
     storage_state: str | None = None
+    # Accept self-signed certificates. Off by default; a MITM proxy that
+    # re-signs TLS needs this opt-in.
+    ignore_https_errors: bool = False
     # Sites that need a manual login on first run (adapter id list).
     login_sites: list[str] = ["facebook"]
 

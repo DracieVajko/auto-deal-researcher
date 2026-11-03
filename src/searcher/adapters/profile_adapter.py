@@ -196,13 +196,13 @@ class ProfileAdapter(BaseAdapter):
 
     @staticmethod
     def _detect_condition(text: str) -> str:
-        normalised = fold(text).lower()
-        if "open box" in normalised or "openbox" in normalised or "rozbalen" in normalised:
+        normalized = fold(text).lower()
+        if "open box" in normalized or "openbox" in normalized or "rozbalen" in normalized:
             return "open_box"
-        if "refurbished" in normalised or "repasovan" in normalised or "rekonstruovan" in normalised:
+        if "refurbished" in normalized or "repasovan" in normalized or "rekonstruovan" in normalized:
             return "refurbished"
-        if "new" in normalised or "novy" in normalised or "nove" in normalised:
+        if "new" in normalized or "novy" in normalized or "nove" in normalized:
             return "new"
-        if "used" in normalised or "pouzit" in normalised or "bazar" in normalised:
+        if "used" in normalized or "pouzit" in normalized or "bazar" in normalized:
             return "used"
         return "unknown"

@@ -85,21 +85,17 @@ class BrowserProfile:
         return shutil.which(exe) if exe else None
 
 
-def _win(p: list[str]) -> list[str]:
-    return p
-
-
 REGISTRY: list[BrowserProfile] = [
     BrowserProfile(
         id="brave",
         name="Brave (Chromium)",
         channel=None,
         candidates={
-            "windows": _win([
+            "windows": [
                 r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
                 r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
                 r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\Application\brave.exe",
-            ]),
+            ],
             "darwin": [
                 "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
             ],

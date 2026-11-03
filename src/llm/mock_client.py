@@ -16,6 +16,15 @@ class MockLLMClient:
         self.call_count = 0
 
     # === Async methods (used by searcher) ===
+    async def generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
+        """Public query ladder entry point used by PlaywrightSearcher."""
+        return await self._generate_search_query_async(prompt, broader)
+
+    @staticmethod
+    def keyword_query(prompt: str, max_words: int = 5) -> str:
+        """Deterministic short query fallback."""
+        return " ".join((prompt or "").split()[:max_words])
+
     async def _generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
         """Generate search queries using LLM (async version)."""
         self.call_count += 1

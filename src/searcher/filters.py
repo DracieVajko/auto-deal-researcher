@@ -215,9 +215,9 @@ def _normalize_choice(value: Any, aliases: Mapping[str, str], allowed: tuple, *,
     text = fold(_clean(value) or "").lower()
     if text in (Condition.ANY, "all", "alles", "vsetko", "všetko"):
         return None
-    normalised = aliases.get(text, text)
-    if normalised in allowed:
-        return normalised
+    normalized = aliases.get(text, text)
+    if normalized in allowed:
+        return normalized
     if strict:
         msg = f"Unsupported filter value {value!r}; expected one of {', '.join(allowed)}"
         raise ValueError(msg)
@@ -400,11 +400,11 @@ def filters_from_mapping(data: Mapping[str, Any] | None) -> SearchFilters:
         "extras",
     }
     for key, value in data.items():
-        normalised_key = str(key).strip().lower()
-        if normalised_key in known or value is None or value == "":
+        normalized_key = str(key).strip().lower()
+        if normalized_key in known or value is None or value == "":
             continue
         if isinstance(value, (str, int, float, bool)):
-            extras[normalised_key] = str(value).lower() if isinstance(value, bool) else str(value)
+            extras[normalized_key] = str(value).lower() if isinstance(value, bool) else str(value)
 
     result = SearchFilters(
         min_price=_optional_float(data.get("min_price", data.get("price_min"))),
@@ -428,7 +428,7 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
     shipping wording and sort wording.
     """
     text = prompt or ""
-    normalised = fold(text).lower()
+    normalized = fold(text).lower()
 
     min_price = None
     max_price = None
@@ -467,7 +467,7 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
         (r"\bbrand[\s-]?new\b|\bnew\b|\bnov(?:y|e)\b|\bneu(?:e|es|er)?\b", "new"),
         (r"\bmarketplace\b", "marketplace"),
     ):
-        if re.search(patterned, normalised):
+        if re.search(patterned, normalized):
             condition = value
             break
 
@@ -475,10 +475,10 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
     if re.search(
         r"\b(?:free[\s-]?shipping|doprava\s+zdarma|postovne\s+zdarma"
         r"|versandkostenfrei|kostenlos(?:er|em|en|e)?\s+versand)\b",
-        normalised,
+        normalized,
     ):
         shipping = "free"
-    elif re.search(r"\b(?:paid[\s-]?shipping|platena\s+doprava)\b", normalised):
+    elif re.search(r"\b(?:paid[\s-]?shipping|platena\s+doprava)\b", normalized):
         shipping = "paid"
 
     sort = None
@@ -499,7 +499,7 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
         ),
         (r"\bnajrelevantnejsie\b|\brelevance\b", "relevance"),
     ):
-        if re.search(patterned, normalised):
+        if re.search(patterned, normalized):
             sort = value
             break
 

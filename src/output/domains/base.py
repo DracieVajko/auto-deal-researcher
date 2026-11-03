@@ -76,15 +76,15 @@ class DomainProfile:
 
     def normalize_specs(self, specs: Mapping[str, str]) -> dict[str, str]:
         """Apply aliases and drop keys this profile does not define."""
-        normalised: dict[str, str] = {}
+        normalized: dict[str, str] = {}
         for key, value in specs.items():
             mapped = self.aliases.get(key, key)
             if mapped == "price_eur":
                 continue
             if self.key_specs and mapped not in self.key_specs:
                 continue
-            normalised[mapped] = value
-        return normalised
+            normalized[mapped] = value
+        return normalized
 
     def check(
         self, specs: dict[str, str], prompt: str | None

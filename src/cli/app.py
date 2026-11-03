@@ -682,6 +682,45 @@ def browsers():
 
 
 @app.command()
+def sites(
+    all_sites: bool = typer.Option(False, "--all", help="Include disabled sites"),
+    status: str | None = typer.Option(None, "--status", help="Filter by registry status"),
+):
+    """List catalogue sites, enabled state and profile readiness."""
+    from src.searcher.site_profiles import load_profiles
+    from src.searcher.site_registry import SITES
+
+    config = load_config()
+    enabled = {site.name for site in config.search.websites if site.enabled}
+    profiles = load_profiles()
+    rows = []
+    for spec in SITES:
+        if status and spec.status != status:
+            continue
+        if not all_sites and spec.id not in enabled:
+            continue
+        profile = profiles.get(spec.id)
+        rows.append(
+            (
+                spec.id,
+                spec.status,
+                "enabled" if spec.id in enabled else "disabled",
+                "ready" if profile and profile.is_runtime_ready else "none",
+                spec.name,
+            )
+        )
+    if not rows:
+        typer.echo("No sites match.")
+        return
+    typer.echo(f"{'id':<18} {'status':<12} {'config':<10} {'profile':<8} name")
+    for site_id, site_status, config_state, profile_state, name in rows:
+        typer.echo(
+            f"{site_id:<18} {site_status:<12} {config_state:<10} "
+            f"{profile_state:<8} {name}"
+        )
+
+
+@app.command()
 def login_sites():
     """List sites that need a manual login and which sessions are saved."""
     from src.searcher.adapters import ADAPTER_REGISTRY

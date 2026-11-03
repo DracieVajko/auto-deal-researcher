@@ -255,6 +255,10 @@ is an optional emergency cap; omit it for unlimited selection. The report's
 `Shops searched` section lists what was selected and what was skipped, with
 the reason.
 
+`python -m src.cli sites` shows the catalogue with each site's registry status,
+whether it is enabled in `config.yaml`, and whether a profile is ready.
+`--all` includes disabled sites; `--status working` filters by status.
+
 Sites that need a real session (eBay, Solaro, optionally Amazon) use:
 
 ```bash

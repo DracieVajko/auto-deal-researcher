@@ -1434,21 +1434,93 @@ class ResultProcessor:
             f"**Filtered out:** {len(filtered)}"
         )
         lines.append("")
-        if site_plan is not None:
-            lines += self._site_plan_lines(site_plan)
+        site_plan_lines = (
+            self._site_plan_lines(site_plan) if site_plan is not None else []
+        )
 
         if not relevant:
             lines.append("No deals matching the request were found.")
+            lines += site_plan_lines
             if filtered:
                 lines += ["", "## Filtered out", ""]
                 lines += self._filtered_lines(filtered)
             return "\n".join(lines) + "\n"
 
-        lines += ["## Summary", ""]
-        lines.append(
-            "| # | Pick | Product | Price | Condition | Site | Score | Verdict | Link |"
+        top = self._top_three(relevant, top_picks)
+        lines += ["## Winner", ""]
+        lines += self._deal_card(top[0][1], 1, top_picks, prompt, label=top[0][0])
+
+        if len(top) > 1:
+            lines += ["## Runner-ups", ""]
+            for index, (label, analysis) in enumerate(top[1:], 2):
+                lines += self._deal_card(
+                    analysis, index, top_picks, prompt, label=label
+                )
+
+        lines += ["## All found", ""]
+        lines += self._all_found_lines(relevant, top_picks)
+        lines += self._price_history_lines(relevant)
+
+        if len(top) >= 2:
+            lines += self._comparison_lines([analysis for _, analysis in top])
+
+        shown_urls = {analysis.deal.url for _, analysis in top}
+        others = [
+            analysis for analysis in relevant if analysis.deal.url not in shown_urls
+        ]
+        if others:
+            lines += ["---", "", "## Other deals", ""]
+            for index, analysis in enumerate(others, len(top) + 1):
+                lines += self._deal_card(analysis, index, top_picks, prompt)
+        else:
+            lines += ["---", ""]
+
+        if site_plan_lines:
+            lines += site_plan_lines
+        if filtered:
+            lines += ["## Filtered out", ""]
+            lines += self._filtered_lines(filtered)
+
+        return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _top_three(
+        relevant: list[DealAnalysis], top_picks: set[str]
+    ) -> list[tuple[str, DealAnalysis]]:
+        """Return the winner plus up to two runner-ups, without duplicates."""
+        best = max(relevant, key=lambda analysis: analysis.score)
+        cheapest = min(
+            relevant, key=lambda analysis: comparable_price(analysis.deal) or float("inf")
         )
-        lines.append("|---|------|---------|-------|-----------|------|-------|---------|------|")
+        price_performance = max(
+            relevant,
+            key=lambda analysis: analysis.score / (comparable_price(analysis.deal) or 1.0),
+        )
+
+        top: list[tuple[str, DealAnalysis]] = [("🏆 Best overall", best)]
+        for label, candidate in (
+            ("💰 Cheapest", cheapest),
+            ("⚡ Best price/performance", price_performance),
+        ):
+            if candidate is not None and all(
+                candidate is not existing for _, existing in top
+            ):
+                top.append((label, candidate))
+
+        for analysis in relevant:
+            if len(top) >= 3:
+                break
+            if all(analysis is not existing for _, existing in top):
+                top.append(("Runner-up", analysis))
+        return top[:3]
+
+    def _all_found_lines(
+        self, relevant: list[DealAnalysis], top_picks: set[str]
+    ) -> list[str]:
+        lines = [
+            "| # | Pick | Product | Price | Condition | Site | Score | Verdict | Link |",
+            "|---|------|---------|-------|-----------|------|-------|---------|------|",
+        ]
         markers: set[str] = set()
         for index, analysis in enumerate(relevant, 1):
             deal = analysis.deal
@@ -1479,100 +1551,87 @@ class ResultProcessor:
                 "*bundle N pcs* = minimum quantity; "
                 "*shipping unknown* = not stated, not treated as free.",
             ]
-        # ---- Top picks: cheapest, best overall, best price/performance ----
-        if relevant:
-            lines += ["", "## Top picks", ""]
-            # Best overall = highest score
-            best = max(relevant, key=lambda a: a.score)
-            # Cheapest = lowest effective price
-            cheapest = min(relevant, key=lambda a: comparable_price(a.deal) or float("inf"))
-            # Best price/performance = highest score per euro
-            pp = max(relevant, key=lambda a: (a.score / (comparable_price(a.deal) or 1.0)))
-            picks = []
-            if best is not None:
-                picks.append(("🏆 Best overall", best))
-            if cheapest is not None and cheapest is not best:
-                picks.append(("💰 Cheapest", cheapest))
-            if pp is not None and pp not in (best, cheapest):
-                picks.append(("⚡ Best price/performance", pp))
-            # Deduplicate by url
-            seen_urls = set()
-            for label, a in picks:
-                if a.deal.url in seen_urls:
-                    continue
-                seen_urls.add(a.deal.url)
-                price_out, currency_out = self._format_effective_price(a.deal)
-                lines.append(
-                    f"- **{label}:** [{a.deal.title}]({a.deal.url}) — "
-                    f"{price_out:.2f} {currency_out} (score {a.score:.0f})"
-                )
-            lines += [""]
+        lines.append("")
+        return lines
 
-        # ---- Price history charts for all deals with stored history ----
+    def _price_history_lines(self, relevant: list[DealAnalysis]) -> list[str]:
         try:
             from src.output.charts import price_history_svg
-            storage = None
-            try:
-                from src.storage.manager import StorageManager
-                storage = StorageManager(self.full_config.storage.db_path)
-            except Exception:
-                storage = None
-            if storage is not None:
-                chart_lines = []
-                for a in relevant:
-                    hist = storage.get_price_history(a.deal.url, days=90)
-                    pts = [
-                        (
-                            h["timestamp"][:10],
-                            h.get("effective_price_eur") or h["price_eur"],
-                        )
-                        for h in (hist or [])
-                        if h.get("effective_price_eur") or h.get("price_eur")
-                    ]
-                    if len(pts) >= 2:
-                        svg = price_history_svg(pts, title=a.deal.title[:40])
-                        if svg:
-                            chart_lines.append(f"### {a.deal.title[:60]}")
-                            chart_lines.append("")
-                            chart_lines.append(svg)
-                            chart_lines.append("")
-                if chart_lines:
-                    lines += ["## Price history", ""]
-                    lines += chart_lines
+            from src.storage.manager import StorageManager
+
+            storage = StorageManager(self.full_config.storage.db_path)
+        except Exception:
+            return []
+
+        charts: list[str] = []
+        try:
+            for analysis in relevant:
+                hist = storage.get_price_history(analysis.deal.url, days=90)
+                points = [
+                    (
+                        row["timestamp"][:10],
+                        row.get("effective_price_eur") or row["price_eur"],
+                    )
+                    for row in (hist or [])
+                    if row.get("effective_price_eur") or row.get("price_eur")
+                ]
+                if len(points) >= 2:
+                    svg = price_history_svg(points, title=analysis.deal.title[:40])
+                    if svg:
+                        charts += [
+                            f"### {analysis.deal.title[:60]}",
+                            "",
+                            svg,
+                            "",
+                        ]
         except Exception as exc:
             logger.debug("Price history chart failed: %s", exc)
+            return []
+        return ["## Price history", "", *charts] if charts else []
 
-        # ---- Comparison view: top picks side by side ----
-        if top_picks and len(top_picks) >= 2:
-            lines += ["## Comparison", ""]
-            pick_analyses = [a for a in relevant if a.deal.url in top_picks][:3]
-            if pick_analyses:
-                lines.append("| | " + " | ".join(self._escape(a.deal.title[:40]) for a in pick_analyses) + " |")
-                lines.append("|---|" + "|".join(["---"] * len(pick_analyses)) + "|")
-                lines.append("| Price | " + " | ".join(f"{comparable_price(a.deal):.2f}" for a in pick_analyses) + " |")
-                lines.append("| Score | " + " | ".join(f"{a.score:.0f}" for a in pick_analyses) + " |")
-                lines.append("| Condition | " + " | ".join(a.deal.condition for a in pick_analyses) + " |")
-                lines.append("| Site | " + " | ".join(a.deal.site_name for a in pick_analyses) + " |")
-                lines.append("| Link | " + " | ".join(f"[open]({a.deal.url})" for a in pick_analyses) + " |")
-                lines += [""]
-
-        lines += [""]
-        if relevant and all(a.verdict == "skip" for a in relevant):
-            lines += [
-                "**No listing fully matches the request.** The highest-scoring "
-                "options and the exact gaps are listed below.",
-                "",
-            ]
-        lines += ["---", "", "## Deal details", ""]
-
-        for index, analysis in enumerate(relevant, 1):
-            lines += self._deal_card(analysis, index, top_picks, prompt)
-
-        if filtered:
-            lines += ["## Filtered out", ""]
-            lines += self._filtered_lines(filtered)
-
-        return "\n".join(lines) + "\n"
+    def _comparison_lines(self, analyses: list[DealAnalysis]) -> list[str]:
+        lines = ["## Comparison", ""]
+        lines.append(
+            "| | "
+            + " | ".join(self._escape(a.deal.title[:40]) for a in analyses)
+            + " |"
+        )
+        lines.append("|---|" + "|".join(["---"] * len(analyses)) + "|")
+        lines.append(
+            "| Price | "
+            + " | ".join(f"{comparable_price(a.deal):.2f}" for a in analyses)
+            + " |"
+        )
+        lines.append(
+            "| Score | " + " | ".join(f"{a.score:.0f}" for a in analyses) + " |"
+        )
+        lines.append(
+            "| Condition | "
+            + " | ".join(a.deal.condition for a in analyses)
+            + " |"
+        )
+        lines.append(
+            "| Site | " + " | ".join(a.deal.site_name for a in analyses) + " |"
+        )
+        spec_keys: list[str] = []
+        for analysis in analyses:
+            for key in analysis.specs:
+                if key not in spec_keys:
+                    spec_keys.append(key)
+        for key in spec_keys[:6]:
+            label = key.replace("_", " ").title()
+            lines.append(
+                f"| {label} | "
+                + " | ".join(a.specs.get(key, "n/a") for a in analyses)
+                + " |"
+            )
+        lines.append(
+            "| Link | "
+            + " | ".join(f"[open]({a.deal.url})" for a in analyses)
+            + " |"
+        )
+        lines.append("")
+        return lines
 
     def _deal_card(
         self,
@@ -1580,10 +1639,14 @@ class ResultProcessor:
         index: int,
         top_picks: set[str],
         prompt: str | None = None,
+        label: str = "",
     ) -> list[str]:
         deal = analysis.deal
         price_out, currency_out = self._format_effective_price(deal)
         lines = [f"### {index}. {deal.title}", ""]
+        if label:
+            lines.append(f"**Pick:** {label}")
+            lines.append("")
         lines.append(
             f"- **Price:** {price_out:.2f} {currency_out} "
             f"— {self._price_breakdown(deal)}"

@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- Winner-first Markdown report: the highest-scoring deal is the first section
+  with its full card, followed by runner-ups, `All found`, a comparison table
+  with common specs, `Other deals`, `Shops searched` and `Filtered out`.
 - Unlimited site selection: the LLM sees shop specialties and may select
   every suitable shop; `--sites` overrides automatic selection. The `ask`
   wizard no longer asks for a shop count.

@@ -83,7 +83,8 @@ def test_report_filters_laptops_and_explains_each_deal(tmp_path):
     assert used["alternatives"] == [] or used["alternatives"][0]["price_eur"] <= used["price_eur"]
 
     markdown = open(md_path, encoding="utf-8").read()
-    assert "## Deal details" in markdown
+    assert "## Winner" in markdown
+    assert "## All found" in markdown
     assert "Pros" in markdown and "Cons" in markdown
     assert "Score breakdown" in markdown
     assert "Before you buy" in markdown
@@ -182,7 +183,7 @@ def test_non_pc_report_has_no_cpu_ram_advice(tmp_path):
     assert "ssd" not in bullets
 
     markdown = Path(md_path).read_text(encoding="utf-8")
-    card = markdown.split("## Deal details", 1)[1]
+    card = markdown.split("## Winner", 1)[1]
     assert "CPU" not in card
     assert "RAM" not in card
     assert "SSD" not in card
@@ -755,7 +756,8 @@ def test_cheapest_pick_uses_effective_price():
 
     markdown = processor._to_markdown("x", analyses, [], "2026-11-02", set())
 
-    assert "Cheapest:** [Dear listed]" in markdown
+    assert "**Pick:** 💰 Cheapest" in markdown
+    assert "Dear listed" in markdown
 
 
 def test_report_lists_selected_and_skipped_shops(tmp_path):
@@ -791,6 +793,71 @@ def test_report_marks_user_requested_shops(tmp_path):
 
     markdown = Path(md_path).read_text(encoding="utf-8")
     assert "requested by the user" in markdown.lower()
+
+
+def test_winner_first_report_structure():
+    processor = ResultProcessor(load_config())
+    analyses = [
+        DealAnalysis(
+            deal=Deal(url=f"https://x/{i}", title=f"Deal {i}", price_eur=100 + i),
+            domain="generic",
+            score=score,
+            verdict="buy",
+        )
+        for i, score in enumerate((90.0, 80.0, 70.0))
+    ]
+
+    markdown = processor._to_markdown("x", analyses, [], "2026-11-03", set())
+
+    assert (
+        markdown.index("## Winner")
+        < markdown.index("## Runner-ups")
+        < markdown.index("## All found")
+    )
+    winner_block = markdown.split("## Winner", 1)[1].split("## Runner-ups", 1)[0]
+    assert "Deal 0" in winner_block
+    runner_block = markdown.split("## Runner-ups", 1)[1].split("## All found", 1)[0]
+    assert "Deal 1" in runner_block and "Deal 2" in runner_block
+    all_block = markdown.split("## All found", 1)[1].split("## Comparison", 1)[0]
+    assert all(f"Deal {i}" in all_block for i in range(3))
+
+
+def test_single_deal_has_no_empty_runnerup_or_other_sections():
+    processor = ResultProcessor(load_config())
+    analyses = [
+        DealAnalysis(
+            deal=Deal(url="https://x/1", title="Only deal", price_eur=100),
+            domain="generic",
+            score=90.0,
+            verdict="buy",
+        )
+    ]
+
+    markdown = processor._to_markdown("x", analyses, [], "2026-11-03", set())
+
+    assert "## Winner" in markdown
+    assert "## Runner-ups" not in markdown
+    assert "## Other deals" not in markdown
+
+
+def test_other_deals_contains_only_remaining_cards():
+    processor = ResultProcessor(load_config())
+    analyses = [
+        DealAnalysis(
+            deal=Deal(url=f"https://x/{i}", title=f"Deal {i}", price_eur=100 + i),
+            domain="generic",
+            score=90.0 - i,
+            verdict="buy",
+        )
+        for i in range(4)
+    ]
+
+    markdown = processor._to_markdown("x", analyses, [], "2026-11-03", set())
+
+    other_block = markdown.split("## Other deals", 1)[1]
+    assert "Deal 3" in other_block
+    assert "Deal 0" not in other_block
+    assert "Deal 1" not in other_block
 
 
 def test_report_shows_shipping_breakdown():

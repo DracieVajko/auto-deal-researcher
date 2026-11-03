@@ -379,6 +379,23 @@ and the JSON/CSV add `effective_price_eur`, `price_kind`, `price_trust`,
 `price_warnings` and `price_breakdown`. A deal without a quote keeps the old
 behaviour: its listed price is the effective price.
 
+### Report layout
+
+The Markdown report is ordered for reading, not for raw listing order:
+
+1. **Winner** — highest score, full card with price breakdown, specs, pros/cons,
+   alternatives and checklist.
+2. **Runner-ups** — up to two more full cards, labelled `Cheapest` or
+   `Best price/performance` when they win that comparison.
+3. **All found** — one compact table with every relevant deal and its link.
+4. **Comparison** — winner and runner-ups side by side, including common specs.
+5. **Other deals** — full cards for everything not already shown at the top.
+6. **Shops searched** — selected and skipped shops with reasons.
+7. **Filtered out** — removed listings with the reason and link.
+
+Every deal appears once as a full card; the `All found` table is the only place
+where it is repeated. JSON/CSV/XLSX fields are unchanged.
+
 ### Site discovery and profiles
 
 All 30 registered sites are listed in `config.example.yaml`. Sites without an

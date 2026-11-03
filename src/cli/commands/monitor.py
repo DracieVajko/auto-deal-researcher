@@ -30,7 +30,7 @@ def _load_prompt_from_file(prompt_file: str) -> str:
     return data.get("prompt", "")
 
 
-def _write_text_file(path: str, text: str) -> None:
+def _write_text_file(path: str | Path, text: str) -> None:
     """Write text to a file (sync helper for use in threads)."""
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)

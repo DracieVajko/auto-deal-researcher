@@ -213,16 +213,14 @@ class StorageManager:
             "timestamp": utcnow_iso(),
             "effective_price_eur": comparable_price(deal),
             "price_kind": (
-                deal.price_quote.kind.value
-                if getattr(deal, "price_quote", None) is not None
-                else "unknown"
+                (deal.price_quote.kind.value if deal.price_quote else "unknown")
             ),
         }
         quote = getattr(deal, "price_quote", None)
         if quote is not None and quote.shipping.cost_eur is not None:
             sighting["shipping_cost_eur"] = quote.shipping.cost_eur
-        result = self.db["price_history"].insert(sighting)
-        return result.last_pk if result else None
+        result = self.db["price_history"].insert(sighting)  # type: ignore[union-attr]
+        return int(result.last_pk) if result and result.last_pk is not None else None
 
     def get_price_history(self, url: str, days: int = 30) -> list[dict]:
         """Get price history for a specific product URL."""
@@ -402,7 +400,7 @@ class StorageManager:
 
     # Run tracking
     def create_run(self, run_id: str, prompt: str, condition: str, category: str) -> None:
-        self.db["runs"].insert({
+        self.db["runs"].insert({  # type: ignore[union-attr]
             "id": run_id,
             "prompt": prompt,
             "condition": condition,
@@ -415,7 +413,7 @@ class StorageManager:
         }, pk="id")
 
     def complete_run(self, run_id: str, total_deals: int, new_deals: int, status: str = "completed", error: str = "") -> None:
-        self.db["runs"].update(run_id, {
+        self.db["runs"].update(run_id, {  # type: ignore[union-attr]
             "completed_at": utcnow_iso(),
             "total_deals": total_deals,
             "new_deals": new_deals,
@@ -432,7 +430,7 @@ class StorageManager:
         return RunRecord(**row) if row else None
 
     def get_run(self, run_id: str) -> RunRecord | None:
-        row = self.db["runs"].get(run_id)
+        row = self.db["runs"].get(run_id)  # type: ignore[union-attr]
         return RunRecord(**row) if row else None
 
     def get_all_runs(self, limit: int = 50) -> list[RunRecord]:
@@ -441,17 +439,18 @@ class StorageManager:
 
     # Alerts
     def add_alert(self, run_id: str, rule_name: str, message: str, severity: str = "info") -> int:
-        result = self.db["alerts"].insert({
+        result = self.db["alerts"].insert({  # type: ignore[union-attr]
             "run_id": run_id,
             "rule_name": rule_name,
             "message": message,
             "severity": severity,
             "sent": 0,
         })
-        return result.last_pk
+        assert result.last_pk is not None
+        return int(result.last_pk)
 
     def get_unsent_alerts(self) -> list[dict]:
         return list(self.db["alerts"].rows_where("sent = 0", order_by="created_at"))
 
     def mark_alert_sent(self, alert_id: int) -> None:
-        self.db["alerts"].update(alert_id, {"sent": 1, "sent_at": utcnow_iso()})
+        self.db["alerts"].update(alert_id, {"sent": 1, "sent_at": utcnow_iso()})  # type: ignore[union-attr]

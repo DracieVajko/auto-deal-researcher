@@ -121,6 +121,8 @@ def _post_with_retry(url: str, *, headers: dict, json_body: dict, timeout: float
         if attempt < attempts - 1:
             logger.info(f"Transient {last.status_code} from {url}; retrying")
             time.sleep(2 * (attempt + 1))
+    if last is None:
+        raise ValueError("attempts must be at least 1")
     return last
 
 

@@ -204,7 +204,7 @@ def by_id(browser_id: str) -> BrowserProfile | None:
 
 def detect_all() -> list[tuple[BrowserProfile, str | None]]:
     """Return (profile, executable) for every browser found on this machine."""
-    found = []
+    found: list[tuple[BrowserProfile, str | None]] = []
     for profile in REGISTRY:
         exe = profile.find_executable() or profile.find_on_path()
         if exe:

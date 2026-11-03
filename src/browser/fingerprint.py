@@ -131,7 +131,9 @@ class FingerprintGenerator:
     def __init__(self, seed: int | None = None):
         self.rng = random.Random(seed)
     
-    def generate(self, browser_type: str = "chromium") -> Fingerprint:
+    def generate(
+        self, browser_type: Literal["chromium", "firefox", "webkit"] = "chromium"
+    ) -> Fingerprint:
         """Generate a consistent fingerprint for a browser type."""
         # Pick a profile
         profile_key = self._pick_profile(browser_type)
@@ -375,7 +377,11 @@ class FingerprintRotator:
         self.generator = FingerprintGenerator(seed)
         self._current: dict[str, Fingerprint] = {}
     
-    def get_fingerprint(self, browser_type: str = "chromium", session_id: str | None = None) -> Fingerprint:
+    def get_fingerprint(
+        self,
+        browser_type: Literal["chromium", "firefox", "webkit"] = "chromium",
+        session_id: str | None = None,
+    ) -> Fingerprint:
         """Get fingerprint for browser type, optionally tied to session."""
         if session_id and session_id in self._current:
             return self._current[session_id]
@@ -385,7 +391,11 @@ class FingerprintRotator:
             self._current[session_id] = fp
         return fp
     
-    def rotate(self, session_id: str, browser_type: str = "chromium") -> Fingerprint:
+    def rotate(
+        self,
+        session_id: str,
+        browser_type: Literal["chromium", "firefox", "webkit"] = "chromium",
+    ) -> Fingerprint:
         """Force rotate fingerprint for session."""
         fp = self.generator.generate(browser_type)
         self._current[session_id] = fp

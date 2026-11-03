@@ -268,9 +268,11 @@ class ResultProcessor:
         if brand_filter:
             brands = [b.strip().lower() for b in str(brand_filter).split(",") if b.strip()]
             if brands:
-                kept = [d for d in deals if any(b in (d.title or "").lower() for b in brands)]
-                if kept:
-                    deals = kept
+                brand_kept = [
+                    d for d in deals if any(b in (d.title or "").lower() for b in brands)
+                ]
+                if brand_kept:
+                    deals = brand_kept
 
         analyses = await self._analyze_deals(deals, prompt)
         relevant = [a for a in analyses if not a.wrong_form_factor]
@@ -286,21 +288,21 @@ class ResultProcessor:
             if prices:
                 median = prices[len(prices) // 2]
                 lo, hi = median * 0.3, median * 3.0
-                kept, dropped = [], []
+                kept_analyses, dropped = [], []
                 for a in relevant:
                     p = comparable_price(a.deal)
                     if p is None or (lo <= p <= hi):
-                        kept.append(a)
+                        kept_analyses.append(a)
                     else:
                         dropped.append(a)
-                if dropped and len(kept) >= 3:
+                if dropped and len(kept_analyses) >= 3:
                     for analysis in dropped:
                         price = comparable_price(analysis.deal)
                         analysis.filter_reason = (
                             f"Price outlier: {price:.2f} EUR outside "
                             f"{lo:.2f}-{hi:.2f} EUR"
                         )
-                    relevant = kept
+                    relevant = kept_analyses
                     filtered = filtered + dropped
         # Best overall deal first: the summary must agree with the scores
         # instead of keeping an arbitrary search order.
@@ -349,9 +351,7 @@ class ResultProcessor:
                     "price_eur": a.deal.price_eur,
                     "effective_price_eur": comparable_price(a.deal),
                     "price_kind": (
-                        a.deal.price_quote.kind.value
-                        if getattr(a.deal, "price_quote", None) is not None
-                        else "unknown"
+                        (a.deal.price_quote.kind.value if a.deal.price_quote else "unknown")
                     ),
                     "url": a.deal.url,
                     "reason": a.filter_reason or "Form factor does not match the request",
@@ -512,9 +512,9 @@ class ResultProcessor:
                         self._merge_llm_analysis(analysis, item, prompt)
                 else:
                     for item in enriched:
-                        index = item.get("index")
-                        if isinstance(index, int) and 0 <= index < len(chunk):
-                            self._merge_llm_analysis(chunk[index], item, prompt)
+                        entry_index = item.get("index")
+                        if isinstance(entry_index, int) and 0 <= entry_index < len(chunk):
+                            self._merge_llm_analysis(chunk[entry_index], item, prompt)
 
         self._add_cross_alternatives(analyses)
         return analyses
@@ -1288,7 +1288,7 @@ class ResultProcessor:
             spec_match = 0.0
             price_score = min(price_score, 30.0)
 
-        rows = {
+        rows: dict[str, float] = {
             "Requirement fit": round(requirement_fit),
             "Spec match": round(spec_match),
             "Price": round(price_score),
@@ -1810,13 +1810,13 @@ class ResultProcessor:
             lines.append("")
             lines.append("| Criterion | Score |")
             lines.append("|-----------|-------|")
-            for label, value in analysis.score_breakdown.items():
-                lines.append(f"| {label} | {value:.0f}/100 |")
+            for label, score_value in analysis.score_breakdown.items():
+                lines.append(f"| {label} | {score_value:.0f}/100 |")
             lines.append("")
 
         lines.append("**Before you buy**")
-        for item in self._checklist(deal, analysis, prompt):
-            lines.append(f"- {item}")
+        for check in self._checklist(deal, analysis, prompt):
+            lines.append(f"- {check}")
         lines += ["", "---", ""]
         return lines
 

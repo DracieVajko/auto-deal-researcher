@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar
 
+from typing import Any, Literal
+
 from playwright.async_api import Page
 
 if TYPE_CHECKING:
@@ -119,7 +121,7 @@ class BaseAdapter(ABC):
         category: str = "any",
         profile: SiteProfile | None = None,
         *,
-        wait_until: str = "domcontentloaded",
+        wait_until: Literal["commit", "domcontentloaded", "load", "networkidle"] = "domcontentloaded",
         timeout: int = 30000,  # noqa: ASYNC109 - Playwright wants milliseconds
     ) -> str | None:
         """Navigate to a profile URL when available, otherwise the adapter URL."""

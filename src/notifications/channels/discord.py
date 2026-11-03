@@ -2,6 +2,8 @@
 
 import logging
 
+from typing import Any
+
 import aiohttp
 
 from src.notifications.base import Alert, NotificationChannel
@@ -18,7 +20,7 @@ class DiscordChannel(NotificationChannel):
 
     async def send(self, alert: Alert) -> bool:
         color_map = {"info": 0x3498DB, "warning": 0xF39C12, "critical": 0xE74C3C}
-        embed = {
+        embed: dict[str, Any] = {
             "title": alert.title,
             "description": alert.message,
             "color": color_map.get(alert.severity, 0x3498DB),

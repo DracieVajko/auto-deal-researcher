@@ -145,7 +145,7 @@ class ProfileAdapter(BaseAdapter):
             condition_text = await self._text(element, extraction.condition_selector)
             condition = self._detect_condition(condition_text or full_text)
 
-            metadata: dict[str, str] = {
+            metadata: dict[str, object] = {
                 "source": "profile",
                 "original_price": original_price,
                 "original_currency": original_currency,

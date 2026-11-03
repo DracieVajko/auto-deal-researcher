@@ -82,18 +82,18 @@ def trends(
                 emoji = "📉" if item["change_pct"] < 0 else "📈"
                 typer.echo(f"  {emoji} {item['change_pct']:+.1f}% - {item['url'][:60]}")
     else:
-        result = analyzer.get_all_category_trends(days)
+        all_trends = analyzer.get_all_category_trends(days)
         
         typer.echo(f"\n📊 Market Trends (last {days} days)")
         typer.echo("=" * 60)
         
-        for cat, data in sorted(result.items()):
-            if data.get("trend") == "insufficient_data":
+        for cat, trend_data in sorted(all_trends.items()):
+            if trend_data.get("trend") == "insufficient_data":
                 continue
-            trend_emoji = {"dropping": "📉", "rising": "📈", "stable": "➡️", "volatile": "📊"}.get(data["trend"], "❓")
-            typer.echo(f"\n{data['trend'].upper()} {data['trend']} {trend_emoji} — {cat.title()}")
-            typer.echo(f"  Avg change: {data['avg_change_pct']:+.1f}% | Volatility: {data['avg_volatility']:.1%} | Products: {data['products_tracked']}")
-            typer.echo(f"  📉 Dropping: {data['dropping_count']} | 📈 Rising: {data['rising_count']} | ➡️ Stable: {data['stable_count']}")
+            emoji_for_trend = {"dropping": "📉", "rising": "📈", "stable": "➡️", "volatile": "📊"}.get(trend_data["trend"], "❓")
+            typer.echo(f"\n{trend_data['trend'].upper()} {trend_data['trend']} {emoji_for_trend} — {cat.title()}")
+            typer.echo(f"  Avg change: {trend_data['avg_change_pct']:+.1f}% | Volatility: {trend_data['avg_volatility']:.1%} | Products: {trend_data['products_tracked']}")
+            typer.echo(f"  📉 Dropping: {trend_data['dropping_count']} | 📈 Rising: {trend_data['rising_count']} | ➡️ Stable: {trend_data['stable_count']}")
 
 
 # Watchlist commands

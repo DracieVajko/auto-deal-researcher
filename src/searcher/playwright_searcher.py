@@ -382,7 +382,7 @@ class PlaywrightSearcher:
     ) -> list[Deal]:
         """Main search entry point — multi-round with LLM query refinement."""
         all_deals: list[Deal] = []
-        seen_urls = set()
+        seen_urls: set[str] = set()
         rounds: list[SearchRound] = []
         self._skipped_sites = []
         self._last_selected_sites = []

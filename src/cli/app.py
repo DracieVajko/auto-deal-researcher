@@ -311,7 +311,7 @@ async def run_search(
     if winners:
         config.search.winners_count = winners
     if output_format:
-        config.output.format = output_format
+        config.output.format = output_format  # type: ignore[assignment]
     if country:
         config.search.user_country = country.upper()
     if max_sites is not None:
@@ -818,7 +818,7 @@ def doctor(
     offline: bool = typer.Option(False, "--offline", help="Check config only, no network"),
 ):
     """Run site health diagnostics."""
-    asyncio.run(_doctor_async(site, offline))
+    asyncio.run(doctor_async(site, offline))
 
 
 async def doctor_async(site: str | None, offline: bool):
@@ -1010,7 +1010,7 @@ def watch(
     alternatives: bool = typer.Option(True, "--alternatives/--no-alternatives", help="Search for 2-3 counter-products"),
 ):
     """Watch specific product URLs: track price/stock and find alternatives."""
-    watch_fn(urls, watchlist, output_dir, alternatives)
+    watch_fn(urls or [], watchlist, output_dir, alternatives)
 
 
 if __name__ == "__main__":

@@ -44,7 +44,7 @@ def _run_migrations(db: Database) -> None:
                 applied_at TEXT DEFAULT (datetime('now'))
             )
         """)
-        db["migrations"].insert({"version": 0})
+        db["migrations"].insert({"version": 0})  # type: ignore[union-attr]
 
     current_version = db.execute("SELECT MAX(version) FROM migrations").fetchone()[0] or 0
 
@@ -65,7 +65,7 @@ def _run_migrations(db: Database) -> None:
         current_version = 4
 
     # Update version
-    db["migrations"].insert({"version": current_version}, pk="version", replace=True)
+    db["migrations"].insert({"version": current_version}, pk="version", replace=True)  # type: ignore[union-attr]
 
 
 def _migration_001_initial(db: Database) -> None:

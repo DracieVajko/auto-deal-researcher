@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.notifications import NotificationManager
+from src.searcher.adapters.base import Deal
 from src.storage.manager import StorageManager
 
 logger = logging.getLogger(__name__)
@@ -223,17 +224,17 @@ class WatchlistManager:
         
         return []
     
-    async def _search_item(self, item: "WatchlistItem") -> list:
+    async def _search_item(self, item: "WatchlistItem") -> list[Deal]:
         """Search for item using searcher."""
         # This would use the searcher - implementation depends on searcher interface
         # For now, return empty list
         return []
     
-    def _find_best_match(self, item: "WatchlistItem", deals: list) -> Optional[object]:
+    def _find_best_match(self, item: "WatchlistItem", deals: list[Deal]) -> Deal | None:
         """Find best matching deal from search results."""
         # Simple matching by title similarity
         best_match = None
-        best_score = 0
+        best_score = 0.0
         
         for deal in deals:
             # Simple title similarity

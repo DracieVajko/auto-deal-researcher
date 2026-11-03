@@ -72,7 +72,7 @@ class LLMConfig(BaseModel):
     context_window: int = 32768  # Max context window (model dependent)
     auto_context_sizing: bool = True
     total_token_budget: int = 128000
-    local_coordination: "LocalCoordinationConfig" = None
+    local_coordination: "LocalCoordinationConfig | None" = None
 
 
 class NotificationChannelConfig(BaseModel):

@@ -77,14 +77,24 @@ async def _monitor_async(
         from src.notifications.channels.webhook import WebhookChannel
         for ch in getattr(config.notifications, "channels", []) or []:
             if ch.type == "webhook":
-                notif.add_channel(WebhookChannel(ch.name))
+                url = (ch.settings or {}).get("url")
+                if not url:
+                    logger.debug("Webhook channel %s has no settings.url", ch.name)
+                    continue
+                notif.add_channel(WebhookChannel(ch.name, url))
     except Exception as exc:
         logger.debug("Webhook channel init skipped: %s", exc)
     try:
         from src.notifications.channels.discord import DiscordChannel
         for ch in getattr(config.notifications, "channels", []) or []:
             if ch.type == "discord":
-                notif.add_channel(DiscordChannel(ch.name))
+                url = (ch.settings or {}).get("webhook_url")
+                if not url:
+                    logger.debug(
+                        "Discord channel %s has no settings.webhook_url", ch.name
+                    )
+                    continue
+                notif.add_channel(DiscordChannel(ch.name, url))
     except Exception as exc:
         logger.debug("Discord channel init skipped: %s", exc)
 

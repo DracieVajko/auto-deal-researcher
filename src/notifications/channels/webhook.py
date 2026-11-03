@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class WebhookChannel(NotificationChannel):
     """HTTP webhook channel for custom integrations."""
 
-    def __init__(self, name: str, url: str, cooldown_minutes: int = 60, headers: dict = None):
+    def __init__(self, name: str, url: str, cooldown_minutes: int = 60, headers: dict | None = None):
         super().__init__(name, cooldown_minutes)
         self.url = url
         self.headers = headers or {"Content-Type": "application/json"}

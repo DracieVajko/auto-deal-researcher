@@ -16,13 +16,11 @@ class Alert:
     severity: str = "info"
     source: str = "auto-deal-searcher"
     timestamp: str = ""
-    metadata: dict = None
+    metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.timestamp:
             self.timestamp = datetime.now().isoformat()
-        if self.metadata is None:
-            self.metadata = {}
 
 
 class NotificationChannel(ABC):

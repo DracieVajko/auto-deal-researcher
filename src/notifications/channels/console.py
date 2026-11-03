@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 class ConsoleChannel(NotificationChannel):
     """Console output channel - always available for debugging."""
 
+    def __init__(self, name: str = "console", cooldown_minutes: int = 60):
+        super().__init__(name, cooldown_minutes)
+
     async def send(self, alert: Alert) -> bool:
         prefix = {
             "info": "ℹ️",

@@ -20,8 +20,10 @@ class SystemChannel(NotificationChannel):
         super().__init__(name, cooldown_minutes)
 
     async def send(self, alert: Alert) -> bool:
-        title = alert.title
-        message = alert.message
+        # Collapse CR/LF so the AppleScript/PowerShell string literal cannot be
+        # broken by a newline in the alert text.
+        title = " ".join(str(alert.title).split())
+        message = " ".join(str(alert.message).split())
         system = platform.system()
         def _ps_escape(value: str) -> str:
             return str(value).replace("'", "''")

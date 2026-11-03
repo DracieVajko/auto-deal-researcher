@@ -93,6 +93,7 @@ class AgentBase(ABC, Generic[T, R]):
     async def run(self, input_data: T) -> AgentResult[R]:
         """Execute the agent with error handling and timing."""
         self.status = AgentStatus.RUNNING
+        self._running = True
         try:
             result = await self.execute(input_data)
             result.completed_at = datetime.now(timezone.utc)

@@ -44,7 +44,7 @@ class WatchlistManager:
     
     STORAGE_FILE = "data/watchlist.json"
     
-    def __init__(self, storage: "StorageManager" = None, notifications: "NotificationManager" = None):
+    def __init__(self, storage: "StorageManager | None" = None, notifications: "NotificationManager | None" = None):
         self.storage = storage
         self.notifications = notifications
         self.items: dict[str, "WatchlistItem"] = {}

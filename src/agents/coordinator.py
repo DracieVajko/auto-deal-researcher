@@ -25,7 +25,7 @@ def _extract_result(result):
 class CoordinatorAgent(AgentBase[dict, dict]):
     """Meta-agent that orchestrates the Diamond Search pipeline."""
 
-    def __init__(self, agents: list[AgentBase], config: dict = None):
+    def __init__(self, agents: list[AgentBase], config: dict | None = None):
         super().__init__("coordinator", AgentRole.COORDINATOR, config)
         self.agents = {agent.name: agent for agent in agents}
         self.agent_order = [a.name for a in agents]

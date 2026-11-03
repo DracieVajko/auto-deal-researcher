@@ -1,5 +1,6 @@
 """Alert rule definition."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -10,10 +11,10 @@ from src.notifications.base import Alert
 class AlertRule:
     """Rule for automatically generating alerts."""
     name: str
-    condition: callable
+    condition: Callable[[dict], bool]
     alert_template: dict
     cooldown_minutes: int = 60
-    channels: list[str] = None
+    channels: list[str] = field(default_factory=list)
     _last_triggered: dict = field(default_factory=dict)
 
     def should_trigger(self, context: dict) -> bool:

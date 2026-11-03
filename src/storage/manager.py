@@ -1,7 +1,6 @@
 """SQLite storage manager for deal deduplication and history."""
 
 import json
-import sqlite3
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -325,7 +324,7 @@ class StorageManager:
         """, (url, cutoff)).fetchall()
 
         if len(rows) < 2:
-            return {"trend": "insufficient_data", "points": len(rows)}
+            return {"trend": "insufficient_data", "data_points": len(rows)}
 
         prices = [r["price_eur"] for r in rows]
         first_price = prices[0]
@@ -358,10 +357,11 @@ class StorageManager:
     def mark_seen_today(self, urls: list[str]):
         """Call after each run for all URLs found in this run."""
         today = today_iso()
-        self.db.conn.executemany(
-            "UPDATE deals SET last_seen = ? WHERE url = ?",
-            [(today, url) for url in urls],
-        )
+        with self.db.conn:
+            self.db.conn.executemany(
+                "UPDATE deals SET last_seen = ? WHERE url = ?",
+                [(today, url) for url in urls],
+            )
 
     def prune_missing(self, max_age_days: int = 30, grace_period_days: int = 7) -> dict:
         """
@@ -372,7 +372,7 @@ class StorageManager:
         cutoff = (utcnow().date() - timedelta(days=max_age_days)).isoformat()
         grace_cutoff = (utcnow().date() - timedelta(days=grace_period_days)).isoformat()
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self.db.conn as conn:
             # Count deals to be pruned
             to_prune = conn.execute(
                 "SELECT COUNT(*) FROM deals WHERE last_seen < ?", (cutoff,)

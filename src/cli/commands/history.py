@@ -123,7 +123,14 @@ def watchlist_cmd(
             typer.echo("Error: --url, --title, and --target-price required for add", err=True)
             raise typer.Exit(1)
         
-        item = wl_manager.add_item(url, title, target_price, condition, category, threshold)
+        item = wl_manager.add_item(
+            url,
+            title,
+            target_price,
+            condition,
+            category,
+            alert_threshold_pct=threshold,
+        )
         typer.echo(f"✅ Added to watchlist: {title}")
         typer.echo(f"  Target: {target_price}€ | Threshold: {threshold}% | Condition: {condition}")
     

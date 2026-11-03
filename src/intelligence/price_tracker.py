@@ -74,7 +74,7 @@ class PriceTracker:
         deal = self.storage.get_deal_by_id(deal_id)
         if deal:
             return self.storage.get_price_trend(deal.url, days)
-        return {"trend": "unknown", "data_points": 0}
+        return {"trend": "insufficient_data", "data_points": 0}
 
     def get_deals_nearing_target(self, target_price_eur: float, margin_pct: float = 5.0) -> list[dict]:
         """Find deals within margin_pct% of target price."""

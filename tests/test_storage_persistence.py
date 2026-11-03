@@ -119,6 +119,26 @@ def test_mark_seen_today(storage):
     assert storage.get_deal(URL) is not None
 
 
+def test_mark_seen_today_is_committed(storage):
+    from src.utils.time import today_iso
+
+    storage.save_deal(make_deal(), "run1")
+    storage.db.execute(
+        "UPDATE deals SET last_seen = '2000-01-01' WHERE url = ?", (URL,)
+    )
+    storage.mark_seen_today([URL])
+    storage.db.conn.close()
+
+    reopened = StorageManager(str(storage.db_path))
+    assert reopened.get_deal(URL).last_seen == today_iso()
+
+
+def test_price_trend_short_history_uses_data_points(storage):
+    storage.save_deal(make_deal(), "run1")
+    trend = storage.get_price_trend(URL)
+    assert trend == {"trend": "insufficient_data", "data_points": 1}
+
+
 def _age_sightings(storage, days):
     storage.db.execute(
         "UPDATE price_history SET timestamp = ?", ((datetime.now() - timedelta(days=days)).isoformat(),)

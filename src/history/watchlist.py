@@ -121,8 +121,12 @@ class WatchlistManager:
             item.target_price_eur = target_price_eur
             item.condition = condition
             item.category = category
-            item.site_name = url.split("/")[2] if "://" in url else ""
+            item.site_name = site_name or (
+                url.split("/")[2] if "://" in url else ""
+            )
+            item.alert_threshold_pct = alert_threshold_pct
             item.target_price_reached = False
+            self._save()
             return item
         
         item = WatchlistItem(
@@ -131,8 +135,9 @@ class WatchlistManager:
             target_price_eur=target_price_eur,
             condition=condition,
             category=category,
-            site_name=url.split("/")[2] if "://" in url else "",
+            site_name=site_name or (url.split("/")[2] if "://" in url else ""),
             url_hash=hashlib.md5(url.encode()).hexdigest()[:12],
+            alert_threshold_pct=alert_threshold_pct,
         )
         self.items[url_hash] = item
         self._save()

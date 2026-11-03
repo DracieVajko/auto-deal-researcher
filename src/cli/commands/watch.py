@@ -115,7 +115,7 @@ async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool
             # record price history for trend charts
             if info.get("price") is not None:
                 try:
-                    from src.storage.models import Deal
+                    from src.searcher.adapters.base import Deal
                     deal = Deal(
                         url=url, title=info["title"], price_eur=info["price"],
                         site_name="watchlist", condition="any",

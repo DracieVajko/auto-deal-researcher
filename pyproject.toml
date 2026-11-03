@@ -7,7 +7,7 @@ name = "auto-deal-searcher"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "playwright>=1.44.0",
+    "playwright>=1.64.1",
     "pydantic>=2.9.0",
     "pydantic-core>=2.23.0",
     "greenlet>=3.1.0",

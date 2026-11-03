@@ -101,20 +101,34 @@ def _available_llm_backends(config) -> list[str]:
 
 
 
+def _split_sites(raw: str | None) -> list[str] | None:
+    """Parse a comma-separated --sites value."""
+    if not raw:
+        return None
+    values = [part.strip() for part in raw.split(",") if part.strip()]
+    return values or None
+
+
 @app.command()
 def ask(
     country: str | None = typer.Option(None, "--country", help="Market; asked when omitted"),
-    max_sites: int | None = typer.Option(None, "--max-sites", help="Max shops per round; asked when omitted"),
+    max_sites: int | None = typer.Option(None, "--max-sites", help="Optional cap; omit for all suitable shops"),
+    sites: str | None = typer.Option(None, "--sites", help="Comma-separated shop ids; overrides automatic selection"),
     debug: bool = typer.Option(False, "--debug", "-d", help="Verbose LLM provider diagnostics"),
 ):
     """Prompt-only search: describe what you want, the app infers the rest."""
     if debug:
         import logging
         logging.basicConfig(level=logging.DEBUG, format='%(name)s: %(message)s')
-    asyncio.run(_ask_async(country, max_sites, debug))
+    asyncio.run(_ask_async(country, max_sites, _split_sites(sites), debug))
 
 
-async def _ask_async(country: str | None, max_sites: int | None, debug: bool = False) -> None:
+async def _ask_async(
+    country: str | None,
+    max_sites: int | None,
+    sites: list[str] | None = None,
+    debug: bool = False,
+) -> None:
     config = load_config()
     if debug:
         import logging
@@ -146,8 +160,6 @@ async def _ask_async(country: str | None, max_sites: int | None, debug: bool = F
 
     if not country:
         country = typer.prompt("Country", default=config.search.user_country)
-    if max_sites is None:
-        max_sites = typer.prompt("Max shops", default=int(config.search.max_sites), type=int)
 
     typer.echo("")
 
@@ -167,7 +179,8 @@ async def _ask_async(country: str | None, max_sites: int | None, debug: bool = F
     outcome = await run_search(
         prompt,
         country=country.upper(),
-        max_sites=int(max_sites),
+        max_sites=max_sites,
+        sites=sites,
         llm_mode=llm_mode,
         debug=debug,
         brief=_brief,
@@ -195,7 +208,8 @@ def run(
     sort: str | None = typer.Option(None, "--sort", help="relevance, price_asc, price_desc, newest"),
     extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
     country: str | None = typer.Option(None, "--country", help="Market to prefer, e.g. SK, CZ, DE"),
-    max_sites: int | None = typer.Option(None, "--max-sites", help="How many shops to open per round"),
+    max_sites: int | None = typer.Option(None, "--max-sites", help="Optional cap; omit for all suitable shops"),
+    sites: str | None = typer.Option(None, "--sites", help="Comma-separated shop ids; overrides automatic selection"),
     llm: str | None = typer.Option(None, "--llm", help="LLM backend: local, cloud, or auto (default)"),
     debug: bool = typer.Option(False, "--debug", "-d", help="Verbose LLM provider diagnostics"),
     domain: str | None = typer.Option(None, "--domain", help="Force a product domain (bike, computer, phone, car, furniture, generic)"),
@@ -222,6 +236,7 @@ def run(
             extra_filters,
             country,
             max_sites,
+            sites=_split_sites(sites),
             llm_mode=llm,
             debug=debug,
             domain=domain,
@@ -267,6 +282,7 @@ async def run_search(
     extra_filters: list[str] | None = None,
     country: str | None = None,
     max_sites: int | None = None,
+    sites: list[str] | None = None,
     llm_mode: str | None = None,
     debug: bool = False,
     domain: str | None = None,
@@ -298,7 +314,7 @@ async def run_search(
         config.output.format = output_format
     if country:
         config.search.user_country = country.upper()
-    if max_sites:
+    if max_sites is not None:
         config.search.max_sites = max_sites
 
     llm = LLMClient(config)
@@ -336,12 +352,12 @@ async def run_search(
             )
         )
 
-    sites: list[str] = []
+    selected_sites: list[str] = []
 
     def _capture_plan(names: list[str]) -> None:
         for name in names:
-            if name not in sites:
-                sites.append(name)
+            if name not in selected_sites:
+                selected_sites.append(name)
         if plan:
             plan(list(names))
 
@@ -358,7 +374,12 @@ async def run_search(
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         try:
             deals = await searcher.search(
-                prompt, condition, effective_category, filters, on_sites=_capture_plan
+                prompt,
+                condition,
+                effective_category,
+                filters,
+                on_sites=_capture_plan,
+                sites=sites,
             )
         finally:
             await browser_mgr.close()
@@ -376,7 +397,7 @@ async def run_search(
     )
     return SearchOutcome(
         deal_count=len(deals),
-        sites=sites,
+        sites=selected_sites,
         json_path=json_path,
         md_path=md_path,
         results_dir=config.output.directory,
@@ -400,6 +421,7 @@ async def run_async(
     extra_filters=None,
     country=None,
     max_sites=None,
+    sites=None,
     llm_mode=None,
     debug=False,
     domain=None,
@@ -444,6 +466,7 @@ async def run_async(
         extra_filters=extra_filters,
         country=country,
         max_sites=max_sites,
+        sites=sites,
         llm_mode=llm_mode,
         debug=debug,
         domain=domain,
@@ -514,7 +537,7 @@ async def _diamond_search_async(
         raise typer.Exit(1)
     if country:
         config.search.user_country = country.upper()
-    if max_sites:
+    if max_sites is not None:
         config.search.max_sites = max_sites
 
     llm = LLMClient(config)
@@ -788,7 +811,8 @@ def search(
     sort: str | None = typer.Option(None, "--sort", help="relevance, price_asc, price_desc, newest"),
     extra_filters: list[str] | None = typer.Option(None, "--filter", help="Extra filter KEY=VALUE (repeatable)"),  # noqa: B008
     country: str | None = typer.Option(None, "--country", help="Market to prefer, e.g. SK, CZ, DE"),
-    max_sites: int | None = typer.Option(None, "--max-sites", help="How many shops to open per round"),
+    max_sites: int | None = typer.Option(None, "--max-sites", help="Optional cap; omit for all suitable shops"),
+    sites: str | None = typer.Option(None, "--sites", help="Comma-separated shop ids; overrides automatic selection"),
 ):
     """AI-powered search across multiple sites with LLM judgment."""
     asyncio.run(
@@ -810,6 +834,7 @@ def search(
             extra_filters,
             country,
             max_sites,
+            sites=_split_sites(sites),
         )
     )
 
@@ -832,12 +857,13 @@ async def _search_async(
     extra_filters=None,
     country=None,
     max_sites=None,
+    sites=None,
 ):
     config = load_config()
     config.search.winners_count = winners
     if country:
         config.search.user_country = country.upper()
-    if max_sites:
+    if max_sites is not None:
         config.search.max_sites = max_sites
 
     llm = LLMClient(config)
@@ -871,7 +897,9 @@ async def _search_async(
 
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         try:
-            deals = await searcher.search(prompt, condition, category, filters)
+            deals = await searcher.search(
+                prompt, condition, category, filters, sites=sites
+            )
         finally:
             await browser_mgr.close()
 

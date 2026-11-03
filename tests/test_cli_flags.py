@@ -48,3 +48,11 @@ def test_run_command_defaults(captured):
     result = runner.invoke(app, ["run", "--prompt", "notebook"])
     assert result.exit_code == 0, result.output
     assert captured["args"][-2:] == (None, None)
+
+
+def test_sites_reach_the_run_command(captured):
+    result = runner.invoke(
+        app, ["run", "--prompt", "notebook", "--sites", "alza,bazos"]
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["kwargs"]["sites"] == ["alza", "bazos"]

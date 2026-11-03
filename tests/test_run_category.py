@@ -32,9 +32,17 @@ class FakeSearcher:
         return False
 
     async def search(
-        self, prompt, condition="any", category="any", filters=None, on_sites=None
+        self,
+        prompt,
+        condition="any",
+        category="any",
+        filters=None,
+        on_sites=None,
+        sites=None,
     ):
-        FakeSearcher.calls.append({"condition": condition, "category": category})
+        FakeSearcher.calls.append(
+            {"condition": condition, "category": category, "sites": sites}
+        )
         if on_sites:
             on_sites(["alza"])
         return []

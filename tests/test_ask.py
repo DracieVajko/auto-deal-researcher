@@ -24,6 +24,7 @@ def _stub(monkeypatch, tmp_path):
         category=None,
         country=None,
         max_sites=None,
+        sites=None,
         brief=None,
         plan=None,
         **kwargs,
@@ -31,6 +32,7 @@ def _stub(monkeypatch, tmp_path):
         calls["prompt"] = prompt
         calls["country"] = country
         calls["max_sites"] = max_sites
+        calls["sites"] = sites
         brief(
             app_module.SearchBrief(
                 filters=SearchFilters(max_price=200.0, condition="used"),
@@ -81,11 +83,21 @@ def test_ask_seeds_skip_questions(monkeypatch, tmp_path):
     assert calls["max_sites"] == 4
 
 
-def test_ask_non_numeric_max_sites_reprompts(monkeypatch, tmp_path):
+def test_ask_does_not_prompt_for_a_shop_count(monkeypatch, tmp_path):
     calls = _stub(monkeypatch, tmp_path)
-    result = runner.invoke(app_module.app, ["ask"], input="kolo\nSK\nabc\n7\n")
+    result = runner.invoke(app_module.app, ["ask"], input="kolo\n\n")
     assert result.exit_code == 0, result.output
-    assert calls["max_sites"] == 7
+    assert calls["max_sites"] is None
+    assert "Max shops" not in result.output
+
+
+def test_ask_forwards_sites(monkeypatch, tmp_path):
+    calls = _stub(monkeypatch, tmp_path)
+    result = runner.invoke(
+        app_module.app, ["ask", "--sites", "bazos,alza"], input="kolo\n\n"
+    )
+    assert result.exit_code == 0, result.output
+    assert calls["sites"] == ["bazos", "alza"]
 
 
 def test_ask_aborts_cleanly_at_eof(monkeypatch, tmp_path):

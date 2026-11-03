@@ -138,7 +138,7 @@ async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool
         # price history chart
         try:
             hist = storage.get_price_history(r["url"], days=90)
-            pts = [(h["timestamp"][:10], h["price_eur"]) for h in hist if h.get("price_eur")]
+            pts = [(h["timestamp"][:10], h.get("effective_price_eur") or h["price_eur"]) for h in hist if h.get("price_eur")]
             if len(pts) >= 2:
                 from src.output.charts import price_history_svg
                 svg = price_history_svg(pts, title="Price history")

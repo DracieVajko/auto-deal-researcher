@@ -62,6 +62,19 @@ def test_price_history_stores_effective_price_and_kind(storage):
     assert rows[0]["price_kind"] == "regular"
 
 
+def test_price_tracker_uses_effective_price(storage):
+    deal = make_deal()
+    deal.price_quote = build_price_quote(
+        100.0, shipping=ShippingQuote(cost_eur=10.0)
+    )
+    storage.save_deal(deal, "run1")
+
+    tracker = PriceTracker(storage)
+    assert tracker.get_deals_below_price(105.0) == []
+    result = tracker.get_deals_below_price(110.0)
+    assert result[0]["effective_price_eur"] == 110.0
+
+
 def test_save_and_get_deal_roundtrip(storage):
     storage.save_deal(make_deal(), "run1")
     stored = storage.get_deal(URL)

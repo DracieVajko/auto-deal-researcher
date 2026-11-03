@@ -8,6 +8,10 @@ from src.searcher.adapters.base import Deal
 from src.storage.manager import StorageManager
 
 
+def _effective_price(deal) -> float:
+    return float(getattr(deal, "effective_price_eur", 0.0) or deal.price_eur)
+
+
 @dataclass
 class PriceHistoryEntry:
     id: int
@@ -77,28 +81,32 @@ class PriceTracker:
         deals = self.storage.get_all_deals()
         results = []
         for deal in deals:
-            if deal.price_eur <= target_price_eur * (1 + margin_pct / 100):
+            price = _effective_price(deal)
+            if price <= target_price_eur * (1 + margin_pct / 100):
                 results.append({
                     "url": deal.url,
                     "title": deal.title,
                     "price_eur": deal.price_eur,
+                    "effective_price_eur": price,
                     "site_name": deal.site_name,
                     "target_price": target_price_eur,
-                    "difference_pct": round((deal.price_eur - target_price_eur) / target_price_eur * 100, 2),
+                    "difference_pct": round((price - target_price_eur) / target_price_eur * 100, 2),
                 })
-        return sorted(results, key=lambda x: x["price_eur"])
+        return sorted(results, key=lambda x: x["effective_price_eur"])
 
     def get_deals_below_price(self, max_price_eur: float, condition: str = "any") -> list[dict]:
-        """Get all deals below a certain price."""
+        """Get all deals below a certain effective price."""
         deals = self.storage.get_all_deals()
         results = []
         for deal in deals:
-            if deal.price_eur <= max_price_eur and (condition == "any" or deal.condition == condition):
+            price = _effective_price(deal)
+            if price <= max_price_eur and (condition == "any" or deal.condition == condition):
                 results.append({
                     "url": deal.url,
                     "title": deal.title,
                     "price_eur": deal.price_eur,
+                    "effective_price_eur": price,
                     "site_name": deal.site_name,
                     "condition": deal.condition,
                 })
-        return sorted(results, key=lambda x: x["price_eur"])
+        return sorted(results, key=lambda x: x["effective_price_eur"])

@@ -29,6 +29,7 @@ from src.output.requirements import (
 from src.searcher.adapters.base import Deal
 from src.searcher.listing_filter import is_laptop_title, wants_mini_pc_form_factor
 from src.searcher.pricing import PriceKind, comparable_price
+from src.searcher.site_selection import SitePlan
 from src.text.normalize import fold
 from src.utils.time import utcnow_stamp
 
@@ -238,6 +239,7 @@ class ResultProcessor:
         deals: list[Deal],
         output_dir: str | None = None,
         prompt: str | None = None,
+        site_plan: SitePlan | None = None,
     ) -> tuple[str, str]:
         """Write one JSON file and one Markdown file.
 
@@ -327,6 +329,7 @@ class ResultProcessor:
             "count": len(relevant),
             "duplicates_collapsed": duplicates_collapsed,
             "filtered_out_count": len(filtered),
+            "site_plan": site_plan.as_dict() if site_plan is not None else None,
             "deals": [
                 self._deal_to_dict(
                     analysis,
@@ -355,7 +358,9 @@ class ResultProcessor:
         with open(json_path, "w", encoding="utf-8") as handle:  # noqa: ASYNC230
             json.dump(payload, handle, indent=2, ensure_ascii=False)
 
-        md_content = self._to_markdown(prompt, relevant, filtered, timestamp, top_picks)
+        md_content = self._to_markdown(
+            prompt, relevant, filtered, timestamp, top_picks, site_plan=site_plan
+        )
         md_path = out_dir / f"{stem}.md"
         with open(md_path, "w", encoding="utf-8") as handle:  # noqa: ASYNC230
             handle.write(md_content)
@@ -1419,6 +1424,7 @@ class ResultProcessor:
         filtered: list[DealAnalysis],
         timestamp: str,
         top_picks: set[str],
+        site_plan: SitePlan | None = None,
     ) -> str:
         lines: list[str] = [f"# Deal Search Results — {timestamp}", ""]
         if prompt:
@@ -1428,6 +1434,8 @@ class ResultProcessor:
             f"**Filtered out:** {len(filtered)}"
         )
         lines.append("")
+        if site_plan is not None:
+            lines += self._site_plan_lines(site_plan)
 
         if not relevant:
             lines.append("No deals matching the request were found.")
@@ -1696,6 +1704,26 @@ class ResultProcessor:
                         "Ask for a screenshot of the memory configuration."
                     )
         return items
+
+    @staticmethod
+    def _site_plan_lines(site_plan: SitePlan) -> list[str]:
+        lines = ["## Shops searched", ""]
+        if site_plan.selected:
+            lines.append("Selected: " + ", ".join(site_plan.selected) + ".")
+        else:
+            lines.append("No shop was selected.")
+        if site_plan.reasoning:
+            lines.append("")
+            lines.append(f"Reason: {site_plan.reasoning}.")
+        if site_plan.skipped:
+            lines.append("")
+            skipped = "; ".join(
+                f"{item.get('name', '?')} ({item.get('reason', 'skipped')})"
+                for item in site_plan.skipped
+            )
+            lines.append(f"Skipped: {skipped}.")
+        lines.append("")
+        return lines
 
     @staticmethod
     def _filtered_lines(filtered: list[DealAnalysis]) -> list[str]:

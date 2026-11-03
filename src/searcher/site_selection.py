@@ -13,7 +13,7 @@ nonsense the deterministic ranking is used instead.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,22 @@ class SiteCandidate:
         if category not in ("any",) and category not in self.categories:
             return False
         return not (condition not in ("any",) and condition not in self.conditions)
+
+
+@dataclass(frozen=True)
+class SitePlan:
+    """What the search decided to open and what it skipped."""
+
+    selected: list[str]
+    reasoning: str = ""
+    skipped: list[dict] = field(default_factory=list)
+
+    def as_dict(self) -> dict:
+        return {
+            "selected": list(self.selected),
+            "reasoning": self.reasoning,
+            "skipped": list(self.skipped),
+        }
 
 
 def market_distance(site_country: str, user_country: str) -> int:
@@ -177,6 +193,7 @@ class SiteSelector:
 __all__ = [
     "NEIGHBOURS",
     "SiteCandidate",
+    "SitePlan",
     "SiteSelector",
     "market_distance",
     "rank_by_location",

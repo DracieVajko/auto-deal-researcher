@@ -264,6 +264,21 @@ async def test_cache_key_includes_the_prompt():
 
 
 @pytest.mark.asyncio
+async def test_site_plan_contains_selected_and_skipped():
+    config = AppConfig(search=SearchConfig(
+        websites=[_real_site("solaro_sk"), _site("shop_a", "SK")],
+        user_country="SK",
+    ))
+    config.search.diamond_search.enabled = False
+    searcher = _searcher(config)
+    _profiles(searcher, "shop_a")
+
+    await searcher._select_sites("used", "auto", "solar")
+    assert "shop_a" in searcher.site_plan.selected
+    assert any(item["name"] == "solaro_sk" for item in searcher.site_plan.skipped)
+
+
+@pytest.mark.asyncio
 async def test_disabled_sites_are_never_selected():
     config = AppConfig(
         search=SearchConfig(

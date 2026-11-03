@@ -29,7 +29,7 @@ from src.searcher.query_language import language_for_country, localise_query
 from src.searcher.sessions import apply_session
 from src.searcher.site_profiles import SiteProfile, load_profiles
 from src.searcher.site_registry import SITES, by_id
-from src.searcher.site_selection import SiteCandidate, SiteSelector
+from src.searcher.site_selection import SiteCandidate, SitePlan, SiteSelector
 from src.storage.manager import StorageManager
 from src.utils.time import utcnow_stamp
 
@@ -328,6 +328,15 @@ class PlaywrightSearcher:
         )
         self._site_selection_cache[cache_key] = selected
         return selected
+
+    @property
+    def site_plan(self) -> SitePlan:
+        """Selected shops, the reason and every skipped shop with its reason."""
+        return SitePlan(
+            selected=[site.name for site in self._last_selected_sites],
+            reasoning=self._site_selection_reason,
+            skipped=list(self._skipped_sites),
+        )
 
     async def search(
         self,

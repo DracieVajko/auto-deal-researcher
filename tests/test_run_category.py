@@ -23,7 +23,9 @@ class FakeSearcher:
     calls: ClassVar[list] = []
 
     def __init__(self, config, llm, storage, browser_mgr):
-        pass
+        from src.searcher.site_selection import SitePlan
+
+        self.site_plan = SitePlan(selected=["alza"], reasoning="test")
 
     async def __aenter__(self):
         return self

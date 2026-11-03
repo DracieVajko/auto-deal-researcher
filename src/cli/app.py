@@ -381,6 +381,7 @@ async def run_search(
                 on_sites=_capture_plan,
                 sites=sites,
             )
+            site_plan = searcher.site_plan
         finally:
             await browser_mgr.close()
 
@@ -393,7 +394,7 @@ async def run_search(
 
     # Output (AI-named, timestamped)
     json_path, md_path = await processor.save_results(
-        deals, config.output.directory, prompt=prompt
+        deals, config.output.directory, prompt=prompt, site_plan=site_plan
     )
     return SearchOutcome(
         deal_count=len(deals),

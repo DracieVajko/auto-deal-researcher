@@ -640,86 +640,106 @@ class PlaywrightSearcher:
         )
         if on_sites and sites:
             on_sites([site.name for site in sites])
-        all_deals = []
+        if not sites:
+            return []
 
-        for site in sites:
-            page = None
-            started = time.perf_counter()
-            self.health.record_search_start(site.name, site.adapter_class)
-            try:
-                # Per-site stable fingerprint session; fresh page per site, closed after
-                page = await self.browser_manager.get_page(session_id=f"search-{site.name}")
-                page.set_default_timeout(30000)
-                page.set_default_navigation_timeout(30000)
-                await apply_session(page.context, site.name)
+        concurrency = max(1, int(getattr(self.config.search, "concurrency", 3)))
+        semaphore = asyncio.Semaphore(concurrency)
 
-                profile = self._profile_for(site)
-                adapter_profile = (
-                    profile
-                    if profile is not None and profile.is_runtime_ready
-                    else None
-                )
-                country, currency = self._site_market(site)
-                site_query = await localise_query(
-                    self.llm,
-                    query,
-                    language_for_country(country),
-                    self._query_language_cache,
-                )
-                try:
-                    adapter_cls = get_adapter(site.adapter_class)
-                    adapter = adapter_cls(
-                        base_url=site.base_url,
-                        currency=currency,
-                        enrich_limit=getattr(self.config.search, "enrich_limit", 20),
-                    )
-                except ValueError:
-                    if profile is None or not profile.is_runtime_ready:
-                        continue
-                    from src.searcher.adapters.profile_adapter import ProfileAdapter
+        async def run_site(site: WebsiteConfig) -> list[Deal]:
+            async with semaphore:
+                return await self._search_one_site(site, query, category, filters)
 
-                    adapter = ProfileAdapter(
-                        base_url=site.base_url,
-                        profile=profile,
-                        currency=currency,
-                        enrich_limit=getattr(self.config.search, "enrich_limit", 20),
-                    )
-                deals = await adapter.search(
-                    page,
-                    site_query,
-                    max_results=20,
-                    filters=filters,
-                    category=category,
-                    profile=adapter_profile,
-                )
-                latency = (time.perf_counter() - started) * 1000
-                self.health.record_search_result(
-                    site.name, bool(deals), len(deals), latency
-                )
-                # Filter by condition/category if adapter supports it
-                for deal in deals:
-                    deal.site_name = site.name
-                    if deal.url not in seen_urls:
-                        all_deals.append(deal)
-                # Rate limiting
-                await asyncio.sleep(1)
-            except SiteBlockedError as e:
-                # Anti-bot interstitial: expected for some sites, not a bug.
-                logger.warning(f"[{site.name}] Blocked: {e}")
-                self._skipped_sites.append({"name": site.name, "reason": str(e)})
-                self.health.record_search_result(
-                    site.name, False, 0, (time.perf_counter() - started) * 1000, blocked=True
-                )
-            except Exception:
-                logger.exception(f"[{site.name}] Search error")
-                self.health.record_search_result(
-                    site.name, False, 0, (time.perf_counter() - started) * 1000
-                )
-            finally:
-                if page:
-                    await page.close()
-
+        results = await asyncio.gather(*(run_site(site) for site in sites))
+        all_deals: list[Deal] = []
+        seen: set[str] = set(seen_urls)
+        for deals in results:
+            for deal in deals:
+                if deal.url not in seen:
+                    seen.add(deal.url)
+                    all_deals.append(deal)
+        seen_urls.update(seen)
         return all_deals
+
+    async def _search_one_site(
+        self,
+        site: WebsiteConfig,
+        query: str,
+        category: str,
+        filters: SearchFilters | None,
+    ) -> list[Deal]:
+        page = None
+        started = time.perf_counter()
+        self.health.record_search_start(site.name, site.adapter_class)
+        try:
+            # Per-site stable fingerprint session; fresh page per site, closed after
+            page = await self.browser_manager.get_page(session_id=f"search-{site.name}")
+            page.set_default_timeout(30000)
+            page.set_default_navigation_timeout(30000)
+            await apply_session(page.context, site.name)
+
+            profile = self._profile_for(site)
+            adapter_profile = (
+                profile if profile is not None and profile.is_runtime_ready else None
+            )
+            country, currency = self._site_market(site)
+            site_query = await localise_query(
+                self.llm,
+                query,
+                language_for_country(country),
+                self._query_language_cache,
+            )
+            try:
+                adapter_cls = get_adapter(site.adapter_class)
+                adapter = adapter_cls(
+                    base_url=site.base_url,
+                    currency=currency,
+                    enrich_limit=getattr(self.config.search, "enrich_limit", 20),
+                )
+            except ValueError:
+                if profile is None or not profile.is_runtime_ready:
+                    return []
+                from src.searcher.adapters.profile_adapter import ProfileAdapter
+
+                adapter = ProfileAdapter(
+                    base_url=site.base_url,
+                    profile=profile,
+                    currency=currency,
+                    enrich_limit=getattr(self.config.search, "enrich_limit", 20),
+                )
+            deals = await adapter.search(
+                page,
+                site_query,
+                max_results=20,
+                filters=filters,
+                category=category,
+                profile=adapter_profile,
+            )
+            latency = (time.perf_counter() - started) * 1000
+            self.health.record_search_result(
+                site.name, bool(deals), len(deals), latency
+            )
+            for deal in deals:
+                deal.site_name = site.name
+            await asyncio.sleep(1)
+            return deals
+        except SiteBlockedError as e:
+            # Anti-bot interstitial: expected for some sites, not a bug.
+            logger.warning(f"[{site.name}] Blocked: {e}")
+            self._skipped_sites.append({"name": site.name, "reason": str(e)})
+            self.health.record_search_result(
+                site.name, False, 0, (time.perf_counter() - started) * 1000, blocked=True
+            )
+            return []
+        except Exception:
+            logger.exception(f"[{site.name}] Search error")
+            self.health.record_search_result(
+                site.name, False, 0, (time.perf_counter() - started) * 1000
+            )
+            return []
+        finally:
+            if page:
+                await page.close()
 
     async def search_with_diamond(
         self,

@@ -153,6 +153,9 @@ class SearchConfig(BaseModel):
     # Upper bound on how many shops are opened per search round.
     # 0 means unlimited: the LLM selects every suitable shop.
     max_sites: int = 0
+    # Parallel site searches per round. Higher is faster but more likely to
+    # trigger rate limits; 3 is a safe default for a handful of shops.
+    concurrency: int = 3
     # Attach external review/spec sources to the comparison table.
     sources: bool = True
     source_count: int = 5

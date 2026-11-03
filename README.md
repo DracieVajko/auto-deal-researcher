@@ -236,6 +236,8 @@ The searcher does not open every registered shop. It works in three steps:
 3. **AI selection** — the LLM receives shop specialties and notes and selects
    **every** shop that fits; there is no count limit. It can only pick from the
    runnable list, never widen it, and falls back to the full list when it fails.
+4. **Parallel search** — sites are opened concurrently, bounded by
+   `search.concurrency` (default 3), so ten shops do not run strictly one by one.
 
 ```bash
 # Let the LLM choose every suitable shop.

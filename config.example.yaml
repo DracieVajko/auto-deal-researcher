@@ -295,6 +295,7 @@ search:
   max_sites: 0
   sources: true
   source_count: 5
+  concurrency: 3
   # Listing detail pages fetched per site per search. Adapters enrich the
   # cheapest listings first when this cap cuts the page.
   enrich_limit: 20

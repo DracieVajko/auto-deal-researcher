@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- Parallel site search with bounded `search.concurrency` (default 3); results
+  are merged in site order and duplicate URLs are still collapsed.
 - Product spec coverage: `computer` extracts GPU (RTX/GTX/Radeon/Arc/Iris Xe/
   Apple M-series); `phone` extracts camera MP, battery mAh, battery life,
   charging watts, health, storage, RAM and screen size.

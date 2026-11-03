@@ -1,6 +1,7 @@
 """Watch specific product URLs: track price/stock and find 2-3 alternatives."""
 
 import asyncio
+import logging
 from pathlib import Path
 
 import typer
@@ -8,6 +9,8 @@ from playwright.async_api import async_playwright
 
 from src.config import load_config
 from src.storage.manager import StorageManager
+
+logger = logging.getLogger(__name__)
 
 
 PRICE_SELECTORS = [
@@ -41,12 +44,14 @@ async def _fetch_product(page, url: str) -> dict:
                     title = (await el.inner_text()).strip()
             if title:
                 break
-        except Exception:
+        except Exception as exc:
+            logger.debug("watch title selector %s failed: %s", sel, exc)
             continue
     if not title:
         try:
             title = await page.title()
-        except Exception:
+        except Exception as exc:
+            logger.debug("watch page.title failed: %s", exc)
             title = url
 
     price = None
@@ -68,9 +73,9 @@ async def _fetch_product(page, url: str) -> dict:
                         num = num.replace(".", "").replace(",", ".")
                     price = float(num)
                     break
-        except Exception:
+        except Exception as exc:
+            logger.debug("watch price selector %s failed: %s", sel, exc)
             continue
-    # 2) text-based fallback: "Cena: 149 €" / "Price: 149 EUR"
     if price is None:
         try:
             import re
@@ -81,8 +86,8 @@ async def _fetch_product(page, url: str) -> dict:
                 if num.count(".") > 1:
                     num = num.replace(".", "").replace(",", ".")
                 price = float(num)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("watch text price fallback failed: %s", exc)
 
     # stock heuristic
     stock = "unknown"
@@ -92,8 +97,8 @@ async def _fetch_product(page, url: str) -> dict:
             stock = "out_of_stock"
         elif any(w in body for w in ("na sklade", "in stock", "dostupn", "available")):
             stock = "in_stock"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("watch stock heuristic failed: %s", exc)
 
     return {"url": url, "title": title[:200], "price": price, "stock": stock, "error": None}
 
@@ -145,8 +150,8 @@ async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool
                 if svg:
                     lines.append("")
                     lines.append(svg)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("watch price chart failed: %s", exc)
         lines.append("")
 
     # Alternatives search

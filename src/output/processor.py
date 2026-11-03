@@ -1594,7 +1594,8 @@ class ResultProcessor:
             from src.storage.manager import StorageManager
 
             storage = StorageManager(self.full_config.storage.db_path)
-        except Exception:  # noqa: BLE001 - charts are optional
+        except Exception as exc:  # noqa: BLE001 - charts are optional
+            logger.debug("Price history storage init failed: %s", exc)
             return []
 
         charts: list[str] = []

@@ -18,8 +18,8 @@ class BasePage:
     async def wait_for_load(self):
         try:
             await self.page.wait_for_load_state("domcontentloaded", timeout=15000)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("wait_for_load failed: %s", exc)
 
     async def handle_cookie_consent(self) -> bool:
         selectors = [
@@ -33,7 +33,8 @@ class BasePage:
                 if btn and await btn.is_visible():
                     await btn.click()
                     return True
-            except Exception:
+            except Exception as exc:
+                logger.debug("cookie selector %s failed: %s", sel, exc)
                 continue
         return False
 
@@ -41,12 +42,14 @@ class BasePage:
         try:
             await self.page.click(selector, timeout=5000)
             return True
-        except Exception:
+        except Exception as exc:
+            logger.debug("safe_click %s failed: %s", selector, exc)
             return False
 
     async def safe_fill(self, selector: str, value: str) -> bool:
         try:
             await self.page.fill(selector, value, timeout=5000)
             return True
-        except Exception:
+        except Exception as exc:
+            logger.debug("safe_fill %s failed: %s", selector, exc)
             return False

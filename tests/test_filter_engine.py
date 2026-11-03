@@ -5,6 +5,7 @@ import pytest
 from src.searcher.adapters.base import Deal
 from src.searcher.filter_engine import FilterEngine
 from src.searcher.filters import SearchFilters
+from src.searcher.pricing import ShippingQuote, build_price_quote
 from src.searcher.site_profiles import (
     FilterSpec,
     SearchSpec,
@@ -179,6 +180,16 @@ def test_post_filter_price_range_keeps_unknown_and_drops_outside():
     ]
     result = FilterEngine.post_filter(deals, SearchFilters(min_price=100, max_price=500))
     assert [deal.url for deal in result] == ["b", "c"]
+
+
+def test_price_filter_uses_shipping_inclusive_price():
+    deal = Deal(
+        url="https://x/1",
+        title="X",
+        price_eur=95.0,
+        price_quote=build_price_quote(95.0, shipping=ShippingQuote(cost_eur=10.0)),
+    )
+    assert FilterEngine._matches(deal, SearchFilters(max_price=100.0)) is False
 
 
 def test_post_filter_condition_keeps_unknown():

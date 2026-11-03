@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlite_utils import Database
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Columns added after the initial migration, applied idempotently to any
 # database created by an older build.
@@ -17,6 +17,13 @@ DEALS_COLUMNS: dict[str, str] = {
     "seller_rating": "REAL",
     "shipping_cost_eur": "REAL",
     "metadata": "TEXT",
+    "effective_price_eur": "REAL",
+    "price_kind": "TEXT DEFAULT 'unknown'",
+}
+
+PRICE_HISTORY_COLUMNS: dict[str, str] = {
+    "effective_price_eur": "REAL",
+    "price_kind": "TEXT DEFAULT 'unknown'",
 }
 
 
@@ -52,6 +59,10 @@ def _run_migrations(db: Database) -> None:
     if current_version < 3:
         _migration_003_backfill_deals_columns(db)
         current_version = 3
+
+    if current_version < 4:
+        _migration_004_price_trust(db)
+        current_version = 4
 
     # Update version
     db["migrations"].insert({"version": current_version}, pk="version", replace=True)
@@ -172,17 +183,30 @@ def _migration_003_backfill_deals_columns(db: Database) -> None:
     _ensure_deals_columns(db)
 
 
-def _ensure_deals_columns(db: Database) -> list[str]:
-    """Add any missing deals columns. Returns the names that were added."""
-    if "deals" not in db.table_names():
+def _migration_004_price_trust(db: Database) -> None:
+    """Add the effective price and price kind to deals and price history."""
+    _ensure_deals_columns(db)
+    _ensure_table_columns(db, "price_history", PRICE_HISTORY_COLUMNS)
+
+
+def _ensure_table_columns(
+    db: Database, table: str, columns: dict[str, str]
+) -> list[str]:
+    """Add any missing columns to *table*. Returns the names that were added."""
+    if table not in db.table_names():
         return []
-    existing = {row[1] for row in db.execute("PRAGMA table_info(deals)").fetchall()}
+    existing = {row[1] for row in db.execute(f"PRAGMA table_info({table})").fetchall()}
     added = []
-    for column, ddl in DEALS_COLUMNS.items():
+    for column, ddl in columns.items():
         if column not in existing:
-            db.execute(f"ALTER TABLE deals ADD COLUMN {column} {ddl}")
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
             added.append(column)
     return added
+
+
+def _ensure_deals_columns(db: Database) -> list[str]:
+    """Add any missing deals columns. Returns the names that were added."""
+    return _ensure_table_columns(db, "deals", DEALS_COLUMNS)
 
 
 def get_db(db_path: str | Path = "data/deals.db") -> Database:

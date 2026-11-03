@@ -11,6 +11,7 @@ from src.output.domains.ai import DomainProposal, propose_domain, validate_propo
 from src.output.domains.cache import load_drafts, save_draft
 from src.output.processor import DealAnalysis, ResultProcessor
 from src.searcher.adapters.base import Deal
+from src.searcher.pricing import PriceKind, ShippingQuote, build_price_quote
 
 
 def test_unknown_text_falls_back_to_generic():
@@ -527,6 +528,25 @@ def test_price_uses_the_median_with_four_distinct_prices():
 
     assert analyses[0].score_breakdown["Price"] == 95
     assert analyses[3].score_breakdown["Price"] == 25
+
+
+def test_price_score_uses_effective_price_and_trust():
+    processor = ResultProcessor.__new__(ResultProcessor)
+    deal = Deal(
+        url="https://x/1",
+        title="X",
+        price_eur=100.0,
+        price_quote=build_price_quote(
+            100.0,
+            kind=PriceKind.ACCOUNT_GATED,
+            shipping=ShippingQuote(cost_eur=20.0),
+        ),
+    )
+    analysis = DealAnalysis(deal=deal, domain="generic", seller_type="retailer")
+
+    breakdown = processor._score_breakdown(analysis, median=100.0, analyses=[analysis])
+
+    assert breakdown["Price"] < 95
 
 
 def test_price_claim_cons_are_dropped():

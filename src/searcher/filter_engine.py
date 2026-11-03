@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
 
 from src.searcher.filters import SearchFilters
+from src.searcher.pricing import comparable_price
 from src.searcher.site_profiles import FilterSpec, SiteProfile
 
 if TYPE_CHECKING:
@@ -190,10 +191,7 @@ class FilterEngine:
 
     @staticmethod
     def _price(deal: Any) -> float:
-        try:
-            return float(deal.price_eur or 0)
-        except (TypeError, ValueError):
-            return 0.0
+        return comparable_price(deal)
 
     @classmethod
     def _matches(cls, deal: Any, filters: SearchFilters) -> bool:

@@ -3,8 +3,9 @@
 import sqlite3
 
 from src.searcher.adapters.base import Deal
+from src.searcher.pricing import ShippingQuote, build_price_quote
 from src.storage.manager import StorageManager
-from src.storage.schema import DEALS_COLUMNS, get_db
+from src.storage.schema import DEALS_COLUMNS, PRICE_HISTORY_COLUMNS, get_db
 
 
 def _make_legacy_db(path):
@@ -58,7 +59,9 @@ def test_legacy_db_gains_missing_columns(tmp_path):
     db = get_db(db_path)
     cols = {r[1] for r in db.execute("PRAGMA table_info(deals)")}
     assert DEALS_COLUMNS.keys() <= cols, "every column the manager writes must exist"
-    assert db.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == 3
+    history_cols = {r[1] for r in db.execute("PRAGMA table_info(price_history)")}
+    assert PRICE_HISTORY_COLUMNS.keys() <= history_cols
+    assert db.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == 4
 
 
 def test_save_deal_works_on_legacy_db(tmp_path):
@@ -74,6 +77,37 @@ def test_save_deal_works_on_legacy_db(tmp_path):
     assert saved is not None
     assert saved.price_eur == 339.0
     assert saved.currency if hasattr(saved, "currency") else True
+
+
+def test_save_deal_persists_effective_price_and_kind(tmp_path):
+    storage = StorageManager(str(tmp_path / "deals.db"))
+    deal = Deal(
+        url="https://x/1",
+        title="X",
+        price_eur=100.0,
+        price_quote=build_price_quote(
+            100.0, shipping=ShippingQuote(cost_eur=5.0)
+        ),
+    )
+    storage.save_deal(deal)
+
+    saved = storage.get_deal("https://x/1")
+    assert saved.effective_price_eur == 105.0
+    assert saved.price_kind == "regular"
+    assert saved.shipping_cost_eur == 5.0
+
+
+def test_legacy_rows_read_as_effective_equal_to_listed(tmp_path):
+    db_path = str(tmp_path / "legacy.db")
+    _make_legacy_db(db_path)
+    storage = StorageManager(db_path)
+    storage.save_deal(
+        Deal(url="https://x/1", title="DJI", price_eur=339.0, condition="new")
+    )
+
+    saved = storage.get_deal("https://x/1")
+    assert saved.effective_price_eur == 339.0
+    assert saved.price_kind == "unknown"
 
 
 def test_migration_preserves_existing_rows(tmp_path):

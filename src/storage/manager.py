@@ -7,6 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from src.searcher.adapters.base import Deal
+from src.searcher.pricing import comparable_price
 from src.storage.schema import get_db
 from src.utils.time import today_iso, utcnow, utcnow_iso, utcnow_stamp
 
@@ -28,6 +29,8 @@ class StoredDeal:
     shipping_cost_eur: float = 0.0
     original_currency: str = "EUR"
     metadata: str = "{}"
+    effective_price_eur: float = 0.0
+    price_kind: str = "unknown"
 
 
 @dataclass
@@ -45,6 +48,8 @@ class PriceHistoryEntry:
     shipping_cost_eur: float
     run_id: str
     timestamp: str
+    effective_price_eur: float = 0.0
+    price_kind: str = "unknown"
 
 
 @dataclass
@@ -85,6 +90,8 @@ def _row_to_stored_deal(row) -> StoredDeal:
         shipping_cost_eur=data.get("shipping_cost_eur") or 0.0,
         original_currency=data.get("original_currency") or "EUR",
         metadata=data.get("metadata") or "{}",
+        effective_price_eur=data.get("effective_price_eur") or data["price_eur"],
+        price_kind=data.get("price_kind") or "unknown",
     )
 
 
@@ -109,6 +116,14 @@ class StorageManager:
     def save_deal(self, deal: Deal, run_id: str = ""):
         existing = self.get_deal_by_url(deal.url)
         today = today_iso()
+        quote = getattr(deal, "price_quote", None)
+
+        shipping_cost = getattr(deal, "shipping_cost_eur", 0.0)
+        if quote is not None and quote.shipping.cost_eur is not None:
+            shipping_cost = quote.shipping.cost_eur
+        metadata = dict(getattr(deal, "metadata", {}) or {})
+        if quote is not None:
+            metadata["price_quote"] = quote.as_dict()
 
         deal_data = {
             "url": deal.url,
@@ -121,9 +136,11 @@ class StorageManager:
             "availability": getattr(deal, "availability", "unknown"),
             "seller_name": getattr(deal, "seller_name", ""),
             "seller_rating": getattr(deal, "seller_rating", 0.0),
-            "shipping_cost_eur": getattr(deal, "shipping_cost_eur", 0.0),
+            "shipping_cost_eur": shipping_cost,
             "original_currency": getattr(deal, "original_currency", "EUR"),
-            "metadata": json.dumps(getattr(deal, "metadata", {}) or {}, ensure_ascii=False),
+            "metadata": json.dumps(metadata, ensure_ascii=False),
+            "effective_price_eur": comparable_price(deal),
+            "price_kind": quote.kind.value if quote is not None else "unknown",
         }
 
         if existing:
@@ -134,7 +151,8 @@ class StorageManager:
                     title = ?, price_eur = ?, currency = ?, condition = ?,
                     category = ?, site_name = ?, last_seen = ?, times_seen = ?,
                     availability = ?, seller_name = ?, seller_rating = ?,
-                    shipping_cost_eur = ?, original_currency = ?, metadata = ?
+                    shipping_cost_eur = ?, original_currency = ?, metadata = ?,
+                    effective_price_eur = ?, price_kind = ?
                 WHERE url = ?
                 """,
                 (
@@ -143,7 +161,8 @@ class StorageManager:
                     today, existing.times_seen + 1, deal_data["availability"],
                     deal_data["seller_name"], deal_data["seller_rating"],
                     deal_data["shipping_cost_eur"], deal_data["original_currency"],
-                    deal_data["metadata"], deal.url,
+                    deal_data["metadata"], deal_data["effective_price_eur"],
+                    deal_data["price_kind"], deal.url,
                 ),
             )
         else:
@@ -153,8 +172,9 @@ class StorageManager:
                 INSERT INTO deals (
                     url, title, price_eur, currency, condition, category, site_name,
                     first_seen, last_seen, times_seen, availability, seller_name,
-                    seller_rating, shipping_cost_eur, original_currency, metadata
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    seller_rating, shipping_cost_eur, original_currency, metadata,
+                    effective_price_eur, price_kind
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     deal_data["url"], deal_data["title"], deal_data["price_eur"],
@@ -162,7 +182,8 @@ class StorageManager:
                     deal_data["site_name"], today, today, 1, deal_data["availability"],
                     deal_data["seller_name"], deal_data["seller_rating"],
                     deal_data["shipping_cost_eur"], deal_data["original_currency"],
-                    deal_data["metadata"],
+                    deal_data["metadata"], deal_data["effective_price_eur"],
+                    deal_data["price_kind"],
                 ),
             )
 
@@ -191,7 +212,16 @@ class StorageManager:
             "shipping_cost_eur": getattr(deal, "shipping_cost_eur", 0.0),
             "run_id": f"manual_{utcnow_stamp()}" if not run_id else run_id,
             "timestamp": utcnow_iso(),
+            "effective_price_eur": comparable_price(deal),
+            "price_kind": (
+                deal.price_quote.kind.value
+                if getattr(deal, "price_quote", None) is not None
+                else "unknown"
+            ),
         }
+        quote = getattr(deal, "price_quote", None)
+        if quote is not None and quote.shipping.cost_eur is not None:
+            sighting["shipping_cost_eur"] = quote.shipping.cost_eur
         result = self.db["price_history"].insert(sighting)
         return result.last_pk if result else None
 
@@ -238,15 +268,17 @@ class StorageManager:
                 # Compare latest with earliest in window
                 latest = prices[0]
                 earliest = prices[-1]
-                if earliest["price_eur"] > 0:
-                    change_pct = ((latest["price_eur"] - earliest["price_eur"]) / earliest["price_eur"]) * 100
+                latest_price = latest.get("effective_price_eur") or latest["price_eur"]
+                earliest_price = earliest.get("effective_price_eur") or earliest["price_eur"]
+                if earliest_price > 0:
+                    change_pct = ((latest_price - earliest_price) / earliest_price) * 100
                     if change_pct <= -threshold_pct:
                         drops.append({
                             "url": url,
                             "title": latest.get("title", ""),
                             "site_name": latest.get("site_name", ""),
-                            "old_price": earliest["price_eur"],
-                            "new_price": latest["price_eur"],
+                            "old_price": earliest_price,
+                            "new_price": latest_price,
                             "change_pct": round(change_pct, 2),
                             "old_timestamp": earliest["timestamp"],
                             "new_timestamp": latest["timestamp"],

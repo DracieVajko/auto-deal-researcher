@@ -16,8 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar
 
-from src.config.models import OutputConfig
-from src.config.models import Condition
+from src.config.models import Condition, OutputConfig
 from src.output.dedup import collapse_duplicates
 from src.output.domains import DomainProfile, detect, get
 from src.output.domains.ai import proposal_to_profile, propose_domain
@@ -29,6 +28,7 @@ from src.output.requirements import (
 )
 from src.searcher.adapters.base import Deal
 from src.searcher.listing_filter import is_laptop_title, wants_mini_pc_form_factor
+from src.searcher.pricing import PriceKind, comparable_price
 from src.text.normalize import fold
 from src.utils.time import utcnow_stamp
 
@@ -82,6 +82,7 @@ class DealAnalysis:
     # The exact profile that detected this domain, including an AI draft that
     # is not in DOMAIN_REGISTRY. Consumers resolve `profile or get(domain)`.
     profile: DomainProfile | None = None
+    filter_reason: str = ""
 
 
 class ResultProcessor:
@@ -120,17 +121,114 @@ class ResultProcessor:
         ).upper() or "EUR"
 
     def _format_price(self, deal) -> tuple[float, str]:
-        """Convert deal price to user's preferred output currency."""
-        if deal.price_eur <= 0:
+        """Convert the listed deal price to the user's output currency."""
+        return self._format_amount(deal.price_eur)
+
+    def _format_effective_price(self, deal) -> tuple[float, str]:
+        """Convert the comparable price (shipping and bundle aware)."""
+        return self._format_amount(comparable_price(deal))
+
+    def _format_amount(self, amount_eur: float) -> tuple[float, str]:
+        """Convert one EUR amount to the user's preferred output currency."""
+        if amount_eur <= 0:
             return 0.0, self.output_currency
         if self.output_currency == "EUR":
-            return deal.price_eur, "EUR"
+            return amount_eur, "EUR"
         # Convert from EUR to target currency
         rates = getattr(getattr(self.full_config, "search", None), "currency_rates", {})
         rate = rates.get(self.output_currency, 1.0)
         if rate <= 0:
             rate = 1.0
-        return deal.price_eur / rate, self.output_currency
+        return amount_eur / rate, self.output_currency
+
+    @staticmethod
+    def _price_marker(deal: Deal) -> str:
+        """Short human marker explaining why a price is not a plain price."""
+        quote = getattr(deal, "price_quote", None)
+        if quote is None:
+            return ""
+        parts: list[str] = []
+        if quote.kind == PriceKind.ACCOUNT_GATED:
+            parts.append("new user")
+        elif quote.kind == PriceKind.COUPON:
+            parts.append("coupon")
+        elif quote.kind == PriceKind.PROMO:
+            parts.append("promo")
+        if quote.price_from:
+            parts.append("from")
+        if quote.bundle.min_quantity > 1:
+            parts.append(f"bundle {quote.bundle.min_quantity} pcs")
+        if quote.shipping.is_free is not True and quote.shipping.cost_eur is None:
+            parts.append("shipping unknown")
+        return ", ".join(parts)
+
+    @staticmethod
+    def _price_breakdown(deal: Deal) -> str:
+        """Explain listed price, shipping, bundle and the effective total."""
+        quote = getattr(deal, "price_quote", None)
+        if quote is None:
+            return f"Item {deal.price_eur:.2f} €"
+
+        quantity = max(1, quote.bundle.min_quantity)
+        if quantity > 1:
+            text = (
+                f"Total {quote.listed_price_eur:.2f} € / {quantity} = "
+                f"{quote.listed_price_eur / quantity:.2f} € per unit"
+            )
+        else:
+            text = f"Item {quote.listed_price_eur:.2f} €"
+
+        if quote.shipping.is_free is True:
+            text += " + free shipping"
+        elif quote.shipping.cost_eur is not None:
+            if quantity > 1:
+                text += (
+                    f" + shipping {quote.shipping.cost_eur:.2f} € "
+                    f"({quote.shipping.cost_eur / quantity:.2f} €/unit)"
+                )
+            else:
+                text += f" + shipping {quote.shipping.cost_eur:.2f} €"
+        else:
+            text += " + shipping unknown"
+
+        text += f" = {quote.effective_price_eur:.2f} €"
+        if quote.price_from and quote.price_max_eur is not None:
+            text += (
+                f" (from {quote.listed_price_eur:.2f} €, "
+                f"variants up to {quote.price_max_eur:.2f} €)"
+            )
+        elif quote.price_from:
+            text += f" (from {quote.listed_price_eur:.2f} €)"
+        if quote.kind == PriceKind.ACCOUNT_GATED:
+            text += " — new-user price"
+            if quote.regular_price_eur is not None:
+                text += f"; regular price {quote.regular_price_eur:.2f} €"
+        if quote.warnings:
+            text += " — " + "; ".join(quote.warnings)
+        return text
+
+    def _price_breakdown_dict(self, deal: Deal) -> dict:
+        """Structured price breakdown for JSON/CSV consumers."""
+        quote = getattr(deal, "price_quote", None)
+        if quote is None:
+            return {
+                "listed_price_eur": deal.price_eur,
+                "shipping_cost_eur": None,
+                "shipping_is_free": None,
+                "bundle_min_quantity": 1,
+                "effective_price_eur": comparable_price(deal),
+                "price_from": False,
+                "price_max_eur": None,
+            }
+        return {
+            "listed_price_eur": quote.listed_price_eur,
+            "shipping_cost_eur": quote.shipping.cost_eur,
+            "shipping_is_free": quote.shipping.is_free,
+            "bundle_min_quantity": quote.bundle.min_quantity,
+            "effective_price_eur": quote.effective_price_eur,
+            "price_from": quote.price_from,
+            "price_max_eur": quote.price_max_eur,
+        }
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -171,23 +269,31 @@ class ResultProcessor:
         analyses = await self._analyze_deals(deals, prompt)
         relevant = [a for a in analyses if not a.wrong_form_factor]
         filtered = [a for a in analyses if a.wrong_form_factor]
+        for analysis in filtered:
+            analysis.filter_reason = "Form factor does not match the request"
 
         # Price-range sanity: drop extreme outliers so a 100 EUR bike is not
         # compared against a 1000 EUR one (Fabia vs Ferrari). Only when we
         # have enough deals to compute a meaningful median.
         if len(relevant) >= 5:
-            prices = sorted(a.deal.price_eur for a in relevant if a.deal.price_eur)
+            prices = sorted(comparable_price(a.deal) for a in relevant if comparable_price(a.deal))
             if prices:
                 median = prices[len(prices) // 2]
                 lo, hi = median * 0.3, median * 3.0
                 kept, dropped = [], []
                 for a in relevant:
-                    p = a.deal.price_eur
+                    p = comparable_price(a.deal)
                     if p is None or (lo <= p <= hi):
                         kept.append(a)
                     else:
                         dropped.append(a)
                 if dropped and len(kept) >= 3:
+                    for analysis in dropped:
+                        price = comparable_price(analysis.deal)
+                        analysis.filter_reason = (
+                            f"Price outlier: {price:.2f} EUR outside "
+                            f"{lo:.2f}-{hi:.2f} EUR"
+                        )
                     relevant = kept
                     filtered = filtered + dropped
         # Best overall deal first: the summary must agree with the scores
@@ -234,8 +340,14 @@ class ResultProcessor:
                     "title": a.deal.title,
                     "site_name": a.deal.site_name,
                     "price_eur": a.deal.price_eur,
+                    "effective_price_eur": comparable_price(a.deal),
+                    "price_kind": (
+                        a.deal.price_quote.kind.value
+                        if getattr(a.deal, "price_quote", None) is not None
+                        else "unknown"
+                    ),
                     "url": a.deal.url,
-                    "reason": "Form factor does not match the request",
+                    "reason": a.filter_reason or "Form factor does not match the request",
                 }
                 for a in filtered
             ],
@@ -254,12 +366,16 @@ class ResultProcessor:
             import csv
             with open(csv_path, "w", newline="", encoding="utf-8") as handle:
                 writer = csv.writer(handle)
-                writer.writerow(["rank", "title", "price_eur", "condition", "site", "score", "verdict", "url", "top_pick"])
+                writer.writerow(["rank", "title", "price_eur", "effective_price_eur", "price_kind", "price_trust", "price_warnings", "condition", "site", "score", "verdict", "url", "top_pick"])
                 for index, analysis in enumerate(relevant, 1):
                     deal = analysis.deal
+                    quote = getattr(deal, "price_quote", None)
                     writer.writerow([
-                        index, deal.title, deal.price_eur, deal.condition,
-                        deal.site_name, round(analysis.score, 1),
+                        index, deal.title, deal.price_eur, comparable_price(deal),
+                        quote.kind.value if quote is not None else "unknown",
+                        quote.trust if quote is not None else 1.0,
+                        " | ".join(quote.warnings) if quote is not None else "",
+                        deal.condition, deal.site_name, round(analysis.score, 1),
                         analysis.verdict, deal.url,
                         "yes" if deal.url in top_picks else "no",
                     ])
@@ -273,21 +389,25 @@ class ResultProcessor:
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "Deals"
-            headers = ["rank", "title", "price_eur", "condition", "site", "score", "verdict", "url", "top_pick"]
+            headers = ["rank", "title", "price_eur", "effective_price_eur", "price_kind", "price_trust", "price_warnings", "condition", "site", "score", "verdict", "url", "top_pick"]
             ws.append(headers)
             for c in ws[1]:
                 c.font = Font(bold=True)
             for index, analysis in enumerate(relevant, 1):
                 deal = analysis.deal
+                quote = getattr(deal, "price_quote", None)
                 ws.append([
-                    index, deal.title, deal.price_eur, deal.condition,
-                    deal.site_name, round(analysis.score, 1),
+                    index, deal.title, deal.price_eur, comparable_price(deal),
+                    quote.kind.value if quote is not None else "unknown",
+                    quote.trust if quote is not None else 1.0,
+                    " | ".join(quote.warnings) if quote is not None else "",
+                    deal.condition, deal.site_name, round(analysis.score, 1),
                     analysis.verdict, deal.url,
                     "yes" if deal.url in top_picks else "no",
                 ])
             # widen columns
             ws.column_dimensions["B"].width = 60
-            ws.column_dimensions["H"].width = 60
+            ws.column_dimensions["L"].width = 60
             xlsx_path = out_dir / f"{stem}.xlsx"
             wb.save(xlsx_path)
         except Exception as exc:
@@ -971,10 +1091,10 @@ class ResultProcessor:
         relevant = [
             analysis
             for analysis in analyses
-            if not analysis.wrong_form_factor and analysis.deal.price_eur > 0
+            if not analysis.wrong_form_factor and comparable_price(analysis.deal) > 0
         ]
-        prices = [analysis.deal.price_eur for analysis in relevant]
-        distinct = {round(analysis.deal.price_eur, 2) for analysis in relevant}
+        prices = [comparable_price(analysis.deal) for analysis in relevant]
+        distinct = {round(comparable_price(analysis.deal), 2) for analysis in relevant}
         median = (
             statistics.median(prices)
             if len(distinct) >= self.MIN_PRICE_SAMPLE
@@ -1026,7 +1146,7 @@ class ResultProcessor:
                     for other in relevant
                     if other is not analysis
                     and other.matches_requirements
-                    and other.deal.price_eur < analysis.deal.price_eur
+                    and comparable_price(other.deal) < comparable_price(analysis.deal)
                 ),
                 key=lambda item: item.score,
                 reverse=True,
@@ -1041,7 +1161,8 @@ class ResultProcessor:
                         if other is not analysis
                         and (
                             other.score > analysis.score
-                            or other.deal.price_eur < analysis.deal.price_eur
+                            or comparable_price(other.deal)
+                            < comparable_price(analysis.deal)
                         )
                     ),
                     key=lambda item: item.score,
@@ -1053,8 +1174,10 @@ class ResultProcessor:
                 title_key = other.deal.title.strip().lower()
                 if title_key in existing:
                     continue
-                if other.deal.price_eur < analysis.deal.price_eur:
-                    saving = analysis.deal.price_eur - other.deal.price_eur
+                other_price = comparable_price(other.deal)
+                analysis_price = comparable_price(analysis.deal)
+                if other_price < analysis_price:
+                    saving = analysis_price - other_price
                     why = (
                         f"Cheaper by {saving:.0f} EUR at {other.deal.site_name}; "
                         f"score {other.score:.0f}/100"
@@ -1062,14 +1185,14 @@ class ResultProcessor:
                 else:
                     why = (
                         f"Higher-scoring option at {other.deal.site_name} "
-                        f"({other.deal.price_eur:.0f} EUR); score {other.score:.0f}/100"
+                        f"({other_price:.0f} EUR); score {other.score:.0f}/100"
                     )
                 if not other.matches_requirements:
                     why += " (also misses some requirements)"
                 analysis.alternatives.append(
                     {
                         "title": other.deal.title,
-                        "price_eur": other.deal.price_eur,
+                        "price_eur": other_price,
                         "why": why,
                         "source": "results",
                     }
@@ -1101,8 +1224,9 @@ class ResultProcessor:
             # An unknown product type has no vocabulary to grade against.
             spec_match = 50.0
 
-        if median and deal.price_eur > 0:
-            ratio = deal.price_eur / median
+        deal_price = comparable_price(deal)
+        if median and deal_price > 0:
+            ratio = deal_price / median
             if ratio <= 0.8:
                 price_score = 95.0
             elif ratio <= 1.0:
@@ -1113,6 +1237,11 @@ class ResultProcessor:
                 price_score = 25.0
         else:
             price_score = 50.0
+
+        trust = 1.0
+        if deal.price_quote is not None:
+            trust = max(0.4, min(1.0, float(deal.price_quote.trust)))
+        price_score *= trust
 
         condition_score = {
             "new": 90.0,
@@ -1188,6 +1317,7 @@ class ResultProcessor:
     ) -> dict:
         deal = analysis.deal
         price_out, currency_out = self._format_price(deal)
+        quote = getattr(deal, "price_quote", None)
         return {
             "rank": rank,
             "is_top_pick": is_top_pick,
@@ -1196,6 +1326,12 @@ class ResultProcessor:
             "price_eur": deal.price_eur,
             "price": price_out,
             "currency": currency_out,
+            "effective_price_eur": comparable_price(deal),
+            "price_kind": quote.kind.value if quote is not None else "unknown",
+            "price_trust": quote.trust if quote is not None else 1.0,
+            "price_warnings": list(quote.warnings) if quote is not None else [],
+            "price_breakdown": self._price_breakdown_dict(deal),
+            "price_marker": self._price_marker(deal),
             "original_price": deal.original_price,
             "original_currency": deal.original_currency,
             "condition": deal.condition,
@@ -1236,7 +1372,7 @@ class ResultProcessor:
         for i, a in enumerate(relevant[:25], 1):
             d = a.deal
             lines.append(
-                f"{i}. {d.title[:80]} | {d.price_eur} EUR | {d.condition} | "
+                f"{i}. {d.title[:80]} | {comparable_price(d)} EUR | {d.condition} | "
                 f"score {a.score:.0f} | {d.site_name} | {d.url}"
             )
         summary = "\n".join(lines)
@@ -1252,7 +1388,8 @@ class ResultProcessor:
         user = f"Request: {prompt or 'n/a'}\n\nDeals:\n{summary}"
         try:
             raw = await self.llm._chat(system, user, max_tokens=200)
-            import json, re
+            import json
+            import re
             m = re.search(r"\{.*\}", raw, re.S)
             if not m:
                 return None
@@ -1304,30 +1441,45 @@ class ResultProcessor:
             "| # | Pick | Product | Price | Condition | Site | Score | Verdict | Link |"
         )
         lines.append("|---|------|---------|-------|-----------|------|-------|---------|------|")
+        markers: set[str] = set()
         for index, analysis in enumerate(relevant, 1):
             deal = analysis.deal
-            price_out, currency_out = self._format_price(deal)
+            price_out, currency_out = self._format_effective_price(deal)
+            marker = self._price_marker(deal)
+            if marker:
+                markers.add(marker)
             pick = "⭐" if deal.url in top_picks else ""
             verdict = VERDICT_LABELS.get(analysis.verdict, analysis.verdict)
             title = self._escape(deal.title)
             if deal.url:
                 title = f"[{title}]({deal.url})"
+            price_cell = f"{price_out:.2f} {currency_out}"
+            if marker:
+                price_cell += f" ({marker})"
             lines.append(
                 f"| {index} | {pick} | {title} | "
-                f"{price_out:.2f} {currency_out} | "
+                f"{price_cell} | "
                 f"{CONDITION_LABELS.get(deal.condition, deal.condition)} | "
                 f"{deal.site_name} | {analysis.score:.0f} | {verdict} | "
                 f"[open]({deal.url}) |"
             )
+        if markers:
+            lines += [
+                "",
+                "**Price markers:** *new user* = account-gated price; "
+                "*coupon* = code required; *from* = lowest variant; "
+                "*bundle N pcs* = minimum quantity; "
+                "*shipping unknown* = not stated, not treated as free.",
+            ]
         # ---- Top picks: cheapest, best overall, best price/performance ----
         if relevant:
             lines += ["", "## Top picks", ""]
             # Best overall = highest score
             best = max(relevant, key=lambda a: a.score)
-            # Cheapest = lowest price
-            cheapest = min(relevant, key=lambda a: a.deal.price_eur or float("inf"))
+            # Cheapest = lowest effective price
+            cheapest = min(relevant, key=lambda a: comparable_price(a.deal) or float("inf"))
             # Best price/performance = highest score per euro
-            pp = max(relevant, key=lambda a: (a.score / (a.deal.price_eur or 1.0)))
+            pp = max(relevant, key=lambda a: (a.score / (comparable_price(a.deal) or 1.0)))
             picks = []
             if best is not None:
                 picks.append(("🏆 Best overall", best))
@@ -1341,7 +1493,7 @@ class ResultProcessor:
                 if a.deal.url in seen_urls:
                     continue
                 seen_urls.add(a.deal.url)
-                price_out, currency_out = self._format_price(a.deal)
+                price_out, currency_out = self._format_effective_price(a.deal)
                 lines.append(
                     f"- **{label}:** [{a.deal.title}]({a.deal.url}) — "
                     f"{price_out:.2f} {currency_out} (score {a.score:.0f})"
@@ -1361,7 +1513,14 @@ class ResultProcessor:
                 chart_lines = []
                 for a in relevant:
                     hist = storage.get_price_history(a.deal.url, days=90)
-                    pts = [(h["timestamp"][:10], h["price_eur"]) for h in (hist or []) if h.get("price_eur")]
+                    pts = [
+                        (
+                            h["timestamp"][:10],
+                            h.get("effective_price_eur") or h["price_eur"],
+                        )
+                        for h in (hist or [])
+                        if h.get("effective_price_eur") or h.get("price_eur")
+                    ]
                     if len(pts) >= 2:
                         svg = price_history_svg(pts, title=a.deal.title[:40])
                         if svg:
@@ -1382,7 +1541,7 @@ class ResultProcessor:
             if pick_analyses:
                 lines.append("| | " + " | ".join(self._escape(a.deal.title[:40]) for a in pick_analyses) + " |")
                 lines.append("|---|" + "|".join(["---"] * len(pick_analyses)) + "|")
-                lines.append("| Price | " + " | ".join(f"{a.deal.price_eur:.2f}" for a in pick_analyses) + " |")
+                lines.append("| Price | " + " | ".join(f"{comparable_price(a.deal):.2f}" for a in pick_analyses) + " |")
                 lines.append("| Score | " + " | ".join(f"{a.score:.0f}" for a in pick_analyses) + " |")
                 lines.append("| Condition | " + " | ".join(a.deal.condition for a in pick_analyses) + " |")
                 lines.append("| Site | " + " | ".join(a.deal.site_name for a in pick_analyses) + " |")
@@ -1415,9 +1574,15 @@ class ResultProcessor:
         prompt: str | None = None,
     ) -> list[str]:
         deal = analysis.deal
-        price_out, currency_out = self._format_price(deal)
+        price_out, currency_out = self._format_effective_price(deal)
         lines = [f"### {index}. {deal.title}", ""]
-        lines.append(f"- **Price:** {price_out:.2f} {currency_out}")
+        lines.append(
+            f"- **Price:** {price_out:.2f} {currency_out} "
+            f"— {self._price_breakdown(deal)}"
+        )
+        marker = self._price_marker(deal)
+        if marker:
+            lines.append(f"- **Price note:** {marker}")
         lines.append(
             f"- **Condition:** {CONDITION_LABELS.get(deal.condition, deal.condition)}"
         )
@@ -1535,17 +1700,18 @@ class ResultProcessor:
     @staticmethod
     def _filtered_lines(filtered: list[DealAnalysis]) -> list[str]:
         lines = [
-            "These listings were removed because they do not match the requested "
-            "form factor:",
+            "These listings were removed from the ranking:",
             "",
         ]
-        lines.append("| Product | Price | Site |")
-        lines.append("|---------|-------|------|")
+        lines.append("| Product | Price | Site | Reason | Link |")
+        lines.append("|---------|-------|------|--------|------|")
         for analysis in filtered:
             deal = analysis.deal
+            reason = analysis.filter_reason or "Form factor does not match the request"
             lines.append(
                 f"| {ResultProcessor._escape(deal.title)} | "
-                f"{deal.price_eur:.0f} € | {deal.site_name} |"
+                f"{comparable_price(deal):.0f} € | {deal.site_name} | "
+                f"{ResultProcessor._escape(reason)} | [open]({deal.url}) |"
             )
         lines.append("")
         return lines

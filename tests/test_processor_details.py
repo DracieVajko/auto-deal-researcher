@@ -8,6 +8,7 @@ from src.config import load_config
 from src.output.domains import detect, get
 from src.output.processor import DealAnalysis, ResultProcessor
 from src.searcher.adapters.base import Deal
+from src.searcher.pricing import PriceKind, ShippingQuote, build_price_quote
 
 PROMPT = (
     "mini pc barebone with Thunderbolt/OCuLink, DDR5, 32-64GB, "
@@ -731,3 +732,61 @@ def test_llm_prompt_names_the_profile_keys():
     )
     asyncio.run(processor._llm_analyze_batch([analysis], "iphone 13"))
     assert "storage, ram, battery_health, screen_size" in captured["user"]
+
+
+def test_cheapest_pick_uses_effective_price():
+    processor = ResultProcessor(load_config())
+    cheap_listed = Deal(
+        url="https://x/cheap",
+        title="Cheap listed",
+        price_eur=90.0,
+        price_quote=build_price_quote(90.0, shipping=ShippingQuote(cost_eur=30.0)),
+    )
+    dear_listed = Deal(
+        url="https://x/dear",
+        title="Dear listed",
+        price_eur=100.0,
+        price_quote=build_price_quote(100.0, shipping=ShippingQuote(is_free=True)),
+    )
+    analyses = [
+        DealAnalysis(deal=cheap_listed, domain="generic", score=80.0),
+        DealAnalysis(deal=dear_listed, domain="generic", score=80.0),
+    ]
+
+    markdown = processor._to_markdown("x", analyses, [], "2026-11-02", set())
+
+    assert "Cheapest:** [Dear listed]" in markdown
+
+
+def test_report_shows_shipping_breakdown():
+    processor = ResultProcessor(load_config())
+    deal = Deal(
+        url="https://x/1",
+        title="X",
+        price_eur=100.0,
+        price_quote=build_price_quote(100.0, shipping=ShippingQuote(cost_eur=5.0)),
+    )
+    analysis = DealAnalysis(deal=deal, domain="generic", score=80.0)
+
+    markdown = processor._to_markdown("x", [analysis], [], "2026-11-02", set())
+
+    assert "Item 100.00" in markdown
+    assert "shipping 5.00" in markdown
+    assert "105.00" in markdown
+
+
+def test_report_marks_account_gated_price():
+    processor = ResultProcessor(load_config())
+    deal = Deal(
+        url="https://x/1",
+        title="X",
+        price_eur=9.99,
+        price_quote=build_price_quote(
+            9.99, kind=PriceKind.ACCOUNT_GATED, shipping=ShippingQuote(is_free=True)
+        ),
+    )
+    analysis = DealAnalysis(deal=deal, domain="generic", score=80.0)
+
+    markdown = processor._to_markdown("x", [analysis], [], "2026-11-02", set())
+
+    assert "new user" in markdown.lower()

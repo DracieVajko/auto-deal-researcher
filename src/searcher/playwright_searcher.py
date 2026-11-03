@@ -10,15 +10,20 @@ from dataclasses import dataclass
 
 from playwright.async_api import BrowserContext, Page
 
-from src.config.models import AppConfig, WebsiteConfig
+from src.config.models import AppConfig, Category, Condition, WebsiteConfig
 from src.diagnostics.selector_health import SelectorHealthTracker
 from src.llm.client import LLMClient
 from src.searcher.adapters import Deal, get_adapter
 from src.searcher.adapters.base import SiteBlockedError
 from src.searcher.filter_engine import FilterEngine
-from src.config.models import Category, Condition
 from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
+from src.searcher.pricing import (
+    BundleTerms,
+    PriceKind,
+    ShippingQuote,
+    build_price_quote,
+)
 from src.searcher.query_language import language_for_country, localise_query
 from src.searcher.site_profiles import SiteProfile, load_profiles
 from src.searcher.site_registry import by_id
@@ -296,6 +301,11 @@ class PlaywrightSearcher:
 
         # Judge once at the end: fewer LLM calls than per-round judging.
         if all_deals:
+            # Ambiguous cards get one batched LLM pass before filters and
+            # ranking, so an account-gated price or a hidden shipping cost is
+            # known when the effective price is computed.
+            await self._enrich_price_quotes(all_deals)
+
             if filters is not None and not filters.is_empty():
                 before_filter = len(all_deals)
                 all_deals = FilterEngine.post_filter(all_deals, filters)
@@ -331,6 +341,136 @@ class PlaywrightSearcher:
             prompt, all_deals, max(len(all_deals), 1)
         )
         return final_ranked
+
+    async def _enrich_price_quotes(self, deals: list[Deal]) -> None:
+        """Let the LLM classify cards the deterministic scanner was unsure about.
+
+        Only quotes built by the regex layer with ``confidence < 0.7`` are
+        sent, at most ten per call. A missing or failing model is not an error:
+        the deterministic quote stays in place.
+        """
+        if not deals or self.llm is None:
+            return
+        classify = getattr(self.llm, "classify_price_quotes", None)
+        if classify is None:
+            return
+
+        ambiguous: list[tuple[Deal, str]] = []
+        for deal in deals:
+            quote = deal.price_quote
+            if quote is None or quote.source != "regex" or quote.confidence >= 0.7:
+                continue
+            text = str((deal.metadata or {}).get("card_text") or "")
+            if not text:
+                continue
+            ambiguous.append((deal, text))
+
+        for start in range(0, len(ambiguous), 10):
+            batch = ambiguous[start : start + 10]
+            items = [
+                {
+                    "id": f"L{index}",
+                    "text": text,
+                    "listed_price_eur": deal.price_eur,
+                    "currency": deal.original_currency or "EUR",
+                }
+                for index, (deal, text) in enumerate(batch)
+            ]
+            try:
+                results = await classify(items)
+            except Exception as exc:  # noqa: BLE001 - optional enrichment
+                logger.info("Price classification pass skipped: %s", exc)
+                continue
+            if not isinstance(results, dict):
+                continue
+            for index, (deal, _text) in enumerate(batch):
+                payload = results.get(f"L{index}")
+                if isinstance(payload, dict):
+                    self._apply_price_classification(deal, payload)
+
+    @staticmethod
+    def _apply_price_classification(deal: Deal, payload: dict) -> None:
+        """Merge a validated LLM classification into an existing quote.
+
+        Deterministic fields win when they matched; the model only fills gaps.
+        Trust is recomputed from the merged flags and is never taken from the
+        model.
+        """
+        quote = deal.price_quote
+        if quote is None:
+            return
+
+        kind = quote.kind
+        if kind in (PriceKind.REGULAR, PriceKind.UNKNOWN):
+            try:
+                llm_kind = PriceKind(str(payload.get("kind", "unknown")))
+            except ValueError:
+                llm_kind = PriceKind.UNKNOWN
+            if llm_kind not in (PriceKind.REGULAR, PriceKind.UNKNOWN):
+                kind = llm_kind
+
+        shipping = quote.shipping
+        if shipping.is_free is None and shipping.cost_eur is None:
+            is_free = payload.get("shipping_is_free")
+            cost = payload.get("shipping_cost_eur")
+            low = payload.get("shipping_min_eur")
+            high = payload.get("shipping_max_eur")
+            if is_free is True:
+                shipping = ShippingQuote(cost_eur=0.0, is_free=True)
+            elif cost is not None:
+                shipping = ShippingQuote(
+                    cost_eur=float(cost), min_eur=low, max_eur=high, is_free=False
+                )
+            elif low is not None:
+                shipping = ShippingQuote(
+                    cost_eur=float(low), min_eur=low, max_eur=high, is_free=False
+                )
+
+        bundle = quote.bundle
+        llm_quantity = payload.get("bundle_min_quantity") or 1
+        if isinstance(llm_quantity, int) and llm_quantity > bundle.min_quantity:
+            bundle = BundleTerms(
+                min_quantity=llm_quantity,
+                total_price_eur=quote.listed_price_eur,
+            )
+
+        price_from = quote.price_from or payload.get("price_from") is True
+        price_max = quote.price_max_eur
+        if price_max is None and payload.get("price_max_eur") is not None:
+            price_max = float(payload["price_max_eur"])
+        regular_price = quote.regular_price_eur
+        if regular_price is None and payload.get("regular_price_eur") is not None:
+            regular_price = float(payload["regular_price_eur"])
+
+        warnings = tuple(
+            dict.fromkeys([*quote.warnings, *(payload.get("warnings") or [])])
+        )
+        evidence = tuple(
+            dict.fromkeys([*quote.evidence, *(payload.get("evidence") or [])])
+        )
+        contributed = (
+            kind != quote.kind
+            or shipping != quote.shipping
+            or bundle != quote.bundle
+            or price_from != quote.price_from
+            or price_max != quote.price_max_eur
+            or regular_price != quote.regular_price_eur
+        )
+        confidence = max(quote.confidence, float(payload.get("confidence", 0.0)))
+
+        deal.price_quote = build_price_quote(
+            quote.listed_price_eur,
+            kind=kind,
+            shipping=shipping,
+            bundle=bundle,
+            price_from=price_from,
+            price_max_eur=price_max,
+            regular_price_eur=regular_price,
+            evidence=evidence,
+            source="llm" if contributed else "regex",
+            confidence=confidence,
+            warnings=warnings,
+        )
 
     async def _execute_round(
         self,

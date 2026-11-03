@@ -14,6 +14,7 @@ from src.history.trends import TrendsAnalyzer
 from src.intelligence.change_detector import ChangeDetector
 from src.intelligence.price_tracker import PriceTracker
 from src.searcher.adapters.base import Deal
+from src.searcher.pricing import ShippingQuote, build_price_quote
 from src.storage.manager import StorageManager
 
 URL = "https://bazos.sk/inzerat/1/drone"
@@ -46,6 +47,19 @@ def test_rows_support_key_and_index_access(storage):
 
 def test_get_deal_missing_returns_none(storage):
     assert storage.get_deal("https://example.com/missing") is None
+
+
+def test_price_history_stores_effective_price_and_kind(storage):
+    deal = make_deal()
+    deal.price_quote = build_price_quote(
+        100.0, shipping=ShippingQuote(cost_eur=5.0)
+    )
+
+    storage.save_deal(deal, "run1")
+
+    rows = storage.get_price_history(URL)
+    assert rows[0]["effective_price_eur"] == 105.0
+    assert rows[0]["price_kind"] == "regular"
 
 
 def test_save_and_get_deal_roundtrip(storage):

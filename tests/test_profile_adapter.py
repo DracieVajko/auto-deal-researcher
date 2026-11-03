@@ -114,6 +114,26 @@ def test_profile_adapter_falls_back_to_the_profile_currency():
     assert adapter.currency == "CZK"
 
 
+@pytest.mark.asyncio
+async def test_profile_adapter_attaches_price_quote():
+    element = FakeElement(
+        mapping={
+            ".title": FakeChild("New user deal"),
+            ".price": FakeChild("9,99 €"),
+            "a": FakeChild(href="/p/1"),
+        },
+        text="New user price 9,99 € free shipping",
+    )
+    adapter = ProfileAdapter(profile=_profile())
+    deal = await adapter.extract_deal(None, element)
+    assert deal is not None
+    assert deal.price_quote is not None
+    assert deal.price_quote.kind == "account_gated"
+    assert deal.price_quote.shipping.is_free is True
+    assert deal.price_quote.effective_price_eur == 9.99
+    assert deal.metadata["card_text"] == "New user price 9,99 € free shipping"
+
+
 def test_profile_adapter_default_search_url():
     adapter = ProfileAdapter(profile=_profile())
     assert adapter.default_search_url("mini pc") == "https://www.mall.sk/search?q=mini+pc"

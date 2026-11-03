@@ -10,6 +10,7 @@ from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import Page
 
 from src.searcher.filters import SearchFilters
+from src.searcher.pricing import build_price_quote, extract_price_signals
 from src.searcher.site_profiles import SiteProfile
 from src.text.normalize import fold
 
@@ -115,15 +116,14 @@ class ProfileAdapter(BaseAdapter):
             return None
         extraction = self.profile.extraction
         try:
+            full_text = " ".join((await element.inner_text()).split())
             title = await self._text(element, extraction.title_selector)
             if not title:
-                text = " ".join((await element.inner_text()).split())
-                title = text[:200]
+                title = full_text[:200]
 
             price_text = await self._text(element, extraction.price_selector)
             if not price_text:
                 # Fallback: extract price from full card text using regex
-                full_text = " ".join((await element.inner_text()).split())
                 price_text = full_text
             parsed = self.parse_price_with_currency(price_text)
             if not title or parsed is None:
@@ -149,6 +149,7 @@ class ProfileAdapter(BaseAdapter):
                 "source": "profile",
                 "original_price": original_price,
                 "original_currency": original_currency,
+                "card_text": full_text[:2000],
             }
             for key, selector in (
                 ("brand", extraction.brand_selector),
@@ -164,6 +165,7 @@ class ProfileAdapter(BaseAdapter):
             if image:
                 metadata["image"] = image
 
+            signals = extract_price_signals(full_text, price_eur, original_currency)
             return Deal(
                 url=url.split("?")[0],
                 title=title,
@@ -174,6 +176,19 @@ class ProfileAdapter(BaseAdapter):
                 metadata=metadata,
                 original_price=original_price,
                 original_currency=original_currency,
+                price_quote=build_price_quote(
+                    price_eur,
+                    kind=signals.kind,
+                    shipping=signals.shipping,
+                    bundle=signals.bundle,
+                    price_from=signals.price_from,
+                    price_max_eur=signals.price_max_eur,
+                    regular_price_eur=signals.regular_price_eur,
+                    evidence=signals.evidence,
+                    source="regex",
+                    confidence=signals.confidence,
+                    warnings=signals.warnings,
+                ),
             )
         except (PlaywrightError, ValueError, AttributeError, TypeError) as exc:
             logger.debug("[%s] extract error: %s", self.profile.site_id, exc)

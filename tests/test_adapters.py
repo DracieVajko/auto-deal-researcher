@@ -95,3 +95,46 @@ def test_html_adapters_expose_selectors():
 
 def test_site_blocked_error_is_runtime_error():
     assert issubclass(SiteBlockedError, RuntimeError)
+
+
+class FakeText:
+    def __init__(self, text="", href=None):
+        self.text = text
+        self.href = href
+
+    async def inner_text(self):
+        return self.text
+
+    async def get_attribute(self, name):
+        return self.href if name == "href" else None
+
+
+class FakeContainer:
+    def __init__(self, text="", mapping=None):
+        self.text = text
+        self.mapping = mapping or {}
+
+    async def inner_text(self):
+        return self.text
+
+    async def query_selector(self, selector):
+        return self.mapping.get(selector)
+
+
+@pytest.mark.asyncio
+async def test_bazos_quote_reads_shipping_from_card():
+    link = FakeText("Notebook Lenovo", href="/inzerat/1")
+    title_container = FakeContainer(
+        "Notebook Lenovo", {".nadpis a": link, "a[href*='inzerat']": link}
+    )
+    price = FakeText("26 € Doprava 4,99 €")
+    price_container = FakeContainer(
+        "26 € Doprava 4,99 €", {"span, b, strong": price}
+    )
+
+    adapter = get_adapter("bazos")()
+    deal = await adapter._extract_from_group(None, title_container, price_container)
+    assert deal is not None
+    assert deal.price_quote is not None
+    assert deal.price_quote.shipping.cost_eur == 4.99
+    assert deal.price_quote.effective_price_eur == 30.99

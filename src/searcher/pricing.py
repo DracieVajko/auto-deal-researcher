@@ -9,7 +9,7 @@ price story in :class:`PriceQuote` and exposes one comparable number.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from typing import Any
 
@@ -65,6 +65,24 @@ class PriceQuote:
     evidence: tuple[str, ...] = ()
     source: str = "regex"
     warnings: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict[str, Any]:
+        """Serialise the quote for storage and JSON reports."""
+        return {
+            "listed_price_eur": self.listed_price_eur,
+            "effective_price_eur": self.effective_price_eur,
+            "kind": self.kind.value,
+            "shipping": asdict(self.shipping),
+            "bundle": asdict(self.bundle),
+            "price_from": self.price_from,
+            "price_max_eur": self.price_max_eur,
+            "regular_price_eur": self.regular_price_eur,
+            "trust": self.trust,
+            "confidence": self.confidence,
+            "evidence": list(self.evidence),
+            "source": self.source,
+            "warnings": list(self.warnings),
+        }
 
 
 @dataclass(frozen=True)
@@ -125,7 +143,7 @@ def _trust_for(
 def build_price_quote(
     listed_price_eur: float,
     *,
-    kind: PriceKind = PriceKind.UNKNOWN,
+    kind: PriceKind = PriceKind.REGULAR,
     shipping: ShippingQuote | None = None,
     bundle: BundleTerms | None = None,
     price_from: bool = False,
@@ -257,7 +275,7 @@ _PRICE_FROM_PATTERNS = (
 
 _PRICE_RANGE_PATTERNS = (
     r"\b(?:od|from|ab)\s*(\d[\d\s.,]*)\s*(?:€|eur|k[čc]|czk)\s*(?:do|to|bis|a[žz])\s*(\d[\d\s.,]*)\s*(?:€|eur|k[čc]|czk)",
-    r"\b(\d[\d\s.,]*)\s*[-–—]\s*(\d[\d\s.,]*)\s*(?:€|eur|k[čc]|czk)",
+    r"\b(\d[\d\s.,]*)\s*[-\u2013\u2014]\s*(\d[\d\s.,]*)\s*(?:€|eur|k[čc]|czk)",
 )
 
 _ORIGINAL_PRICE_PATTERNS = (
@@ -405,6 +423,109 @@ def extract_price_signals(
     )
 
 
+# ---------------------------------------------------------------------------
+# LLM response validation
+# ---------------------------------------------------------------------------
+
+_ALLOWED_KINDS = {kind.value for kind in PriceKind}
+_PRICE_NUMBER_FIELDS = (
+    "shipping_cost_eur",
+    "shipping_min_eur",
+    "shipping_max_eur",
+    "price_max_eur",
+    "regular_price_eur",
+)
+_MAX_AMOUNT = 1_000_000.0
+_INVALID = object()
+
+
+def _valid_amount(value: Any) -> float | object | None:
+    """Return a finite non-negative amount, ``None``, or ``_INVALID``."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return _INVALID
+    number = float(value)
+    if number != number or number in (float("inf"), float("-inf")):
+        return _INVALID
+    if number < 0 or number > _MAX_AMOUNT:
+        return _INVALID
+    return number
+
+
+def validate_price_classification(
+    payload: Any, card_text: str
+) -> dict[str, Any] | None:
+    """Validate one LLM price classification against the card text.
+
+    The model may only report what is visible on the card. Every evidence
+    snippet must be a literal substring, and every number must be finite and
+    sane. A response that breaks a rule is rejected as a whole, so a
+    hallucinated shipping cost cannot leak into the ranking.
+    """
+    if not isinstance(payload, dict):
+        return None
+
+    kind = payload.get("kind", PriceKind.UNKNOWN.value)
+    if kind not in _ALLOWED_KINDS:
+        kind = PriceKind.UNKNOWN.value
+
+    evidence = payload.get("evidence") or []
+    if not isinstance(evidence, list):
+        return None
+    cleaned_evidence: list[str] = []
+    for item in evidence:
+        if not isinstance(item, str):
+            return None
+        if item and item not in card_text:
+            return None
+        if item:
+            cleaned_evidence.append(item)
+
+    numbers = {name: _valid_amount(payload.get(name)) for name in _PRICE_NUMBER_FIELDS}
+    if any(value is _INVALID for value in numbers.values()):
+        return None
+
+    quantity = payload.get("bundle_min_quantity", 1)
+    if quantity is None:
+        quantity = 1
+    if isinstance(quantity, bool) or not isinstance(quantity, int):
+        return None
+    if quantity < 1 or quantity > 1000:
+        return None
+
+    warnings = payload.get("warnings") or []
+    if not isinstance(warnings, list) or not all(isinstance(w, str) for w in warnings):
+        return None
+
+    confidence = payload.get("confidence", 0.0)
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+        return None
+    confidence = max(0.0, min(1.0, float(confidence)))
+
+    def _flag(name: str) -> bool:
+        return payload.get(name) is True
+
+    return {
+        "kind": kind,
+        "shipping_cost_eur": numbers["shipping_cost_eur"],
+        "shipping_is_free": (
+            payload.get("shipping_is_free")
+            if isinstance(payload.get("shipping_is_free"), bool)
+            else None
+        ),
+        "shipping_min_eur": numbers["shipping_min_eur"],
+        "shipping_max_eur": numbers["shipping_max_eur"],
+        "bundle_min_quantity": quantity,
+        "price_from": _flag("price_from"),
+        "price_max_eur": numbers["price_max_eur"],
+        "regular_price_eur": numbers["regular_price_eur"],
+        "warnings": warnings,
+        "confidence": confidence,
+        "evidence": cleaned_evidence,
+    }
+
+
 __all__ = [
     "BundleTerms",
     "PriceKind",
@@ -414,4 +535,5 @@ __all__ = [
     "build_price_quote",
     "comparable_price",
     "extract_price_signals",
+    "validate_price_classification",
 ]

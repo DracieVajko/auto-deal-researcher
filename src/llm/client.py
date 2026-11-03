@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import json
 import logging
 import os
 import re
@@ -258,6 +259,71 @@ class LLMClient:
         )
         data = await self.chat_json(system, prompt, max_tokens=300)
         return data if isinstance(data, dict) else {}
+
+    async def classify_price_quotes(self, items: list[dict]) -> dict[str, dict]:
+        """Classify ambiguous price cards (shipping, bundles, gated promos).
+
+        ``items`` is a batch of at most ten dicts with ``id``, ``text``,
+        ``listed_price_eur`` and ``currency``. Every returned entry is
+        validated against its card text; a response with invented evidence or
+        an impossible number is dropped rather than trusted.
+        """
+        if not items:
+            return {}
+        from src.searcher.pricing import validate_price_classification
+
+        system = (
+            "You classify marketplace listing cards by how their price works. "
+            "For each card return the price kind: regular, promo (public sale), "
+            "coupon (needs a code or auto-applied coupon), account_gated "
+            "(new user, first order, member, app-only), bundle (minimum quantity "
+            "required), range ('from X' or a variant range) or unknown. "
+            "Also report shipping_cost_eur, shipping_is_free, shipping_min_eur, "
+            "shipping_max_eur, bundle_min_quantity, price_from, price_max_eur, "
+            "regular_price_eur, warnings, confidence (0-1) and evidence. "
+            "Use null for any value the card does not show; never guess. "
+            "Every evidence entry MUST be an exact substring copied from the "
+            "card text. Return ONLY JSON: "
+            '{"quotes": [{"id": "...", "kind": "...", "shipping_cost_eur": null, '
+            '"shipping_is_free": null, "shipping_min_eur": null, '
+            '"shipping_max_eur": null, "bundle_min_quantity": 1, '
+            '"price_from": false, "price_max_eur": null, '
+            '"regular_price_eur": null, "warnings": [], "confidence": 0.0, '
+            '"evidence": []}]}'
+        )
+        cards = [
+            {
+                "id": str(item.get("id", "")),
+                "text": str(item.get("text", ""))[:2000],
+                "listed_price_eur": item.get("listed_price_eur"),
+                "currency": item.get("currency", "EUR"),
+            }
+            for item in items[:10]
+        ]
+        user = json.dumps({"cards": cards}, ensure_ascii=False)
+        try:
+            data = await self.chat_json(system, user, max_tokens=1200)
+        except Exception as exc:  # noqa: BLE001 - optional enrichment
+            logger.info("Price classification unavailable: %s", exc)
+            return {}
+
+        quotes = data.get("quotes") if isinstance(data, dict) else data
+        if not isinstance(quotes, list):
+            return {}
+
+        by_id = {card["id"]: card["text"] for card in cards}
+        result: dict[str, dict] = {}
+        for quote in quotes:
+            if not isinstance(quote, dict):
+                continue
+            quote_id = str(quote.get("id", ""))
+            card_text = by_id.get(quote_id)
+            if card_text is None:
+                continue
+            validated = validate_price_classification(quote, card_text)
+            if validated is not None:
+                result[quote_id] = validated
+        return result
 
 
     # === New async methods ===

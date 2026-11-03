@@ -129,6 +129,7 @@ def test_registered_adapter_uses_configured_base_url():
 class FakePage:
     def __init__(self):
         self.closed = False
+        self.context = FakeContext()
 
     def set_default_timeout(self, value):
         pass
@@ -138,6 +139,11 @@ class FakePage:
 
     async def close(self):
         self.closed = True
+
+
+class FakeContext:
+    async def add_cookies(self, cookies):
+        pass
 
 
 class FakeBrowserManager:

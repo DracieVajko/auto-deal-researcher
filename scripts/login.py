@@ -39,10 +39,28 @@ SESSION_DIR = ROOT / "data" / "sessions"
 LOGIN_URLS = {
     "facebook": "https://www.facebook.com/login",
     "ebay": "https://www.ebay.de/",
+    "amazon_de": "https://www.amazon.de/",
+    "nkon_nl": "https://www.nkon.nl/en/",
+    "ecoprodukt_sk": "https://ecoprodukt.sk/",
+    "nay": "https://www.nay.sk/",
+    "solaro_sk": "https://solaro.sk/",
     "alza": "https://www.alza.sk/",
     "bazos": "https://www.bazos.sk/",
     "backmarket": "https://www.backmarket.sk/",
 }
+
+
+def site_base_url(site: str) -> str:
+    """Base URL for an adapter-backed or profile-only site."""
+    try:
+        return get_adapter(site)().base_url
+    except ValueError:
+        from src.searcher.site_registry import by_id
+
+        spec = by_id(site)
+        if spec is None:
+            raise
+        return spec.base_url
 
 
 def session_file(site: str) -> Path:
@@ -69,8 +87,7 @@ def profile_dir(cfg) -> Path:
 
 
 def login(site: str, headless: bool = False) -> None:
-    adapter = get_adapter(site)()
-    url = LOGIN_URLS.get(site, adapter.base_url)
+    url = LOGIN_URLS.get(site, site_base_url(site))
     cfg = load_config()
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
     profile = profile_dir(cfg)
@@ -110,14 +127,14 @@ def check(site: str) -> bool:
         return False
 
     cookies = json.loads(path.read_text(encoding="utf-8"))
-    adapter = get_adapter(site)()
+    base_url = site_base_url(site)
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(storage_state=str(path),
                                   viewport={"width": 1440, "height": 900})
         page = ctx.new_page()
-        page.goto(adapter.base_url, wait_until="domcontentloaded", timeout=60000)
+        page.goto(base_url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(3000)
         body = page.inner_text("body").lower()
         still_login = any(s in body for s in ("log in", "log into", "prihlásiť"))

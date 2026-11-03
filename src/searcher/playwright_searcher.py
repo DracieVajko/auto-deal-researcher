@@ -25,6 +25,7 @@ from src.searcher.pricing import (
     build_price_quote,
 )
 from src.searcher.query_language import language_for_country, localise_query
+from src.searcher.sessions import apply_session
 from src.searcher.site_profiles import SiteProfile, load_profiles
 from src.searcher.site_registry import by_id
 from src.searcher.site_selection import SiteCandidate, SiteSelector
@@ -495,6 +496,7 @@ class PlaywrightSearcher:
                 page = await self.browser_manager.get_page(session_id=f"search-{site.name}")
                 page.set_default_timeout(30000)
                 page.set_default_navigation_timeout(30000)
+                await apply_session(page.context, site.name)
 
                 profile = self._profile_for(site)
                 country, currency = self._site_market(site)

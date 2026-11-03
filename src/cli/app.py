@@ -660,9 +660,8 @@ def browsers():
 @app.command()
 def login_sites():
     """List sites that need a manual login and which sessions are saved."""
-    from pathlib import Path as _Path
-
     from src.searcher.adapters import ADAPTER_REGISTRY
+    from src.searcher.sessions import has_session
 
     cfg = load_config()
     configured = {s.strip().lower() for s in cfg.browser.login_sites}
@@ -670,13 +669,8 @@ def login_sites():
                             if getattr(cls, "requires_login", False)}
 
     typer.echo("\nSites needing a manual login:\n")
-    session_dir = _Path("data") / "sessions"
     for site in sorted(needed):
-        if site not in ADAPTER_REGISTRY:
-            typer.echo(f"  {site:<12} (unknown adapter id - check browser.login_sites)")
-            continue
-        path = session_dir / f"{site}.json"
-        state = "session saved" if path.exists() else "NOT logged in"
+        state = "session saved" if has_session(site) else "NOT logged in"
         typer.echo(f"  {site:<12} {state}")
     typer.echo("\nLog in with:  python scripts/login.py --site <id>")
     typer.echo("Verify with:  python scripts/login.py --site <id> --check")

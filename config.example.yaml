@@ -366,6 +366,7 @@ browser:
   user_data_dir: "./browser_profile"
   headless: true
   slow_mo: 0
+  login_sites: ["facebook", "ebay", "amazon_de", "solaro_sk"]
 
 storage:
   db_path: "./data/deals.db"

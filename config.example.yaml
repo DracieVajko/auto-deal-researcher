@@ -97,7 +97,7 @@ search:
       currency: "CZK"
     - name: "amazon_de"
       base_url: "https://www.amazon.de"
-      enabled: false
+      enabled: true
       adapter_class: "amazon"
       categories: ["electronics", "appliances", "auto", "general", "home", "hobby"]
       conditions: ["new", "used", "refurbished", "open_box"]

@@ -5,7 +5,7 @@ from src.searcher.site_registry import SITES, by_id, by_status, sites_for, summa
 
 def test_registry_has_working_sites():
     working = by_status("working")
-    assert {s.id for s in working} == {"alza", "bazos"}
+    assert {s.id for s in working} == {"alza", "amazon_de", "bazos"}
 
 
 def test_specialty_sites_are_registered():
@@ -78,10 +78,10 @@ def test_by_id_returns_spec():
 
 def test_summary_counts():
     s = summary()
-    assert s["working"] == 2
+    assert s["working"] == 3
     assert s["blocked"] == 4
     assert s["needs_login"] == 2
-    assert s["planned"] == 25
+    assert s["planned"] == 24
     assert sum(s.values()) == len(SITES)
 
 

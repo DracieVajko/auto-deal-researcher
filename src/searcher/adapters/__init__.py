@@ -1,6 +1,7 @@
 """Site adapters registry."""
 
 from .alza import AlzaAdapter
+from .amazon import AmazonAdapter
 from .backmarket import BackMarketAdapter
 from .base import BaseAdapter, Deal, SiteBlockedError
 from .bazos import BazosAdapter
@@ -10,6 +11,7 @@ from .profile_adapter import ProfileAdapter
 
 ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = {
     "alza": AlzaAdapter,
+    "amazon": AmazonAdapter,
     "bazos": BazosAdapter,
     "backmarket": BackMarketAdapter,
     "facebook": FacebookAdapter,
@@ -28,6 +30,7 @@ def get_adapter(name: str) -> type[BaseAdapter]:
 __all__ = [
     "ADAPTER_REGISTRY",
     "AlzaAdapter",
+    "AmazonAdapter",
     "BackMarketAdapter",
     "BaseAdapter",
     "BazosAdapter",

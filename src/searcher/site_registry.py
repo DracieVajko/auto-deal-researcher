@@ -120,7 +120,7 @@ SITES: list[SiteSpec] = [
              country="CZ", currency="CZK"),
     SiteSpec("amazon_de", "Amazon.de", "https://www.amazon.de", "amazon",
              ("electronics", "appliances", "auto", "general", "home", "hobby"),
-             ("new", "used", "refurbished", "open_box"), "planned",
+             ("new", "used", "refurbished", "open_box"), "working",
              seller_type="marketplace", has_warranty=False,
              warranty_note="Amazon's own returns; third-party warranty varies.",
              notes="Browser scraping with the user's cookies; captcha is detected.",

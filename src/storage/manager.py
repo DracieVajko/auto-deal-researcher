@@ -265,15 +265,15 @@ class StorageManager:
                 # Compare latest with earliest in window
                 latest = prices[0]
                 earliest = prices[-1]
-                latest_price = latest.get("effective_price_eur") or latest["price_eur"]
-                earliest_price = earliest.get("effective_price_eur") or earliest["price_eur"]
+                latest_price = latest["effective_price_eur"] or latest["price_eur"]
+                earliest_price = earliest["effective_price_eur"] or earliest["price_eur"]
                 if earliest_price > 0:
                     change_pct = ((latest_price - earliest_price) / earliest_price) * 100
                     if change_pct <= -threshold_pct:
                         drops.append({
                             "url": url,
-                            "title": latest.get("title", ""),
-                            "site_name": latest.get("site_name", ""),
+                            "title": latest["title"],
+                            "site_name": latest["site_name"],
                             "old_price": earliest_price,
                             "new_price": latest_price,
                             "change_pct": round(change_pct, 2),
@@ -283,11 +283,11 @@ class StorageManager:
         return drops
 
     def detect_new_lows(self, days: int = 30) -> list[dict]:
-        """Find products at their lowest price in N days."""
+        """Find products at their lowest effective price in N days."""
         cutoff = (utcnow() - timedelta(days=days)).isoformat()
         rows = self.db.execute("""
             SELECT ph.*, d.title, d.site_name,
-                   MIN(ph.price_eur) OVER (PARTITION BY ph.url) as min_price
+                   MIN(ph.effective_price_eur) OVER (PARTITION BY ph.url) as min_effective
             FROM price_history ph
             JOIN deals d ON ph.url = d.url
             WHERE ph.timestamp >= ?
@@ -295,19 +295,23 @@ class StorageManager:
 
         new_lows = []
         for row in rows:
-            if row["price_eur"] == row["min_price"]:
+            price = row["effective_price_eur"] or row["price_eur"]
+            min_price = row["min_effective"] or row["price_eur"]
+            if price == min_price:
                 # Check if this is the first time at this low price
                 earlier = self.db.execute("""
                     SELECT 1 FROM price_history 
-                    WHERE url = ? AND price_eur <= ? AND timestamp < ?
+                    WHERE url = ? 
+                      AND (effective_price_eur IS NOT NULL AND effective_price_eur <= ?)
+                      AND timestamp < ?
                     LIMIT 1
-                """, (row["url"], row["price_eur"], row["timestamp"])).fetchone()
+                """, (row["url"], min_price, row["timestamp"])).fetchone()
                 if not earlier:
                     new_lows.append({
                         "url": row["url"],
                         "title": row["title"],
                         "site_name": row["site_name"],
-                        "price": row["price_eur"],
+                        "price": price,
                         "timestamp": row["timestamp"],
                     })
         return new_lows
@@ -316,7 +320,7 @@ class StorageManager:
         """Compute trend: dropping, rising, stable, volatile."""
         cutoff = (utcnow() - timedelta(days=days)).isoformat()
         rows = self.db.execute("""
-            SELECT price_eur, timestamp FROM price_history 
+            SELECT effective_price_eur, price_eur, timestamp FROM price_history 
             WHERE url = ? AND timestamp >= ?
             ORDER BY timestamp ASC
         """, (url, cutoff)).fetchall()
@@ -324,7 +328,7 @@ class StorageManager:
         if len(rows) < 2:
             return {"trend": "insufficient_data", "data_points": len(rows)}
 
-        prices = [r["price_eur"] for r in rows]
+        prices = [r["effective_price_eur"] or r["price_eur"] for r in rows]
         first_price = prices[0]
         last_price = prices[-1]
         change_pct = ((last_price - first_price) / first_price) * 100 if first_price > 0 else 0

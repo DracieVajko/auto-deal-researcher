@@ -139,6 +139,75 @@ def test_price_trend_short_history_uses_data_points(storage):
     assert trend == {"trend": "insufficient_data", "data_points": 1}
 
 
+def test_price_tracker_trend_uses_effective_price(storage):
+    """Price tracker trend must use effective price (incl. shipping), not raw price."""
+    deal = make_deal()
+    deal.price_quote = build_price_quote(
+        100.0, shipping=ShippingQuote(cost_eur=20.0)
+    )  # effective = 120.0
+    storage.save_deal(deal, "run1")
+    storage.save_deal(make_deal(price=90.0), "run1")  # effective = 90.0
+
+    tracker = PriceTracker(storage)
+    trend = storage.get_price_trend(URL)
+
+    # Effective price went 120 -> 90, a drop. Raw price went 100 -> 90.
+    assert trend["data_points"] == 2
+    assert trend["change_pct"] == round((90.0 - 120.0) / 120.0 * 100, 2)
+
+
+def test_detect_price_drops_uses_effective_price(storage):
+    """Price drop detection must use effective price (price + shipping)."""
+    # First create the deal row so subsequent price_history rows have a parent
+    storage.save_deal(make_deal(price=100.0), "run1")
+    
+    now = datetime.now()
+    
+    # Delete the auto-created price_history row and insert with distinct timestamps
+    storage.db.execute("DELETE FROM price_history WHERE url = ?", (URL,))
+    
+    # Effective=120 at T0-2day
+    storage.db.execute(
+        "INSERT INTO price_history (deal_id, url, price_eur, effective_price_eur, timestamp, original_price_eur, original_currency, condition, availability, seller_name, seller_rating, shipping_cost_eur, run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (1, URL, 100.0, 120.0, (now - timedelta(days=2)).isoformat(), 100.0, "EUR", "used", "unknown", "", 0.0, "EUR", "run1")
+    )
+    
+    # Effective=90 at T0-1day
+    storage.db.execute(
+        "INSERT INTO price_history (deal_id, url, price_eur, effective_price_eur, timestamp, original_price_eur, original_currency, condition, availability, seller_name, seller_rating, shipping_cost_eur, run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (1, URL, 90.0, 90.0, (now - timedelta(days=1)).isoformat(), 90.0, "EUR", "used", "unknown", "", 0.0, "EUR", "run1")
+    )
+    
+    storage.save_deal(make_deal(price=100.0), "run2")  # effective=100, timestamp=T0
+
+    drops = storage.detect_price_drops(threshold_pct=10.0, days=2)
+    # Effective prices: 120 (2 days ago), 90 (1 day ago), 100 (now)
+    # latest=100, earliest=120, change=(100-120)/120=-16.67%
+    assert any(d["url"] == URL for d in drops)
+    assert any(d["change_pct"] == round((100.0 - 120.0) / 120.0 * 100, 2) for d in drops)
+
+
+def test_detect_new_lows_uses_effective_price(storage):
+    """New low detection must use effective price."""
+    deal = make_deal()
+    deal.price_quote = build_price_quote(
+        100.0, shipping=ShippingQuote(cost_eur=20.0)
+    )  # effective = 120.0
+    storage.save_deal(deal, "run1")
+    storage.db.execute(
+        "UPDATE price_history SET timestamp = ? WHERE url = ?",
+        ((datetime.now() - timedelta(days=2)).isoformat(), URL),
+    )
+    storage.save_deal(make_deal(price=80.0, url="https://x/2"), "run1")  # effective = 80.0
+
+    lows = storage.detect_new_lows(days=30)
+    urls = [d["url"] for d in lows]
+    assert URL in urls
+    # Effective price 120 is the low for this URL (only sighting), not 100 raw
+    item = next(d for d in lows if d["url"] == URL)
+    assert item["price"] == 120.0
+
+
 def _age_sightings(storage, days):
     storage.db.execute(
         "UPDATE price_history SET timestamp = ?", ((datetime.now() - timedelta(days=days)).isoformat(),)

@@ -44,23 +44,23 @@ DEFAULT_SELECTORS = {
 }
 
 
-def _extract_text(element: ElementHandle, selector: str) -> str:
+async def _extract_text(element: ElementHandle, selector: str) -> str:
     """Extract text content from the first element matching selector."""
     try:
-        sub = element.query_selector(selector)
+        sub = await element.query_selector(selector)
         if sub:
-            return (sub.inner_text() or "").strip()
+            return (await sub.inner_text() or "").strip()
     except Exception:
         pass
     return ""
 
 
-def _extract_attr(element: ElementHandle, selector: str, attr: str) -> str | None:
+async def _extract_attr(element: ElementHandle, selector: str, attr: str) -> str | None:
     """Extract an attribute from the first element matching selector."""
     try:
-        sub = element.query_selector(selector)
+        sub = await element.query_selector(selector)
         if sub:
-            return sub.get_attribute(attr)
+            return await sub.get_attribute(attr)
     except Exception:
         pass
     return None
@@ -121,34 +121,34 @@ async def extract_product_card(
     """
     sel = {**DEFAULT_SELECTORS, **(selectors or {})}
 
-    title = _extract_text(card_element, sel["title"])
+    title = await _extract_text(card_element, sel["title"])
     if not title:
         return None  # Not a real listing card
 
-    price_text = _extract_text(card_element, sel["price"])
+    price_text = await _extract_text(card_element, sel["price"])
     price_eur = _parse_price(price_text) if price_text else None
     if price_eur is None:
         return None  # Can't determine price
 
     # Extract URL - try the card's own link or the title's link
-    url = _extract_attr(card_element, sel["url"], "href")
+    url = await _extract_attr(card_element, sel["url"], "href")
     if url and base_url and not url.startswith("http"):
         from urllib.parse import urljoin
         url = urljoin(base_url, url)
 
-    condition_text = _extract_text(card_element, sel.get("availability", ""))
+    condition_text = await _extract_text(card_element, sel.get("availability", ""))
     condition = _detect_condition(condition_text + " " + title)
 
-    availability = _extract_text(card_element, sel.get("availability", ""))
-    seller = _extract_text(card_element, sel.get("seller", ""))
-    image_url = _extract_attr(card_element, sel.get("image", ""), "src")
+    availability = await _extract_text(card_element, sel.get("availability", ""))
+    seller = await _extract_text(card_element, sel.get("seller", ""))
+    image_url = await _extract_attr(card_element, sel.get("image", ""), "src")
 
     return ProductCard(
         title=title,
         price_eur=price_eur,
         url=url or "",
         site_name=site_name,
-        condition=condition,
+        condition=condition,  # type: ignore[arg-type]  # condition detected from text, may be any str
         availability=availability,
         seller_name=seller,
         image_url=image_url,

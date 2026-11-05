@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from src.intelligence.deal_scorer import DealScorer, DealScore
+from src.intelligence.deal_scorer import DealScorer
 
 logger = logging.getLogger(__name__)
 

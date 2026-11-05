@@ -1,3 +1,4 @@
+
 """Multi-language filter extraction for search queries.
 
 Extends the existing LLM-based ``extract_search_filters`` with deterministic
@@ -13,9 +14,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, cast
 
-from src.config.models import Category, Condition
+from src.config.models import Condition
 
 Language = Literal["sk", "cs", "de", "pl", "en"]
 
@@ -149,7 +150,7 @@ CATEGORY_KEYWORDS: dict[Language, dict[str, str]] = {
     },
 }
 
-PRICE_KEYWORDS: dict[Language, list[str]] = {
+PRICE_KEYWORDS: dict[str, list[str]] = {
     "sk": ["do", "max", "najviac", "cena do", "po", "od"],
     "cs": ["do", "max", "nejvíc", "cena do", "po", "od"],
     "de": ["unter", "max", "maximal", "bis", "ab", "von"],
@@ -188,57 +189,88 @@ def _word_match(text_lower: str, kw: str) -> bool:
     import re
     return bool(re.search(rf"\b{re.escape(kw)}\b", text_lower))
 
-
 def detect_language(text: str) -> Language:
     """Detect the language of a text using keyword heuristics."""
     text_lower = text.lower()
-    scores: dict[Language, int] = {"sk": 0, "cs": 0, "de": 0, "pl": 0, "en": 0}
+    score_sk = 0
+    score_cs = 0
+    score_de = 0
+    score_pl = 0
+    score_en = 0
 
     for lang, keywords in CONDITION_KEYWORDS.items():
         for kw in keywords:
             if _word_match(text_lower, kw):
-                scores[lang] += 2
+                if lang == "sk":
+                    score_sk += 2
+                elif lang == "cs":
+                    score_cs += 2
+                elif lang == "de":
+                    score_de += 2
+                elif lang == "pl":
+                    score_pl += 2
+                elif lang == "en":
+                    score_en += 2
 
     for lang, keywords in CATEGORY_KEYWORDS.items():
         for kw in keywords:
             if _word_match(text_lower, kw):
-                scores[lang] += 1
+                if lang == "sk":
+                    score_sk += 1
+                elif lang == "cs":
+                    score_cs += 1
+                elif lang == "de":
+                    score_de += 1
+                elif lang == "pl":
+                    score_pl += 1
+                elif lang == "en":
+                    score_en += 1
 
-    # Price keywords add to language score
-    for lang, keywords in PRICE_KEYWORDS.items():
+    # Price keywords add to language score (type: ignore — MyPy false positive on dict items)
+    for lang_keyword, keywords in PRICE_KEYWORDS.items():  # type: ignore[assignment]
+        lang_kw: Language = lang_keyword  # type: ignore[assignment]
         for kw in keywords:
             if _word_match(text_lower, kw):
-                scores[lang] += 1
+                if lang_kw == "sk":
+                    score_sk += 1
+                elif lang_kw == "cs":
+                    score_cs += 1
+                elif lang_kw == "de":
+                    score_de += 1
+                elif lang_kw == "pl":
+                    score_pl += 1
+                elif lang_kw == "en":
+                    score_en += 1
 
     # SK/CZ disambiguation: Slovak-specific words
     sk_words = ["čo", "kde", "ako", "prečo", "cena", "výrobca", "stav", "parametre", "do", "od"]
     cz_words = ["co", "kde", "jak", "proč", "cena", "výrobce", "stav", "parametry", "do", "od"]
     for w in sk_words:
         if _word_match(text_lower, w):
-            scores["sk"] += 1
+            score_sk += 1
     for w in cz_words:
         if _word_match(text_lower, w):
-            scores["cs"] += 1
+            score_cs += 1
 
     # DE-specific
     de_words = ["und", "oder", "der", "die", "das", "preis", "marke", "zustand", "unter", "max", "bis", "ab", "von"]
     for w in de_words:
         if _word_match(text_lower, w):
-            scores["de"] += 1
+            score_de += 1
 
     # PL-specific
     pl_words = ["i", "lub", "cena", "marka", "stan", "parametry", "do", "max", "od", "powyżej"]
     for w in pl_words:
         if _word_match(text_lower, w):
-            scores["pl"] += 1
+            score_pl += 1
 
-    best = "en"
+    best: Language = "en"
     best_score = 0
     # Preference order: SK first (primary market), then CS, DE, PL, EN
-    for lang in ["sk", "cs", "de", "pl", "en"]:
-        if scores[lang] > best_score:
-            best = lang
-            best_score = scores[lang]
+    for lang_name, lang_score in (("sk", score_sk), ("cs", score_cs), ("de", score_de), ("pl", score_pl), ("en", score_en)):
+        if lang_score > best_score:
+            best = cast(Language, lang_name)
+            best_score = lang_score
     return best
 
 
@@ -424,12 +456,11 @@ def to_search_filters(extracted: ExtractedFilters):
     return SearchFilters(
         min_price=extracted.min_price,
         max_price=extracted.max_price,
-        condition=extracted.condition or Condition.ANY,
-        category=extracted.category or Category.ANY,
+        condition=Condition(extracted.condition) if extracted.condition else Condition.ANY,
         brand=extracted.brand,
         location=extracted.location,
         shipping=extracted.shipping,
         seller_type=extracted.seller_type,
         sort=extracted.sort,
-        extra_filters={f"{k}={v}" for k, v in extracted.extras.items()},
+        extras={k: v for k, v in extracted.extras.items()},
     )

@@ -7,6 +7,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from playwright.async_api import BrowserContext, Page
 
@@ -21,7 +22,6 @@ from src.searcher.filter_engine import FilterEngine
 from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
 from src.searcher.pagination import scrape_pages
-from src.searcher.search_cache import SearchCache
 from src.searcher.pricing import (
     BundleTerms,
     PriceKind,
@@ -29,6 +29,7 @@ from src.searcher.pricing import (
     build_price_quote,
 )
 from src.searcher.query_language import language_for_country, localise_query
+from src.searcher.search_cache import SearchCache
 from src.searcher.sessions import apply_session
 from src.searcher.site_profiles import SiteProfile, load_profiles
 from src.searcher.site_registry import SITES, by_id
@@ -729,10 +730,10 @@ class PlaywrightSearcher:
                 )
 
             # Check cache before searching
-            filters_dict = {}
+            filters_dict: dict[str, Any] = {}
             if filters is not None:
                 try:
-                    filters_dict = filters.model_dump() if hasattr(filters, "model_dump") else dict(filters)
+                    filters_dict = filters.as_dict()
                 except Exception:
                     filters_dict = {}
             cached = self._search_cache.get(site.name, site_query, filters_dict)

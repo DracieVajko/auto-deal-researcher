@@ -225,7 +225,7 @@ class StorageManager:
             "timestamp": utcnow_iso(),
             "effective_price_eur": comparable_price(deal),
             "price_kind": (
-                (deal.price_quote.kind.value if deal.price_quote else "unknown")
+                deal.price_quote.kind.value if deal.price_quote else "unknown"
             ),
         }
         quote = getattr(deal, "price_quote", None)
@@ -365,7 +365,6 @@ class StorageManager:
             if not latest_deal:
                 continue
             try:
-                import json as _json
                 metadata = json.loads(latest_deal) if isinstance(latest_deal, str) else latest_deal
             except (json.JSONDecodeError, TypeError):
                 continue
@@ -568,7 +567,7 @@ class StorageManager:
         """Upsert researched item specs into the item_specs table."""
         import json
 
-        self.db["item_specs"].insert(
+        self.db.table("item_specs").insert(
             {
                 "item_name": item_name,
                 "category": category,
@@ -579,7 +578,7 @@ class StorageManager:
             },
             pk="item_name",
             replace=True,
-        )  # type: ignore[union-attr]
+        )
 
     def get_item_specs(self, item_name: str) -> dict | None:
         """Return cached item specs by item_name, or None if not researched."""

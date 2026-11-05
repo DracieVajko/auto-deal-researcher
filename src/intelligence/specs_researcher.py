@@ -11,15 +11,16 @@ is.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
+import requests
 
 from src.config import load_config
 from src.llm.client import LLMClient
-from src.research.web_search import search_web, WebSource
+from src.research.web_search import WebSource, search_web
 from src.storage.manager import StorageManager
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,7 @@ class ItemSpecs:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ItemSpecs":
+    def from_dict(cls, data: dict) -> ItemSpecs:
         # Specs may be nested under "specs" key (as returned by get_item_specs)
         # or flat (as returned by to_dict).
         specs_data = data.get("specs") or data
@@ -230,8 +231,8 @@ class ItemSpecsResearcher:
     def _search(self, query: str, limit: int) -> list[WebSource]:
         """Run a web search and return sources."""
         try:
-            return search_web(query, limit=limit)
-        except Exception as exc:
+            return search_web(query, max_results=limit)
+        except (requests.RequestException, ValueError) as exc:
             logger.warning("Web search failed for %r: %s", query, exc)
             return []
 

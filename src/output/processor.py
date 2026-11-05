@@ -244,6 +244,7 @@ class ResultProcessor:
         output_dir: str | None = None,
         prompt: str | None = None,
         site_plan: SitePlan | None = None,
+        price_alerts: list[dict] | None = None,
     ) -> tuple[str, str]:
         """Write one JSON file and one Markdown file.
 
@@ -336,6 +337,7 @@ class ResultProcessor:
             "duplicates_collapsed": duplicates_collapsed,
             "filtered_out_count": len(filtered),
             "site_plan": site_plan.as_dict() if site_plan is not None else None,
+            "price_alerts": price_alerts or [],
             "deals": [
                 self._deal_to_dict(
                     analysis,
@@ -363,7 +365,8 @@ class ResultProcessor:
             json.dump(payload, handle, indent=2, ensure_ascii=False)
 
         md_content = self._to_markdown(
-            prompt, relevant, filtered, timestamp, top_picks, site_plan=site_plan
+            prompt, relevant, filtered, timestamp, top_picks, site_plan=site_plan,
+            price_alerts=price_alerts,
         )
         md_path = out_dir / f"{stem}.md"
         with open(md_path, "w", encoding="utf-8") as handle:  # noqa: ASYNC230
@@ -1448,6 +1451,7 @@ class ResultProcessor:
         timestamp: str,
         top_picks: set[str],
         site_plan: SitePlan | None = None,
+        price_alerts: list[dict] | None = None,
     ) -> str:
         lines: list[str] = [f"# Deal Search Results — {timestamp}", ""]
         if prompt:
@@ -1512,6 +1516,13 @@ class ResultProcessor:
 
         if site_plan_lines:
             lines += site_plan_lines
+        if price_alerts:
+            lines += ["", "## Price alerts", ""]
+            for alert in price_alerts:
+                lines.append(
+                    f"- **{alert.get('title', 'Alert')}:** {alert.get('message', '')}"
+                )
+            lines.append("")
         if filtered:
             lines += ["## Filtered out", ""]
             lines += self._filtered_lines(filtered)

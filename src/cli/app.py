@@ -1,6 +1,7 @@
 """Auto Deal Searcher - Typer app factory."""
 
 import asyncio
+import logging
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -30,6 +31,8 @@ from src.searcher.filters import (
 )
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(help="Auto Deal Searcher — find deals across marketplaces")
 app.add_typer(history_app, name="history")
@@ -393,25 +396,34 @@ async def run_search(
         storage.save_deal(deal)
 
     # Price tracking alerts (price drops, new lows, fake promos)
+    price_alerts = []
     try:
         from src.intelligence.price_tracker import PriceTracker
 
         tracker = PriceTracker(storage)
-        price_alerts = []
-        price_alerts.extend(tracker.check_price_drops(threshold_pct=5.0, days=7))
-        price_alerts.extend(tracker.check_new_lows(days=30))
-        price_alerts.extend(tracker.check_fake_promos(threshold_pct=30.0, days=30))
+        price_alert_objects = []
+        price_alert_objects.extend(tracker.check_price_drops(threshold_pct=5.0, days=7))
+        price_alert_objects.extend(tracker.check_new_lows(days=30))
+        price_alert_objects.extend(tracker.check_fake_promos(threshold_pct=30.0, days=30))
+        price_alerts = [
+            {
+                "title": a.title,
+                "message": a.message,
+                "severity": a.severity,
+                "metadata": a.metadata,
+            }
+            for a in price_alert_objects
+        ]
         for alert in price_alerts:
-            logger.info(
-                "Price alert: %s — %s", alert.title, alert.message
-            )
+            logger.info("Price alert: %s — %s", alert["title"], alert["message"])
     except (AttributeError, ImportError):
         # Storage doesn't support price tracking or module unavailable
         pass
 
     # Output (AI-named, timestamped)
     json_path, md_path = await processor.save_results(
-        deals, config.output.directory, prompt=prompt, site_plan=site_plan
+        deals, config.output.directory, prompt=prompt, site_plan=site_plan,
+        price_alerts=price_alerts,
     )
     return SearchOutcome(
         deal_count=len(deals),

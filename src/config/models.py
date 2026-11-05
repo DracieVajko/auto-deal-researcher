@@ -142,6 +142,14 @@ class DiamondSearchConfig(BaseModel):
     llm_token_budget: int = 100000
 
 
+class SpecsResearchConfig(BaseModel):
+    """Configuration for item specs research (replacement finder foundation)."""
+    enabled: bool = True
+    default_category: str = "auto"
+    max_sources: int = 5
+    max_review_snippets: int = 8
+
+
 class SearchConfig(BaseModel):
     websites: list[WebsiteConfig] = []
     default_filters: dict[str, str | float] = Field(default_factory=dict)
@@ -149,28 +157,17 @@ class SearchConfig(BaseModel):
     max_rounds: int = 3
     retry_on_empty: bool = True
     prune_after_days: int = 30
-    # Where the user shops. Sites in this market rank first, neighbouring
-    # markets second, the rest last.
     user_country: str = "SK"
     user_city: str = ""
-    # Upper bound on how many shops are opened per search round.
-    # 0 means unlimited: the LLM selects every suitable shop.
     max_sites: int = 0
-    # Parallel site searches per round. Higher is faster but more likely to
-    # trigger rate limits; 3 is a safe default for a handful of shops.
     concurrency: int = 3
-    # Attach external review/spec sources to the comparison table.
     sources: bool = True
     source_count: int = 5
-    # Currency in which the user wants to see prices (output currency).
-    # Defaults to the currency of the user's country if not specified.
     default_currency: str = ""
-    # Static EUR rates for the currencies the sites list prices in.
     currency_rates: dict[str, float] = Field(default_factory=dict)
-    # Listing detail pages fetched per site per search. Matches one full
-    # results page so the cap never hides a cheap listing.
     enrich_limit: int = 20
     diamond_search: DiamondSearchConfig = DiamondSearchConfig()
+    specs_research: SpecsResearchConfig = SpecsResearchConfig()
 
 
 class AppConfig(BaseModel):

@@ -552,3 +552,50 @@ class StorageManager:
 
     def mark_alert_sent(self, alert_id: int) -> None:
         self.db["alerts"].update(alert_id, {"sent": 1, "sent_at": utcnow_iso()})  # type: ignore[union-attr]
+
+    # ------------------------------------------------------------------
+    # Item specs research (replacement finder foundation)
+    # ------------------------------------------------------------------
+
+    def save_item_specs(
+        self,
+        item_name: str,
+        category: str,
+        specs: dict,
+        review: dict,
+        source_urls: list[str],
+    ) -> None:
+        """Upsert researched item specs into the item_specs table."""
+        import json
+
+        self.db["item_specs"].insert(
+            {
+                "item_name": item_name,
+                "category": category,
+                "specs_json": json.dumps(specs, ensure_ascii=False),
+                "review_json": json.dumps(review, ensure_ascii=False),
+                "source_urls": json.dumps(source_urls, ensure_ascii=False),
+                "researched_at": utcnow_iso(),
+            },
+            pk="item_name",
+            replace=True,
+        )  # type: ignore[union-attr]
+
+    def get_item_specs(self, item_name: str) -> dict | None:
+        """Return cached item specs by item_name, or None if not researched."""
+        import json
+
+        rows = list(
+            self.db["item_specs"].rows_where("item_name = ?", [item_name])
+        )  # type: ignore[union-attr]
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "item_name": row["item_name"],
+            "category": row["category"],
+            "specs": json.loads(row["specs_json"]),
+            "review": json.loads(row["review_json"]),
+            "source_urls": json.loads(row["source_urls"]),
+            "researched_at": row["researched_at"],
+        }

@@ -61,7 +61,7 @@ def test_legacy_db_gains_missing_columns(tmp_path):
     assert DEALS_COLUMNS.keys() <= cols, "every column the manager writes must exist"
     history_cols = {r[1] for r in db.execute("PRAGMA table_info(price_history)")}
     assert PRICE_HISTORY_COLUMNS.keys() <= history_cols
-    assert db.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == 4
+    assert db.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == 5
 
 
 def test_save_deal_works_on_legacy_db(tmp_path):

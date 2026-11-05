@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -1040,6 +1041,55 @@ def watch(
 ):
     """Watch specific product URLs: track price/stock and find alternatives."""
     watch_fn(urls or [], watchlist, output_dir, alternatives)
+
+
+@app.command()
+def research_specs(
+    item: str = typer.Option(..., "--item", "-i", help="Item name to research (e.g. 'Citroen eC3')"),
+    category: str | None = typer.Option(None, "--category", "-cat", help="Category: auto, electronics, appliances, home, hobby, general"),
+    output_dir: str = typer.Option("results/specs", "--output-dir", help="Output directory for specs JSON"),
+):
+    """Research specs and reviews for an item (foundation for replacement finder)."""
+    import asyncio
+    import json
+    from pathlib import Path
+
+    from src.config import load_config
+    from src.storage.manager import StorageManager
+    from src.intelligence.specs_researcher import ItemSpecsResearcher
+
+    config = load_config()
+    storage = StorageManager(config.storage.db_path)
+    researcher = ItemSpecsResearcher(storage=storage, config=config)
+
+    specs = researcher.research(item, category=category)
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = re.sub(r"[^a-z0-9]+", "-", item.lower()).strip("-")
+    out_path = out_dir / f"specs_{safe_name}.json"
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(specs.to_dict(), f, indent=2, ensure_ascii=False)
+
+    typer.echo(f"Specs researched for: {specs.item_name}")
+    typer.echo(f"  Category: {specs.category}")
+    typer.echo(f"  Brand: {specs.brand or 'n/a'}  Model: {specs.model or 'n/a'}  Year: {specs.year or 'n/a'}")
+    if specs.price_eur:
+        typer.echo(f"  Price: {specs.price_eur:.2f} EUR")
+    if specs.power_kw:
+        typer.echo(f"  Power: {specs.power_kw} kW ({specs.power_hp or 'n/a'} hp)")
+    if specs.battery_kwh:
+        typer.echo(f"  Battery: {specs.battery_kwh} kWh  Range: {specs.range_km or 'n/a'} km")
+    if specs.weight_kg:
+        typer.echo(f"  Weight: {specs.weight_kg} kg")
+    if specs.review.summary:
+        typer.echo(f"  Review: {specs.review.summary}")
+    if specs.review.pros:
+        typer.echo(f"  Pros: {', '.join(specs.review.pros)}")
+    if specs.review.cons:
+        typer.echo(f"  Cons: {', '.join(specs.review.cons)}")
+    typer.echo(f"  Sources: {len(specs.source_urls)}")
+    typer.echo(f"  Saved to: {out_path}")
 
 
 if __name__ == "__main__":

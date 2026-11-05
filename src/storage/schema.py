@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlite_utils import Database
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Columns added after the initial migration, applied idempotently to any
 # database created by an older build.
@@ -24,6 +24,15 @@ DEALS_COLUMNS: dict[str, str] = {
 PRICE_HISTORY_COLUMNS: dict[str, str] = {
     "effective_price_eur": "REAL",
     "price_kind": "TEXT DEFAULT 'unknown'",
+}
+
+ITEM_SPECS_COLUMNS: dict[str, str] = {
+    "item_name": "TEXT NOT NULL",
+    "category": "TEXT DEFAULT 'general'",
+    "specs_json": "TEXT NOT NULL DEFAULT '{}'",
+    "review_json": "TEXT NOT NULL DEFAULT '{}'",
+    "source_urls": "TEXT NOT NULL DEFAULT '[]'",
+    "researched_at": "TEXT NOT NULL",
 }
 
 
@@ -63,6 +72,10 @@ def _run_migrations(db: Database) -> None:
     if current_version < 4:
         _migration_004_price_trust(db)
         current_version = 4
+
+    if current_version < 5:
+        _migration_005_item_specs(db)
+        current_version = 5
 
     # Update version
     db["migrations"].insert({"version": current_version}, pk="version", replace=True)  # type: ignore[union-attr]
@@ -187,6 +200,23 @@ def _migration_004_price_trust(db: Database) -> None:
     """Add the effective price and price kind to deals and price history."""
     _ensure_deals_columns(db)
     _ensure_table_columns(db, "price_history", PRICE_HISTORY_COLUMNS)
+
+
+def _migration_005_item_specs(db: Database) -> None:
+    """Create the item_specs table for cached specs research."""
+    if "item_specs" not in db.table_names():
+        db.execute("""
+            CREATE TABLE item_specs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_name TEXT NOT NULL UNIQUE,
+                category TEXT DEFAULT 'general',
+                specs_json TEXT NOT NULL DEFAULT '{}',
+                review_json TEXT NOT NULL DEFAULT '{}',
+                source_urls TEXT NOT NULL DEFAULT '[]',
+                researched_at TEXT NOT NULL
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_item_specs_name ON item_specs(item_name)")
 
 
 def _ensure_table_columns(

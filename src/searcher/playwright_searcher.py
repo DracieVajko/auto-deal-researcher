@@ -21,6 +21,7 @@ from src.searcher.filter_engine import FilterEngine
 from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
 from src.searcher.pagination import scrape_pages
+from src.searcher.search_cache import SearchCache
 from src.searcher.pricing import (
     BundleTerms,
     PriceKind,
@@ -93,6 +94,9 @@ class PlaywrightSearcher:
         self._last_selected_sites: list[WebsiteConfig] = []
         self._site_selection_requested = False
         self._query_language_cache: dict[tuple[str, str], str] = {}
+        self._search_cache = SearchCache(
+            ttl_seconds=getattr(config.search, "cache_ttl_seconds", 3600)
+        )
         if self.diamond_search_enabled:
             self._init_diamond_agents()
     
@@ -724,6 +728,28 @@ class PlaywrightSearcher:
                     enrich_limit=getattr(self.config.search, "enrich_limit", 20),
                 )
 
+            # Check cache before searching
+            filters_dict = {}
+            if filters is not None:
+                try:
+                    filters_dict = filters.model_dump() if hasattr(filters, "model_dump") else dict(filters)
+                except Exception:
+                    filters_dict = {}
+            cached = self._search_cache.get(site.name, site_query, filters_dict)
+            deals: list[Deal] = []
+            if cached is not None:
+                logger.info(f"[{site.name}] Cache hit for {site_query!r}")
+                for deal_dict in cached:
+                    deal = Deal(**deal_dict) if isinstance(deal_dict, dict) else deal_dict
+                    deal.site_name = site.name
+                    deals.append(deal)
+                latency = (time.perf_counter() - started) * 1000
+                self.health.record_search_result(
+                    site.name, bool(deals), len(deals), latency
+                )
+                await asyncio.sleep(1)
+                return deals
+
             # Search page 1
             deals = await adapter.search(
                 page,
@@ -772,6 +798,21 @@ class PlaywrightSearcher:
                     if d.url not in seen_urls:
                         deals.append(d)
                         seen_urls.add(d.url)
+
+            # Store results in cache
+            cache_deals = [
+                {
+                    "url": d.url,
+                    "title": d.title,
+                    "price_eur": d.price_eur,
+                    "currency": d.currency,
+                    "condition": d.condition,
+                    "category": d.category,
+                    "site_name": d.site_name,
+                }
+                for d in deals
+            ]
+            self._search_cache.set(site.name, site_query, cache_deals, filters_dict)
 
             latency = (time.perf_counter() - started) * 1000
             self.health.record_search_result(

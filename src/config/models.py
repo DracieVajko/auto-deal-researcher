@@ -169,6 +169,7 @@ class SearchConfig(BaseModel):
     diamond_search: DiamondSearchConfig = DiamondSearchConfig()
     specs_research: SpecsResearchConfig = SpecsResearchConfig()
     pages_per_site: int = 3
+    cache_ttl_seconds: int = 3600
 
 
 class AppConfig(BaseModel):

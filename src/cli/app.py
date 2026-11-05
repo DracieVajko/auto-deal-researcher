@@ -1226,5 +1226,31 @@ def find_replacement(
     typer.echo(f"\nSaved to: {out_path}")
 
 
+@app.command()
+def cache(
+    stats: bool = typer.Option(False, "--stats", "-s", help="Show cache statistics"),
+    clear: bool = typer.Option(False, "--clear", help="Clear all cache entries"),
+):
+    """Manage the search response cache."""
+    from src.searcher.search_cache import SearchCache
+
+    cache = SearchCache()
+
+    if clear:
+        count = cache.clear()
+        typer.echo(f"Cleared {count} cache entr{'y' if count == 1 else 'ies'}")
+        return
+
+    if stats:
+        s = cache.stats()
+        typer.echo(f"Cache entries: {s['entries']}")
+        typer.echo(f"Total cached deals: {s['total_deals']}")
+        typer.echo(f"Cache directory: {s['cache_dir']}")
+        typer.echo(f"TTL: {s['ttl_seconds']} seconds")
+        return
+
+    typer.echo("Use --stats or --clear")
+
+
 if __name__ == "__main__":
     app()

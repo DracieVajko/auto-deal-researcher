@@ -1,0 +1,20 @@
+# Line-ending configuration
+# Force Windows batch files to CRLF everywhere so launcher tests pass on
+# Linux CI as well as on Windows checkouts.
+*.bat text eol=crlf
+
+# Shell scripts and PowerShell: LF is fine everywhere.
+*.sh text eol=lf
+*.ps1 text eol=lf
+
+# Python and text files: LF (native on Linux/macOS, consistent on Windows).
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+*.json text eol=lf
+*.toml text eol=lf

@@ -1092,5 +1092,123 @@ def research_specs(
     typer.echo(f"  Saved to: {out_path}")
 
 
+@app.command()
+def find_replacement(
+    item: str = typer.Option(..., "--item", "-i", help="Reference item (e.g. 'Citroen eC3')"),
+    category: str | None = typer.Option(None, "--category", "-cat", help="Category override"),
+    condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
+    max_price: str | None = typer.Option(None, "--max-price", help="Maximum price in EUR"),
+    min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
+    winners: int = typer.Option(3, "--winners", "-w", help="How many top candidates to show"),
+    output_dir: str = typer.Option("results/replacement", "--output-dir", help="Output directory"),
+):
+    """Find replacement alternatives for a reference item.
+
+    Researches the reference item's specs, searches for similar items,
+    scores them by spec match, and ranks the best alternatives.
+    """
+    import asyncio
+    import json
+    from pathlib import Path
+
+    from src.config import load_config
+    from src.storage.manager import StorageManager
+    from src.intelligence.specs_researcher import ItemSpecsResearcher
+    from src.intelligence.deal_scorer import DealScorer
+    from src.intelligence.comparison_engine import ComparisonEngine
+    from src.searcher.filter_extractor import extract_filters_from_specs, to_search_filters
+    from src.searcher.filters import SearchFilters
+    from src.searcher.playwright_searcher import PlaywrightSearcher
+    from src.browser.manager import BrowserManager
+    from src.llm.client import LLMClient
+
+    config = load_config()
+    storage = StorageManager(config.storage.db_path)
+    llm = LLMClient(config)
+
+    # Step 1: Research reference item specs
+    typer.echo(f"Researching specs for: {item}")
+    researcher = ItemSpecsResearcher(storage=storage, config=config)
+    specs = researcher.research(item, category=category)
+    specs_dict = specs.to_dict()
+
+    # Step 2: Convert specs to search filters
+    extracted = extract_filters_from_specs(specs_dict)
+    if min_price:
+        extracted.min_price = float(min_price)
+    if max_price:
+        extracted.max_price = float(max_price)
+    if condition != "any":
+        extracted.condition = condition
+    search_filters = to_search_filters(extracted)
+
+    typer.echo(f"  Category: {specs.category}  Brand: {specs.brand or 'n/a'}  Model: {specs.model or 'n/a'}")
+    if specs.price_eur:
+        typer.echo(f"  Reference price: {specs.price_eur:.2f} EUR")
+    if specs.power_kw:
+        typer.echo(f"  Reference power: {specs.power_kw} kW")
+    if specs.battery_kwh:
+        typer.echo(f"  Reference battery: {specs.battery_kwh} kWh")
+
+    # Step 3: Search for candidates
+    typer.echo("\nSearching for alternatives...")
+    browser_mgr = BrowserManager(config)
+
+    async def _run():
+        async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
+            deals = await searcher.search(
+                f"{specs.brand or ''} {specs.model or item}".strip(),
+                condition,
+                specs.category or "auto",
+                search_filters,
+            )
+        await browser_mgr.close()
+        return deals
+
+    deals = asyncio.run(_run())
+
+    typer.echo(f"Found {len(deals)} candidate(s)")
+
+    # Step 4: Score and compare
+    engine = ComparisonEngine()
+    comparison = engine.compare(specs_dict, deals)
+
+    # Step 5: Output results
+    typer.echo("\n" + "=" * 60)
+    typer.echo(f"REPLACEMENT ALTERNATIVES FOR: {item}")
+    typer.echo("=" * 60)
+
+    if comparison.winner:
+        w = comparison.winner
+        typer.echo(f"\nWinner: {w['title']}")
+        typer.echo(f"  Site: {w['site_name']}  Price: {w['effective_price_eur']:.2f} EUR  Score: {w['score']}/100")
+        for reason in w["reasons"][:5]:
+            typer.echo(f"  - {reason}")
+
+    for ru in comparison.runner_ups:
+        typer.echo(f"\nRunner-up #{ru['rank']}: {ru['title']}")
+        typer.echo(f"  Site: {ru['site_name']}  Price: {ru['effective_price_eur']:.2f} EUR  Score: {ru['score']}/100")
+        for reason in ru["reasons"][:3]:
+            typer.echo(f"  - {reason}")
+
+    # Save results
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = re.sub(r"[^a-z0-9]+", "-", item.lower()).strip("-")
+    out_path = out_dir / f"replacement_{safe_name}.json"
+    result_data = {
+        "reference": specs_dict,
+        "comparison": {
+            "winner": comparison.winner,
+            "runner_ups": comparison.runner_ups,
+            "table": comparison.comparison_table,
+            "total_candidates": comparison.total_candidates,
+        },
+    }
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(result_data, f, indent=2, ensure_ascii=False)
+    typer.echo(f"\nSaved to: {out_path}")
+
+
 if __name__ == "__main__":
     app()

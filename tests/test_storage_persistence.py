@@ -14,7 +14,7 @@ from src.history.trends import TrendsAnalyzer
 from src.intelligence.change_detector import ChangeDetector
 from src.intelligence.price_tracker import PriceTracker
 from src.searcher.adapters.base import Deal
-from src.searcher.pricing import ShippingQuote, build_price_quote
+from src.searcher.pricing import PriceKind, ShippingQuote, build_price_quote
 from src.storage.manager import StorageManager
 
 URL = "https://bazos.sk/inzerat/1/drone"
@@ -206,6 +206,52 @@ def test_detect_new_lows_uses_effective_price(storage):
     # Effective price 120 is the low for this URL (only sighting), not 100 raw
     item = next(d for d in lows if d["url"] == URL)
     assert item["price"] == 120.0
+
+
+def test_detect_fake_promos(storage):
+    """Detect when a listing's 'original price' is inflated vs historical prices."""
+    # Historical: same item sold at 80 EUR previously (no discount)
+    storage.save_deal(make_deal(price=80.0), "run1")
+
+    # Current listing: claims regular=200, sells for 100 — fake promo
+    deal = make_deal(price=100.0)
+    deal.price_quote = build_price_quote(
+        100.0, shipping=ShippingQuote(is_free=True),
+        kind=PriceKind.PROMO,
+        regular_price_eur=200.0,
+        evidence=["Was 200.00 EUR"],
+    )
+    storage.save_deal(deal, "run2")
+
+    tracker = PriceTracker(storage)
+    flags = storage.detect_fake_promos(threshold_pct=30.0, days=30)
+    assert len(drops := []) == 0  # type: ignore
+    assert len(flags) == 1
+    assert flags[0]["url"] == URL
+    assert flags[0]["kind"] == "promo"
+    assert flags[0]["regular_price_eur"] == 200.0
+    assert flags[0]["effective_price_eur"] == 100.0
+    assert flags[0]["change_pct"] < -30.0  # regular price is 60% above historical max
+
+
+def test_detect_fake_promos_no_false_positive(storage):
+    """A genuine discount should not be flagged as fake."""
+    # Historical: same item sold at 120 EUR previously
+    storage.save_deal(make_deal(price=120.0), "run1")
+
+    # Current listing: regular=150, sells for 100 — real discount vs history
+    deal = make_deal(price=100.0)
+    deal.price_quote = build_price_quote(
+        100.0, shipping=ShippingQuote(is_free=True),
+        kind=PriceKind.PROMO,
+        regular_price_eur=150.0,
+        evidence=["Was 150.00 EUR"],
+    )
+    storage.save_deal(deal, "run2")
+
+    tracker = PriceTracker(storage)
+    flags = storage.detect_fake_promos(threshold_pct=30.0, days=30)
+    assert len(flags) == 0  # no false positive - regular 150 is only 25% above historical 120
 
 
 def _age_sightings(storage, days):

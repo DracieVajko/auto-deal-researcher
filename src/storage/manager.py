@@ -143,6 +143,18 @@ class StorageManager:
         }
 
         if existing:
+            # Preserve an existing price_quote when the new deal doesn't provide
+            # one, so price_history can still detect fake promos / regular prices.
+            existing_metadata = {}
+            if existing.metadata:
+                try:
+                    existing_metadata = json.loads(existing.metadata)
+                except (json.JSONDecodeError, TypeError):
+                    existing_metadata = {}
+            if "price_quote" not in metadata and "price_quote" in existing_metadata:
+                metadata["price_quote"] = existing_metadata["price_quote"]
+            # deal_data was built before preservation; refresh the metadata entry
+            deal_data["metadata"] = json.dumps(metadata, ensure_ascii=False)
             # Update existing deal (row is addressed by its UNIQUE url)
             self.db.execute(
                 """
@@ -244,7 +256,7 @@ class StorageManager:
         """Find products with price drops >= threshold% in last N days."""
         cutoff = (utcnow() - timedelta(days=days)).isoformat()
         rows = self.db.execute("""
-            SELECT ph.*, d.title, d.site_name
+            SELECT ph.*, d.title, d.site_name, d.metadata
             FROM price_history ph
             JOIN deals d ON ph.url = d.url
             WHERE ph.timestamp >= ?
@@ -315,6 +327,88 @@ class StorageManager:
                         "timestamp": row["timestamp"],
                     })
         return new_lows
+
+    def detect_fake_promos(self, threshold_pct: float = 30.0, days: int = 30) -> list[dict]:
+        """Find listings where the 'regular price' is inflated vs historical prices.
+
+        A 'fake promo' occurs when a listing's regular_price_eur (the 'was'
+        price) is significantly higher than historical prices, making the current
+        price appear to be a bigger discount than it really is.
+        """
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
+        rows = self.db.execute("""
+            SELECT ph.*, d.title, d.site_name, d.metadata
+            FROM price_history ph
+            JOIN deals d ON ph.url = d.url
+            WHERE ph.timestamp >= ?
+            ORDER BY ph.timestamp DESC
+        """, (cutoff,)).fetchall()
+
+        url_prices: dict[str, list[dict]] = {}
+        for row in rows:
+            url = row["url"]
+            if url not in url_prices:
+                url_prices[url] = []
+            url_prices[url].append(dict(row))
+
+        flags: list[dict] = []
+        for url, prices in url_prices.items():
+            if len(prices) < 2:
+                continue
+
+            latest = prices[0]
+            current_price = latest.get("effective_price_eur") or latest["price_eur"]
+            if current_price <= 0:
+                continue
+
+            latest_deal = latest.get("metadata")
+            if not latest_deal:
+                continue
+            try:
+                import json as _json
+                metadata = json.loads(latest_deal) if isinstance(latest_deal, str) else latest_deal
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            price_quote = metadata.get("price_quote", {}) if isinstance(metadata, dict) else {}
+            if not isinstance(price_quote, dict):
+                continue
+
+            regular_price = price_quote.get("regular_price_eur")
+            if regular_price is None:
+                continue
+
+            historical_prices = [
+                p.get("effective_price_eur") or p["price_eur"]
+                for p in prices[1:]
+                if p.get("effective_price_eur") or p.get("price_eur")
+            ]
+
+            if not historical_prices:
+                continue
+
+            max_historical = max(historical_prices)
+            if max_historical <= 0:
+                continue
+
+            # A fake promo: the regular price is inflated vs what the item
+            # has historically sold for. change_pct is negative when regular
+            # exceeds historical max.
+            change_pct = ((max_historical - regular_price) / regular_price) * 100
+            if change_pct <= -threshold_pct:
+                flags.append({
+                    "url": url,
+                    "title": latest.get("title", ""),
+                    "site_name": latest.get("site_name", ""),
+                    "price": current_price,
+                    "kind": price_quote.get("kind", "unknown"),
+                    "regular_price_eur": regular_price,
+                    "effective_price_eur": current_price,
+                    "change_pct": round(change_pct, 2),
+                    "old_timestamp": prices[-1]["timestamp"],
+                    "new_timestamp": latest["timestamp"],
+                })
+        return flags
 
     def get_price_trend(self, url: str, days: int = 30) -> dict:
         """Compute trend: dropping, rising, stable, volatile."""

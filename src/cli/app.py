@@ -1094,7 +1094,8 @@ def research_specs(
 
 @app.command()
 def find_replacement(
-    item: str = typer.Option(..., "--item", "-i", help="Reference item (e.g. 'Citroen eC3')"),
+    item: str = typer.Option("", "--item", "-i", help="Reference item (e.g. 'Citroen eC3')"),
+    interactive: bool = typer.Option(False, "--interactive", "-I", help="Interactive wizard mode"),
     category: str | None = typer.Option(None, "--category", "-cat", help="Category override"),
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
     max_price: str | None = typer.Option(None, "--max-price", help="Maximum price in EUR"),
@@ -1125,6 +1126,21 @@ def find_replacement(
     config = load_config()
     storage = StorageManager(config.storage.db_path)
     llm = LLMClient(config)
+
+    # Interactive wizard mode
+    if interactive or not item:
+        from src.cli.wizard import run_wizard
+
+        wizard_result = run_wizard()
+        item = wizard_result["item"]
+        category = wizard_result["category"] or category
+        condition = wizard_result["condition"] or condition
+        min_price = str(wizard_result["min_price"]) if wizard_result["min_price"] is not None else min_price
+        max_price = str(wizard_result["max_price"]) if wizard_result["max_price"] is not None else max_price
+
+    if not item:
+        typer.echo("Error: --item is required (or use --interactive)", err=True)
+        raise typer.Exit(1)
 
     # Step 1: Research reference item specs
     typer.echo(f"Researching specs for: {item}")

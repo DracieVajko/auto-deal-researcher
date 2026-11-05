@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.notifications.base import Alert
 from src.searcher.adapters.base import Deal
 from src.storage.manager import StorageManager
 
@@ -114,3 +115,96 @@ class PriceTracker:
                     "condition": deal.condition,
                 })
         return sorted(results, key=lambda x: x["effective_price_eur"])
+
+    # ------------------------------------------------------------------
+    # Alert generation
+    # ------------------------------------------------------------------
+
+    def check_price_drops(self, threshold_pct: float = 5.0, days: int = 7) -> list[Alert]:
+        """Return Alert objects for products whose effective price dropped.
+
+        Uses :meth:`StorageManager.detect_price_drops` which compares the
+        latest effective price against the earliest sighting in the window.
+        """
+        alerts: list[Alert] = []
+        for drop in self.storage.detect_price_drops(threshold_pct=threshold_pct, days=days):
+            alerts.append(
+                Alert(
+                    title=f"Price drop: {drop['title']}",
+                    message=(
+                        f"{drop['site_name']}: {drop['title']} dropped "
+                        f"{abs(drop['change_pct'])}% — "
+                        f"{drop['old_price']:.2f} € → {drop['new_price']:.2f} €"
+                    ),
+                    severity="warning",
+                    metadata={
+                        "url": drop["url"],
+                        "title": drop["title"],
+                        "site_name": drop["site_name"],
+                        "old_price": drop["old_price"],
+                        "new_price": drop["new_price"],
+                        "change_pct": drop["change_pct"],
+                        "old_timestamp": drop["old_timestamp"],
+                        "new_timestamp": drop["new_timestamp"],
+                    },
+                )
+            )
+        return alerts
+
+    def check_new_lows(self, days: int = 30) -> list[Alert]:
+        """Return Alert objects for products at their lowest effective price."""
+        alerts: list[Alert] = []
+        for low in self.storage.detect_new_lows(days=days):
+            alerts.append(
+                Alert(
+                    title=f"New low: {low['title']}",
+                    message=(
+                        f"{low['site_name']}: {low['title']} at new low "
+                        f"{low['price']:.2f} €"
+                    ),
+                    severity="info",
+                    metadata={
+                        "url": low["url"],
+                        "title": low["title"],
+                        "site_name": low["site_name"],
+                        "price": low["price"],
+                        "timestamp": low["timestamp"],
+                    },
+                )
+            )
+        return alerts
+
+    def check_fake_promos(self, threshold_pct: float = 30.0, days: int = 30) -> list[Alert]:
+        """Return Alert objects for listings with inflated regular prices.
+
+        A fake promo is when a listing's regular ("was") price is
+        significantly higher than historical effective prices.
+        """
+        alerts: list[Alert] = []
+        for promo in self.storage.detect_fake_promos(
+            threshold_pct=threshold_pct, days=days
+        ):
+            alerts.append(
+                Alert(
+                    title=f"Fake promo: {promo['title']}",
+                    message=(
+                        f"{promo['site_name']}: {promo['title']} claims "
+                        f"regular price {promo['regular_price_eur']:.2f} € but "
+                        f"historically sold for up to {promo['effective_price_eur']:.2f} €"
+                    ),
+                    severity="warning",
+                    metadata={
+                        "url": promo["url"],
+                        "title": promo["title"],
+                        "site_name": promo["site_name"],
+                        "price": promo["price"],
+                        "kind": promo["kind"],
+                        "regular_price_eur": promo["regular_price_eur"],
+                        "effective_price_eur": promo["effective_price_eur"],
+                        "change_pct": promo["change_pct"],
+                        "old_timestamp": promo["old_timestamp"],
+                        "new_timestamp": promo["new_timestamp"],
+                    },
+                )
+            )
+        return alerts

@@ -16,6 +16,7 @@ from src.intelligence.price_tracker import PriceTracker
 from src.searcher.adapters.base import Deal
 from src.searcher.pricing import PriceKind, ShippingQuote, build_price_quote
 from src.storage.manager import StorageManager
+from src.utils.time import utcnow
 
 URL = "https://bazos.sk/inzerat/1/drone"
 
@@ -161,7 +162,7 @@ def test_detect_price_drops_uses_effective_price(storage):
     # First create the deal row so subsequent price_history rows have a parent
     storage.save_deal(make_deal(price=100.0), "run1")
     
-    now = datetime.now()
+    now = utcnow()
     
     # Delete the auto-created price_history row and insert with distinct timestamps
     storage.db.execute("DELETE FROM price_history WHERE url = ?", (URL,))
@@ -180,7 +181,7 @@ def test_detect_price_drops_uses_effective_price(storage):
     
     storage.save_deal(make_deal(price=100.0), "run2")  # effective=100, timestamp=T0
 
-    drops = storage.detect_price_drops(threshold_pct=10.0, days=2)
+    drops = storage.detect_price_drops(threshold_pct=10.0, days=30)
     # Effective prices: 120 (2 days ago), 90 (1 day ago), 100 (now)
     # latest=100, earliest=120, change=(100-120)/120=-16.67%
     assert any(d["url"] == URL for d in drops)
@@ -196,7 +197,7 @@ def test_detect_new_lows_uses_effective_price(storage):
     storage.save_deal(deal, "run1")
     storage.db.execute(
         "UPDATE price_history SET timestamp = ? WHERE url = ?",
-        ((datetime.now() - timedelta(days=2)).isoformat(), URL),
+        ((utcnow() - timedelta(days=2)).isoformat(), URL),
     )
     storage.save_deal(make_deal(price=80.0, url="https://x/2"), "run1")  # effective = 80.0
 
@@ -223,9 +224,7 @@ def test_detect_fake_promos(storage):
     )
     storage.save_deal(deal, "run2")
 
-    tracker = PriceTracker(storage)
     flags = storage.detect_fake_promos(threshold_pct=30.0, days=30)
-    assert len(drops := []) == 0  # type: ignore
     assert len(flags) == 1
     assert flags[0]["url"] == URL
     assert flags[0]["kind"] == "promo"
@@ -249,7 +248,6 @@ def test_detect_fake_promos_no_false_positive(storage):
     )
     storage.save_deal(deal, "run2")
 
-    tracker = PriceTracker(storage)
     flags = storage.detect_fake_promos(threshold_pct=30.0, days=30)
     assert len(flags) == 0  # no false positive - regular 150 is only 25% above historical 120
 
@@ -318,3 +316,71 @@ def test_price_tracker_get_price_trend_for_deal(storage):
 
 def test_row_factory_is_sqlite3_row(storage):
     assert storage.db.conn.row_factory is sqlite3.Row
+
+
+def test_price_tracker_check_price_drops_returns_alerts(storage):
+    """PriceTracker.check_price_drops returns Alert objects for effective-price drops."""
+    deal = make_deal(price=100.0)
+    deal.price_quote = build_price_quote(100.0, shipping=ShippingQuote(is_free=True))
+    storage.save_deal(deal, "run1")
+
+    now = utcnow()
+    storage.db.execute(
+        "UPDATE price_history SET timestamp = ? WHERE url = ?",
+        ((now - timedelta(days=2)).isoformat(), URL),
+    )
+    storage.db.execute(
+        "INSERT INTO price_history (deal_id, url, price_eur, effective_price_eur, timestamp, original_price_eur, original_currency, condition, availability, seller_name, seller_rating, shipping_cost_eur, run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (1, URL, 70.0, 70.0, (now - timedelta(days=1)).isoformat(), 70.0, "EUR", "used", "unknown", "", 0.0, "EUR", "run1"),
+    )
+
+    alerts = PriceTracker(storage).check_price_drops(threshold_pct=20.0, days=30)
+    assert len(alerts) == 1
+    assert alerts[0].title == "Price drop: DJI drone"
+    assert alerts[0].severity == "warning"
+    assert alerts[0].metadata["change_pct"] == -30.0  # (70-100)/100
+    assert alerts[0].metadata["old_price"] == 100.0
+    assert alerts[0].metadata["new_price"] == 70.0
+
+
+def test_price_tracker_check_new_lows_returns_alerts(storage):
+    """PriceTracker.check_new_lows returns Alert objects for new lows."""
+    deal = make_deal(price=100.0)
+    deal.price_quote = build_price_quote(100.0, shipping=ShippingQuote(is_free=True))
+    storage.save_deal(deal, "run1")
+
+    now = utcnow()
+    storage.db.execute(
+        "UPDATE price_history SET timestamp = ? WHERE url = ?",
+        ((now - timedelta(days=2)).isoformat(), URL),
+    )
+    storage.save_deal(make_deal(price=60.0), "run1")  # new low
+
+    alerts = PriceTracker(storage).check_new_lows(days=30)
+    assert len(alerts) >= 1
+    new_low = next(a for a in alerts if "new low" in a.title.lower())
+    assert new_low.metadata["price"] == 60.0
+
+
+def test_price_tracker_check_fake_promos_returns_alerts(storage):
+    """PriceTracker.check_fake_promos returns Alert objects for inflated regular prices."""
+    # Historical: item sold at 80 EUR
+    storage.save_deal(make_deal(price=80.0), "run1")
+
+    # Current: claims regular=200, sells for 100 — fake promo
+    deal = make_deal(price=100.0)
+    deal.price_quote = build_price_quote(
+        100.0, shipping=ShippingQuote(is_free=True),
+        kind=PriceKind.PROMO,
+        regular_price_eur=200.0,
+        evidence=["Was 200.00 EUR"],
+    )
+    storage.save_deal(deal, "run2")
+
+    alerts = PriceTracker(storage).check_fake_promos(threshold_pct=30.0, days=30)
+    assert len(alerts) == 1
+    assert alerts[0].title.startswith("Fake promo:")
+    assert alerts[0].severity == "warning"
+    assert alerts[0].metadata["regular_price_eur"] == 200.0
+    assert alerts[0].metadata["effective_price_eur"] == 100.0
+    assert alerts[0].metadata["change_pct"] < -30.0

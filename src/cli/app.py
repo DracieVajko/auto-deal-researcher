@@ -392,6 +392,23 @@ async def run_search(
     for deal in deals:
         storage.save_deal(deal)
 
+    # Price tracking alerts (price drops, new lows, fake promos)
+    try:
+        from src.intelligence.price_tracker import PriceTracker
+
+        tracker = PriceTracker(storage)
+        price_alerts = []
+        price_alerts.extend(tracker.check_price_drops(threshold_pct=5.0, days=7))
+        price_alerts.extend(tracker.check_new_lows(days=30))
+        price_alerts.extend(tracker.check_fake_promos(threshold_pct=30.0, days=30))
+        for alert in price_alerts:
+            logger.info(
+                "Price alert: %s — %s", alert.title, alert.message
+            )
+    except (AttributeError, ImportError):
+        # Storage doesn't support price tracking or module unavailable
+        pass
+
     # Output (AI-named, timestamped)
     json_path, md_path = await processor.save_results(
         deals, config.output.directory, prompt=prompt, site_plan=site_plan

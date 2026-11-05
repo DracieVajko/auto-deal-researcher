@@ -168,6 +168,7 @@ class SearchConfig(BaseModel):
     enrich_limit: int = 20
     diamond_search: DiamondSearchConfig = DiamondSearchConfig()
     specs_research: SpecsResearchConfig = SpecsResearchConfig()
+    pages_per_site: int = 3
 
 
 class AppConfig(BaseModel):

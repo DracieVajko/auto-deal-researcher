@@ -16,9 +16,11 @@ from src.llm.client import LLMClient
 from src.searcher import sessions
 from src.searcher.adapters import Deal, get_adapter
 from src.searcher.adapters.base import SiteBlockedError
+from src.searcher.anti_bot import detect_block, retry_with_backoff
 from src.searcher.filter_engine import FilterEngine
 from src.searcher.filters import SearchFilters
 from src.searcher.listing_filter import excluded_by_form_factor
+from src.searcher.pagination import scrape_pages
 from src.searcher.pricing import (
     BundleTerms,
     PriceKind,
@@ -678,6 +680,20 @@ class PlaywrightSearcher:
             page.set_default_navigation_timeout(30000)
             await apply_session(page.context, site.name)
 
+            # Apply stealth anti-detection settings to the context
+            try:
+                await page.context.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                    Object.defineProperty(navigator, 'languages', {get: () => ['sk-SK', 'sk', 'en']});
+                    Object.defineProperty(navigator, 'platform', {get: () => 'Win32'});
+                """)
+                await page.context.set_extra_http_headers({
+                    "Accept-Language": "sk-SK,sk;q=0.9,en;q=0.8",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                })
+            except Exception:
+                pass  # Stealth is best-effort
+
             profile = self._profile_for(site)
             adapter_profile = (
                 profile if profile is not None and profile.is_runtime_ready else None
@@ -707,6 +723,8 @@ class PlaywrightSearcher:
                     currency=currency,
                     enrich_limit=getattr(self.config.search, "enrich_limit", 20),
                 )
+
+            # Search page 1
             deals = await adapter.search(
                 page,
                 site_query,
@@ -715,6 +733,46 @@ class PlaywrightSearcher:
                 category=category,
                 profile=adapter_profile,
             )
+
+            # Anti-bot check after first page load
+            block_reason = await detect_block(page)
+            if block_reason:
+                recovered = await retry_with_backoff(page, lambda: None, max_attempts=2)
+                if not recovered:
+                    logger.warning(f"[{site.name}] Blocked: {block_reason}")
+                    reason = block_reason
+                    if sessions.has_session(site.name):
+                        reason += (
+                            " (saved session may be expired; run: "
+                            f"python scripts/login.py --site {site.name})"
+                        )
+                    self._skipped_sites.append({"name": site.name, "reason": reason})
+                    self.health.record_search_result(
+                        site.name, False, 0, (time.perf_counter() - started) * 1000, blocked=True
+                    )
+                    return []
+
+            # Pagination: scrape additional pages up to the limit
+            max_pages = int(getattr(self.config.search, "pages_per_site", 3))
+            if max_pages > 1:
+                async def search_action(p: Page) -> list[Deal]:
+                    return await adapter.search(
+                        p,
+                        site_query,
+                        max_results=20,
+                        filters=filters,
+                        category=category,
+                        profile=adapter_profile,
+                    )
+
+                additional = await scrape_pages(page, search_action, max_pages=max_pages)
+                # Page 1 results already in `deals`; skip duplicates from additional
+                seen_urls = {d.url for d in deals}
+                for d in additional:
+                    if d.url not in seen_urls:
+                        deals.append(d)
+                        seen_urls.add(d.url)
+
             latency = (time.perf_counter() - started) * 1000
             self.health.record_search_result(
                 site.name, bool(deals), len(deals), latency

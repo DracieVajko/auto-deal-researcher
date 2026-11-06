@@ -384,3 +384,37 @@ def test_price_tracker_check_fake_promos_returns_alerts(storage):
     assert alerts[0].metadata["regular_price_eur"] == 200.0
     assert alerts[0].metadata["effective_price_eur"] == 100.0
     assert alerts[0].metadata["change_pct"] < -30.0
+
+
+def test_save_item_specs_first_insert(tmp_path):
+    s = StorageManager(str(tmp_path / "specs.db"))
+    s.save_item_specs(
+        "Citroen eC3",
+        "auto",
+        {"power_kw": 83.0, "battery_kwh": 44.0},
+        {"summary": "Good EV", "pros": ["cheap"], "cons": [], "source_count": 1},
+        ["https://example.com/specs"],
+    )
+    row = s.get_item_specs("Citroen eC3")
+    assert row is not None
+    assert row["item_name"] == "Citroen eC3"
+    assert row["category"] == "auto"
+    assert row["specs"]["power_kw"] == 83.0
+    assert row["specs"]["battery_kwh"] == 44.0
+    assert row["review"]["summary"] == "Good EV"
+    assert row["source_urls"] == ["https://example.com/specs"]
+
+
+def test_save_item_specs_update_existing(tmp_path):
+    s = StorageManager(str(tmp_path / "specs.db"))
+    s.save_item_specs("Citroen eC3", "auto", {"power_kw": 83.0}, {"summary": "v1"}, ["https://a.com"])
+    s.save_item_specs("Citroen eC3", "auto", {"power_kw": 90.0}, {"summary": "v2"}, ["https://b.com"])
+    row = s.get_item_specs("Citroen eC3")
+    assert row["specs"]["power_kw"] == 90.0
+    assert row["review"]["summary"] == "v2"
+    assert row["source_urls"] == ["https://b.com"]
+
+
+def test_save_item_specs_missing_returns_none(tmp_path):
+    s = StorageManager(str(tmp_path / "specs.db"))
+    assert s.get_item_specs("nonexistent") is None

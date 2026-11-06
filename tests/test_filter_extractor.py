@@ -1,12 +1,16 @@
 """Tests for filter_extractor (multi-language filter extraction)."""
 
 from src.searcher.filter_extractor import (
+    Condition,
+    ExtractedFilters,
     detect_language,
+    extract_category,
     extract_condition,
     extract_filters_from_prompt,
     extract_filters_from_specs,
     extract_price,
     extract_specs_from_text,
+    to_search_filters,
 )
 
 
@@ -91,3 +95,91 @@ def test_extract_specs_from_text():
     assert extras["power_kw"] == "83"
     assert extras["battery_kwh"] == "44"
     assert extras["weight_kg"] == "1420"
+
+
+def test_detect_language_pl():
+    assert detect_language("używane auto do 15000") == "pl"
+    assert detect_language("samochód używany max 20000") == "pl"
+
+
+def test_detect_language_unknown_returns_en():
+    assert detect_language("xyzqw random words nothing") == "en"
+    assert detect_language("12345 symbols only") == "en"
+
+
+def test_detect_language_ambiguous_prefers_sk():
+    # "do" and "od" score in SK, CS and PL; SK wins the deterministic tie-break
+    assert detect_language("do 20000 od 10000") == "sk"
+
+
+def test_extract_condition_all_locales():
+    assert extract_condition("nové", "sk") == "new"
+    assert extract_condition("použité", "sk") == "used"
+    assert extract_condition("repasované", "sk") == "refurbished"
+    assert extract_condition("gebraucht", "de") == "used"
+    assert extract_condition("neu", "de") == "new"
+    assert extract_condition("używane", "pl") == "used"
+    assert extract_condition("nowe", "pl") == "new"
+    assert extract_condition("new", "en") == "new"
+    assert extract_condition("used", "en") == "used"
+    assert extract_condition("refurbished", "en") == "refurbished"
+    assert extract_condition("open box", "en") == "open_box"
+    assert extract_condition("unknown thing", "en") is None
+
+
+def test_extract_category_all_locales():
+    assert extract_category("automobil", "sk") == "auto"
+    assert extract_category("elektronika", "cs") == "electronics"
+    assert extract_category("domáca spotrebiča", "sk") == "appliances"
+    assert extract_category("haushaltsgerät", "de") == "appliances"
+    assert extract_category("möbel", "de") == "home"
+    assert extract_category("samochód", "pl") == "auto"
+    assert extract_category("furniture", "en") == "home"
+    assert extract_category("sport", "en") == "hobby"
+    assert extract_category("nothing here", "en") is None
+
+
+def test_to_search_filters_conversion():
+    from src.searcher.filters import SearchFilters
+
+    ef = ExtractedFilters(
+        min_price=100.0,
+        max_price=20000.0,
+        condition="used",
+        brand="Citroen",
+        location="Bratislava",
+        shipping="free",
+        seller_type="retailer",
+        sort="price_asc",
+        extras={"power_kw": "83"},
+        language="sk",
+        confidence=0.8,
+    )
+    sf = to_search_filters(ef)
+    assert isinstance(sf, SearchFilters)
+    assert sf.min_price == 100.0
+    assert sf.max_price == 20000.0
+    assert sf.condition == Condition.USED
+    assert sf.brand == "Citroen"
+    assert sf.location == "Bratislava"
+    assert sf.shipping == "free"
+    assert sf.seller_type == "retailer"
+    assert sf.sort == "price_asc"
+    assert sf.extras == {"power_kw": "83"}
+
+
+def test_to_search_filters_preserves_extras():
+    ef = ExtractedFilters(
+        category="auto",
+        brand="Tesla",
+        condition="new",
+        extras={"battery_kwh": "44.0", "range_km": "350"},
+    )
+    sf = to_search_filters(ef)
+    assert sf.extras == {"battery_kwh": "44.0", "range_km": "350"}
+
+
+def test_to_search_filters_none_condition_is_any():
+    ef = ExtractedFilters(condition=None)
+    sf = to_search_filters(ef)
+    assert sf.condition == Condition.ANY

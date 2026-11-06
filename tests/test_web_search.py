@@ -102,3 +102,13 @@ def test_comparison_query_mentions_specs_and_review():
     query = web_search.comparison_query("Samsung INR18650-30Q 3000mAh")
     assert "Samsung INR18650-30Q" in query
     assert "specs review" in query
+
+
+def test_search_web_limits_results(monkeypatch):
+    monkeypatch.setattr(
+        web_search.requests,
+        "get",
+        lambda *args, **kwargs: FakeHtmlResponse(DDG_HTML),
+    )
+    sources = web_search.search_web("18650 review", max_results=1)
+    assert len(sources) == 1

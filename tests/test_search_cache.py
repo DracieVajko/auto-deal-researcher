@@ -60,3 +60,35 @@ def test_cache_stats(tmp_path):
     stats = cache.stats()
     assert stats["entries"] == 1
     assert stats["total_deals"] == 2
+
+
+def test_cache_key_stable_for_empty_filters(tmp_path):
+    cache = SearchCache(cache_dir=str(tmp_path / "cache"), ttl_seconds=3600)
+    cache.set("bazos", "Citroen eC3", [{"url": "https://a/1"}], {})
+    key1 = cache._cache_key("bazos", "Citroen eC3", {})
+    key2 = cache._cache_key("bazos", "Citroen eC3", {})
+    assert key1 == key2
+
+
+def test_cache_key_stable_for_populated_filters(tmp_path):
+    cache = SearchCache(cache_dir=str(tmp_path / "cache"), ttl_seconds=3600)
+    filters = {"max_price": 20000, "condition": "used"}
+    key1 = cache._cache_key("bazos", "Citroen eC3", filters)
+    key2 = cache._cache_key("bazos", "Citroen eC3", filters)
+    assert key1 == key2
+
+
+def test_cache_key_includes_extras(tmp_path):
+    cache = SearchCache(cache_dir=str(tmp_path / "cache"), ttl_seconds=3600)
+    key1 = cache._cache_key("bazos", "Citroen eC3", {"power_kw": "83"})
+    key2 = cache._cache_key("bazos", "Citroen eC3", {"power_kw": "90"})
+    assert key1 != key2
+
+
+def test_cache_key_includes_site_and_query(tmp_path):
+    cache = SearchCache(cache_dir=str(tmp_path / "cache"), ttl_seconds=3600)
+    key1 = cache._cache_key("bazos", "Citroen eC3", {})
+    key2 = cache._cache_key("alza", "Citroen eC3", {})
+    key3 = cache._cache_key("bazos", "Tesla Model 3", {})
+    assert key1 != key2
+    assert key1 != key3

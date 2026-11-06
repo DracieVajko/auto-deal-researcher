@@ -418,3 +418,72 @@ def test_save_item_specs_update_existing(tmp_path):
 def test_save_item_specs_missing_returns_none(tmp_path):
     s = StorageManager(str(tmp_path / "specs.db"))
     assert s.get_item_specs("nonexistent") is None
+
+
+def test_save_price_alert_rule_insert_get_list_remove(tmp_path):
+    """Price alert rules: insert, get, list, remove."""
+    s = StorageManager(str(tmp_path / "alerts.db"))
+    s.save_price_alert_rule(
+        "https://bazos.sk/i/1",
+        "DJI drone",
+        target_price_eur=150.0,
+        condition="used",
+        channels=["console", "webhook"],
+        cooldown_minutes=30,
+    )
+    rule = s.get_price_alert_rule("https://bazos.sk/i/1")
+    assert rule is not None
+    assert rule["url"] == "https://bazos.sk/i/1"
+    assert rule["title"] == "DJI drone"
+    assert rule["target_price_eur"] == 150.0
+    assert rule["condition"] == "used"
+    assert rule["channels"] == ["console", "webhook"]
+    assert rule["cooldown_minutes"] == 30
+    assert rule["is_active"] is True
+
+    rules = s.list_price_alert_rules()
+    assert len(rules) == 1
+
+    # Update: change target price
+    s.save_price_alert_rule(
+        "https://bazos.sk/i/1",
+        "DJI drone",
+        target_price_eur=120.0,
+        condition="used",
+        channels=["console"],
+        cooldown_minutes=60,
+    )
+    rule = s.get_price_alert_rule("https://bazos.sk/i/1")
+    assert rule["target_price_eur"] == 120.0
+    assert rule["cooldown_minutes"] == 60
+
+    # Deactivate
+    s.set_rule_active("https://bazos.sk/i/1", False)
+    rule = s.get_price_alert_rule("https://bazos.sk/i/1")
+    assert rule["is_active"] is False
+
+    # Remove
+    assert s.remove_price_alert_rule("https://bazos.sk/i/1") is True
+    assert s.get_price_alert_rule("https://bazos.sk/i/1") is None
+    assert s.remove_price_alert_rule("https://bazos.sk/i/1") is False  # already gone
+
+
+def test_get_latest_effective_price(tmp_path):
+    """get_latest_effective_price returns latest effective price for a URL."""
+    s = StorageManager(str(tmp_path / "prices.db"))
+    s.create_run("run1", "test", "any", "any")
+
+    # No sightings -> None
+    assert s.get_latest_effective_price("https://bazos.sk/i/1") is None
+
+    # First sighting
+    s.save_deal(make_deal(price=100.0), "run1")
+    assert s.get_latest_effective_price(URL) == 100.0
+
+    # Second sighting with shipping -> effective price
+    deal = make_deal(price=80.0)
+    deal.price_quote = build_price_quote(80.0, shipping=ShippingQuote(cost_eur=10.0))  # effective 90
+    s.save_deal(deal, "run1")
+
+    # Wait: make_deal(price=80) reuses URL; price_history gets a second row.
+    assert s.get_latest_effective_price(URL) == 90.0

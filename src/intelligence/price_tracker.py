@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from src.notifications.base import Alert
+from src.notifications.manager import NotificationManager
 from src.searcher.adapters.base import Deal
 from src.storage.manager import StorageManager
 
@@ -207,4 +210,84 @@ class PriceTracker:
                     },
                 )
             )
+        return alerts
+
+
+class AlertRuleEngine:
+    """Evaluates user-defined price alert rules against latest sightings.
+
+    A rule triggers when the latest *effective* price for a URL is at or
+    below the user's target price. A per-rule cooldown prevents repeated
+    alerts for the same threshold crossing.
+    """
+
+    def __init__(
+        self,
+        storage: StorageManager,
+        notification_manager: NotificationManager | None = None,
+    ):
+        self.storage = storage
+        self.notification_manager = notification_manager
+
+    def evaluate_rules(self) -> list[Alert]:
+        """Evaluate all active active rules and send triggered alerts.
+
+        Returns the list of triggered ``Alert`` objects.
+        """
+        rules = self.storage.list_price_alert_rules(active_only=True)
+        alerts: list[Alert] = []
+        now = datetime.now(UTC)
+
+        for rule in rules:
+            url = rule["url"]
+            target = rule["target_price_eur"]
+
+            current_price = self.storage.get_latest_effective_price(url)
+            if current_price is None or current_price > target:
+                # No sighting yet, or price still above target.
+                continue
+
+            # Cooldown check
+            last_triggered = rule["last_triggered"]
+            if last_triggered is not None:
+                try:
+                    last = datetime.fromisoformat(last_triggered)
+                except ValueError:
+                    last = None
+                if last is not None and (now - last).total_seconds() < rule[
+                    "cooldown_minutes"
+                ] * 60:
+                    continue  # still in cooldown
+
+            # Build and send alert
+            alert = Alert(
+                title=f"Price alert: {rule['title']}",
+                message=(
+                    f"{url} is now {current_price:.2f} €, at or below your "
+                    f"target of {target:.2f} €."
+                ),
+                severity="info",
+                metadata={
+                    "url": url,
+                    "title": rule["title"],
+                    "target_price_eur": target,
+                    "current_price_eur": current_price,
+                    "condition": rule["condition"],
+                },
+            )
+            alerts.append(alert)
+
+            if self.notification_manager is not None:
+                try:
+                    asyncio.run(
+                        self.notification_manager.send_alert(
+                            alert, channels=rule["channels"] or None
+                        )
+                    )
+                except Exception:  # noqa: BLE001, S110 - notification failure must not abort
+                    pass
+
+            # Record trigger time
+            self.storage.set_rule_last_triggered(url, now.isoformat())
+
         return alerts

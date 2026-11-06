@@ -421,6 +421,16 @@ async def run_search(
         # Storage doesn't support price tracking or module unavailable
         pass
 
+    # Price alert rules (user-configurable thresholds) — evaluate after deals saved
+    try:
+        from src.intelligence.price_tracker import AlertRuleEngine
+
+        engine = AlertRuleEngine(storage, _build_notification_manager(config))
+        engine.evaluate_rules()
+    except (AttributeError, ImportError):
+        # Alert rules not available or module unavailable
+        pass
+
     # Output (AI-named, timestamped)
     json_path, md_path = await processor.save_results(
         deals, config.output.directory, prompt=prompt, site_plan=site_plan,
@@ -612,6 +622,15 @@ async def _diamond_search_async(
         storage.save_deal(deal)
 
     await processor.save_results(deals, output_dir, prompt=prompt)
+
+    # Price alert rules (user-configurable thresholds)
+    try:
+        from src.intelligence.price_tracker import AlertRuleEngine
+
+        engine = AlertRuleEngine(storage, _build_notification_manager(config))
+        engine.evaluate_rules()
+    except (AttributeError, ImportError):
+        pass
 
     typer.echo(f"Diamond Search finished: {len(deals)} deals")
     for d in deals:
@@ -982,6 +1001,15 @@ async def _search_async(
         deals, output_dir, prompt=prompt, site_plan=site_plan
     )
 
+    # Price alert rules (user-configurable thresholds)
+    try:
+        from src.intelligence.price_tracker import AlertRuleEngine
+
+        engine = AlertRuleEngine(storage, _build_notification_manager(config))
+        engine.evaluate_rules()
+    except (AttributeError, ImportError):
+        pass
+
     typer.echo(f"Found {len(deals)} deals")
     for d in deals[:winners]:
         typer.echo(f"  {d.site_name:<10} {d.price_eur:>9.2f} EUR {d.condition:<10} {d.title[:50]}")
@@ -1050,13 +1078,12 @@ def research_specs(
     output_dir: str = typer.Option("results/specs", "--output-dir", help="Output directory for specs JSON"),
 ):
     """Research specs and reviews for an item (foundation for replacement finder)."""
-    import asyncio
     import json
     from pathlib import Path
 
     from src.config import load_config
-    from src.storage.manager import StorageManager
     from src.intelligence.specs_researcher import ItemSpecsResearcher
+    from src.storage.manager import StorageManager
 
     config = load_config()
     storage = StorageManager(config.storage.db_path)
@@ -1112,16 +1139,14 @@ def find_replacement(
     import json
     from pathlib import Path
 
-    from src.config import load_config
-    from src.storage.manager import StorageManager
-    from src.intelligence.specs_researcher import ItemSpecsResearcher
-    from src.intelligence.deal_scorer import DealScorer
-    from src.intelligence.comparison_engine import ComparisonEngine
-    from src.searcher.filter_extractor import extract_filters_from_specs, to_search_filters
-    from src.searcher.filters import SearchFilters
-    from src.searcher.playwright_searcher import PlaywrightSearcher
     from src.browser.manager import BrowserManager
+    from src.config import load_config
+    from src.intelligence.comparison_engine import ComparisonEngine
+    from src.intelligence.specs_researcher import ItemSpecsResearcher
     from src.llm.client import LLMClient
+    from src.searcher.filter_extractor import extract_filters_from_specs, to_search_filters
+    from src.searcher.playwright_searcher import PlaywrightSearcher
+    from src.storage.manager import StorageManager
 
     config = load_config()
     storage = StorageManager(config.storage.db_path)
@@ -1250,6 +1275,148 @@ def cache(
         return
 
     typer.echo("Use --stats or --clear")
+
+
+def _build_notification_manager(config):
+    """Build a NotificationManager with console channel plus any configured channels."""
+    import os
+
+    from src.notifications.channels.console import ConsoleChannel
+    from src.notifications.channels.discord import DiscordChannel
+    from src.notifications.channels.email import EmailChannel
+    from src.notifications.channels.system import SystemChannel
+    from src.notifications.channels.webhook import WebhookChannel
+    from src.notifications.manager import NotificationManager
+
+    nm = NotificationManager()
+    nm.add_channel(ConsoleChannel())  # always available
+    for ch in getattr(config.notifications, "channels", []) or []:
+        ctype = (ch.type or "console").lower()
+        try:
+            if ctype == "console":
+                nm.add_channel(ConsoleChannel(name=ch.name or "console"))
+            elif ctype == "system":
+                nm.add_channel(SystemChannel(name=ch.name or "system"))
+            elif ctype == "webhook":
+                url = (
+                    ch.settings.get("url")
+                    or ch.settings.get("webhook_url")
+                    or os.environ.get("ADS_WEBHOOK_URL", "")
+                )
+                if url:
+                    nm.add_channel(WebhookChannel(name=ch.name or "webhook", url=url))
+            elif ctype == "email":
+                nm.add_channel(EmailChannel(name=ch.name or "email"))
+            elif ctype == "discord":
+                url = (
+                    ch.settings.get("webhook_url")
+                    or os.environ.get("ADS_DISCORD_WEBHOOK_URL", "")
+                )
+                if url:
+                    nm.add_channel(DiscordChannel(name=ch.name or "discord", webhook_url=url))
+        except Exception:  # noqa: BLE001 - a misconfigured channel must not break the run
+            logger.debug("Failed to add notification channel %s", ctype)
+    return nm
+
+
+alert_rule_app = typer.Typer()
+
+
+@alert_rule_app.command("add")
+def alert_rule_add(
+    url: str = typer.Option(..., "--url", "-u", help="Product URL"),
+    title: str = typer.Option(..., "--title", "-t", help="Item title"),
+    target_price: float = typer.Option(..., "--target-price", help="Target price in EUR"),
+    condition: str = typer.Option("any", "--condition", "-c", help="Condition filter"),
+    channels: str | None = typer.Option(None, "--channels", help="Comma-separated channel names"),
+    cooldown_minutes: int = typer.Option(60, "--cooldown-minutes", help="Cooldown in minutes"),
+):
+    """Add a price alert rule."""
+    from src.storage.manager import StorageManager
+
+    config = load_config()
+    storage = StorageManager(config.storage.db_path)
+    ch_list = [c.strip() for c in channels.split(",")] if channels else []
+    storage.save_price_alert_rule(
+        url, title, target_price, condition=condition, channels=ch_list,
+        cooldown_minutes=cooldown_minutes,
+    )
+    typer.echo(f"Alert rule added for {url} (target {target_price} EUR)")
+
+
+@alert_rule_app.command("list")
+def alert_rule_list():
+    """List price alert rules."""
+    from src.storage.manager import StorageManager
+
+    config = load_config()
+    storage = StorageManager(config.storage.db_path)
+    rules = storage.list_price_alert_rules(active_only=False)
+    if not rules:
+        typer.echo("No alert rules.")
+        return
+    typer.echo("Price alert rules:")
+    for r in rules:
+        state = "active" if r["is_active"] else "inactive"
+        typer.echo(
+            f"  {r['url']} — {r['title']} <= {r['target_price_eur']} EUR "
+            f"[{state}, cooldown {r['cooldown_minutes']}min, channels {r['channels']}]"
+        )
+
+
+@alert_rule_app.command("remove")
+def alert_rule_remove(
+    url: str = typer.Option(..., "--url", "-u", help="Product URL"),
+):
+    """Remove an alert rule by URL."""
+    from src.storage.manager import StorageManager
+
+    config = load_config()
+    storage = StorageManager(config.storage.db_path)
+    ok = storage.remove_price_alert_rule(url)
+    typer.echo(f"Removed rule for {url}" if ok else f"No rule for {url}")
+
+
+@alert_rule_app.command("enable")
+def alert_rule_enable(
+    url: str = typer.Option(..., "--url", "-u", help="Product URL"),
+):
+    """Enable an alert rule by URL."""
+    from src.storage.manager import StorageManager
+
+    config = load_config()
+    storage = StorageManager(config.storage.db_path)
+    ok = storage.set_rule_active(url, True)
+    typer.echo(f"Rule for {url} enabled" if ok else f"No rule for {url}")
+
+
+@alert_rule_app.command("disable")
+def alert_rule_disable(
+    url: str = typer.Option(..., "--url", "-u", help="Product URL"),
+):
+    """Disable an alert rule by URL."""
+    from src.storage.manager import StorageManager
+
+    config = load_config()
+    storage = StorageManager(config.storage.db_path)
+    ok = storage.set_rule_active(url, False)
+    typer.echo(f"Rule for {url} disabled" if ok else f"No rule for {url}")
+
+
+@alert_rule_app.command("evaluate")
+def alert_rule_evaluate():
+    """Evaluate all active alert rules and send triggered alerts now."""
+    config = load_config()
+    storage = StorageManager(config.storage.db_path)
+    notification_manager = _build_notification_manager(config)
+    from src.intelligence.price_tracker import AlertRuleEngine
+
+    engine = AlertRuleEngine(storage, notification_manager)
+    alerts = engine.evaluate_rules()
+    typer.echo(f"Evaluated rules; {len(alerts)} alert(s) triggered.")
+
+
+app.add_typer(alert_rule_app, name="alert-rule")
 
 
 if __name__ == "__main__":

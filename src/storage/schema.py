@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlite_utils import Database
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # Columns added after the initial migration, applied idempotently to any
 # database created by an older build.
@@ -33,6 +33,18 @@ ITEM_SPECS_COLUMNS: dict[str, str] = {
     "review_json": "TEXT NOT NULL DEFAULT '{}'",
     "source_urls": "TEXT NOT NULL DEFAULT '[]'",
     "researched_at": "TEXT NOT NULL",
+}
+
+ALERT_RULES_COLUMNS: dict[str, str] = {
+    "url": "TEXT PRIMARY KEY",
+    "title": "TEXT NOT NULL",
+    "target_price_eur": "REAL NOT NULL",
+    "condition": "TEXT DEFAULT 'any'",
+    "channels": "TEXT NOT NULL DEFAULT '[]'",
+    "cooldown_minutes": "INTEGER DEFAULT 60",
+    "added_at": "TEXT NOT NULL",
+    "last_triggered": "TEXT",
+    "is_active": "INTEGER DEFAULT 1",
 }
 
 
@@ -76,6 +88,10 @@ def _run_migrations(db: Database) -> None:
     if current_version < 5:
         _migration_005_item_specs(db)
         current_version = 5
+
+    if current_version < 6:
+        _migration_006_alert_rules(db)
+        current_version = 6
 
     # Update version
     db["migrations"].insert({"version": current_version}, pk="version", replace=True)  # type: ignore[union-attr]
@@ -217,6 +233,25 @@ def _migration_005_item_specs(db: Database) -> None:
             )
         """)
         db.execute("CREATE INDEX IF NOT EXISTS idx_item_specs_name ON item_specs(item_name)")
+
+
+def _migration_006_alert_rules(db: Database) -> None:
+    """Create the alert_rules table for user-configurable price alert thresholds."""
+    if "alert_rules" not in db.table_names():
+        db.execute("""
+            CREATE TABLE alert_rules (
+                url TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                target_price_eur REAL NOT NULL,
+                condition TEXT DEFAULT 'any',
+                channels TEXT NOT NULL DEFAULT '[]',
+                cooldown_minutes INTEGER DEFAULT 60,
+                added_at TEXT NOT NULL,
+                last_triggered TEXT,
+                is_active INTEGER DEFAULT 1
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_alert_rules_active ON alert_rules(is_active)")
 
 
 def _ensure_table_columns(

@@ -598,3 +598,128 @@ class StorageManager:
             "source_urls": json.loads(row["source_urls"]),
             "researched_at": row["researched_at"],
         }
+
+    # ------------------------------------------------------------------
+    # Price alert rules (user-configurable price thresholds)
+    # ------------------------------------------------------------------
+
+    def save_price_alert_rule(
+        self,
+        url: str,
+        title: str,
+        target_price_eur: float,
+        condition: str = "any",
+        channels: list[str] | None = None,
+        cooldown_minutes: int = 60,
+    ) -> None:
+        """Upsert a price alert rule for *url*."""
+        import json
+
+        self.db.table("alert_rules").insert(
+            {
+                "url": url,
+                "title": title,
+                "target_price_eur": float(target_price_eur),
+                "condition": condition,
+                "channels": json.dumps(channels or [], ensure_ascii=False),
+                "cooldown_minutes": int(cooldown_minutes),
+                "added_at": utcnow_iso(),
+                "last_triggered": None,
+                "is_active": 1,
+            },
+            pk="url",
+            replace=True,
+        )  # type: ignore[union-attr]
+
+    def get_price_alert_rule(self, url: str) -> dict | None:
+        """Return a single alert rule by URL, or None."""
+        import json
+
+        rows = list(
+            self.db["alert_rules"].rows_where("url = ?", [url])
+        )  # type: ignore[union-attr]
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "url": row["url"],
+            "title": row["title"],
+            "target_price_eur": row["target_price_eur"],
+            "condition": row["condition"],
+            "channels": json.loads(row["channels"]),
+            "cooldown_minutes": row["cooldown_minutes"],
+            "added_at": row["added_at"],
+            "last_triggered": row["last_triggered"],
+            "is_active": bool(row["is_active"]),
+        }
+
+    def list_price_alert_rules(self, active_only: bool = False) -> list[dict]:
+        """List all alert rules, optionally only active ones."""
+        import json
+
+        if active_only:
+            rows = list(
+                self.db["alert_rules"].rows_where("is_active = 1")
+            )  # type: ignore[union-attr]
+        else:
+            rows = list(
+                self.db["alert_rules"].rows_where("1")
+            )  # type: ignore[union-attr]
+        return [
+            {
+                "url": row["url"],
+                "title": row["title"],
+                "target_price_eur": row["target_price_eur"],
+                "condition": row["condition"],
+                "channels": json.loads(row["channels"]),
+                "cooldown_minutes": row["cooldown_minutes"],
+                "added_at": row["added_at"],
+                "last_triggered": row["last_triggered"],
+                "is_active": bool(row["is_active"]),
+            }
+            for row in rows
+        ]
+
+    def remove_price_alert_rule(self, url: str) -> bool:
+        """Remove an alert rule by URL. Returns True if a row was deleted."""
+        rows = list(
+            self.db["alert_rules"].rows_where("url = ?", [url])
+        )  # type: ignore[union-attr]
+        if not rows:
+            return False
+        self.db.table("alert_rules").delete(url)  # type: ignore[union-attr]
+        return True
+
+    def set_rule_active(self, url: str, active: bool) -> bool:
+        """Activate or deactivate an alert rule. Returns True if a row existed."""
+        rows = list(
+            self.db["alert_rules"].rows_where("url = ?", [url])
+        )  # type: ignore[union-attr]
+        if not rows:
+            return False
+        self.db.table("alert_rules").update(
+            url, {"is_active": 1 if active else 0}
+        )  # type: ignore[union-attr]
+        return True
+
+    def set_rule_last_triggered(self, url: str, timestamp: str) -> None:
+        """Record when a rule last fired (for cooldown enforcement)."""
+        self.db.execute(
+            "UPDATE alert_rules SET last_triggered = ? WHERE url = ?",
+            (timestamp, url),
+        )
+
+    def get_latest_effective_price(self, url: str) -> float | None:
+        """Return the latest effective price for *url*, or None if never seen."""
+        row = self.db.execute(
+            """
+            SELECT effective_price_eur, price_eur FROM price_history
+            WHERE url = ?
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """,
+            (url,),
+        ).fetchone()
+        if row is None:
+            return None
+        return row["effective_price_eur"] or row["price_eur"]

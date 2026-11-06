@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import re
+import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -1417,6 +1418,22 @@ def alert_rule_evaluate():
 
 
 app.add_typer(alert_rule_app, name="alert-rule")
+
+
+@app.command()
+def dashboard(
+    port: int = typer.Option(8765, "--port", "-p", help="Port to serve the dashboard on"),
+    results_dir: str = typer.Option("results", "--results-dir", "-d", help="Results directory to serve"),
+):
+    """Start the web dashboard for viewing search results."""
+    import webbrowser
+
+    from src.dashboard.app import run_server
+
+    typer.echo(f"Starting dashboard at http://127.0.0.1:{port} (serving {results_dir})")
+    typer.echo("Press Ctrl+C to stop.")
+    webbrowser.open(f"http://127.0.0.1:{port}")
+    run_server(port=port, results_dir=results_dir)
 
 
 if __name__ == "__main__":

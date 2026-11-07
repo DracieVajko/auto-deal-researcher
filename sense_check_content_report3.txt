@@ -1,0 +1,54 @@
+{
+  "stage": "sense-check",
+  "round": 3,
+  "batch": "content",
+  "summary": "Content sense-check of 14 manual clusters (34 steps). Verified source files, line numbers, names, counts, staleness. Corrected inaccurate line refs in cli-command-and-search-flow (run/config_check/doctor/search/_search_async) and adapter-conventions (facebook _goto_search). Removed over-engineered indirection: package split in searcher-architecture, timeout getters in init-coupling, site_selection rename in package-and-research-ownership. Staleness confirmed for all targeted issues (filters._NUMBER_RE, Deal.comparable_price_eur, _trust_for noop branches still present).",
+  "clusters_checked": [
+    "cli-command-and-search-flow",
+    "price-parsing-and-comparable-price",
+    "incomplete-migration-and-aliases",
+    "type-safety-enums-and-literals",
+    "searcher-architecture",
+    "error-contract-and-silent-failures",
+    "adapter-conventions",
+    "cross-module-decoupling",
+    "http-and-dependency-health",
+    "notification-channels",
+    "init-coupling-and-async-helpers",
+    "code-duplication-and-report-builders",
+    "package-and-research-ownership",
+    "tests-and-coverage"
+  ],
+  "edits": [
+    "cli-command-and-search-flow step 1 line refs corrected",
+    "searcher-architecture step 1 removed subpackage split",
+    "init-coupling-and-async-helpers step 1 removed getter indirection",
+    "package-and-research-ownership step 1 removed rename-for-convention",
+    "adapter-conventions step 1 facebook line ref corrected"
+  ],
+  "decision_ledger": {
+    "cli-command-and-search-flow": "tighten",
+    "price-parsing-and-comparable-price": "keep",
+    "incomplete-migration-and-aliases": "keep",
+    "type-safety-enums-and-literals": "keep",
+    "searcher-architecture": "tighten",
+    "error-contract-and-silent-failures": "keep",
+    "adapter-conventions": "tighten",
+    "cross-module-decoupling": "keep",
+    "http-and-dependency-health": "keep",
+    "notification-channels": "keep",
+    "init-coupling-and-async-helpers": "tighten",
+    "code-duplication-and-report-builders": "keep",
+    "package-and-research-ownership": "tighten",
+    "tests-and-coverage": "keep"
+  },
+  "files_read": [
+    "src/cli/app.py",
+    "src/searcher/filters.py",
+    "src/searcher/pricing.py",
+    "src/searcher/adapters/bazos.py",
+    "src/searcher/adapters/facebook.py",
+    "src/searcher/adapters/alza.py"
+  ],
+  "blockers": []
+}

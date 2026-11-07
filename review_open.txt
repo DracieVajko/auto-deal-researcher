@@ -1,0 +1,265 @@
+﻿desloppify :   Excluding (from config): .pytest_cache, .ruff_cache, __pycache__, browser_profile, data, flows, 
+results, .superpowers, .claude, .mypy_cache, .desloppify
+At line:1 char:91
++ ...  $env:PATH; desloppify show review --status open --no-budget 2>&1 | O ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (  Excluding (fr...he, .desloppify:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  ΓåÆ query.json updated
+
+  61 open issues matching 'review'
+
+  Codebase-wide  (61 issues)
+    Γùï T1 [high] Condition/Category membership checks compare raw strings instead of enum members
+      related files: src/searcher/adapters/base.py, src/searcher/filter_engine.py, src/intelligence/price_tracker.py, src/cli/app.py ┬╖ suggestion: Type parameters as Condition/Category (or a Literal) and compare against Condition.ANY/Category.ANY, converting at boundaries. ┬╖ evidence: base.py lines 161 and 166: `if condition == "any"` and `if category == "any"`
+      filter_engine.py and price_tracker.py repeat the same comparisons
+      note: Reopened (├ù1) ΓÇö reappeared in scan (was fixed)
+      review::.::holistic::abstraction_fitness::enum_bypass_raw_strings
+    Γùï T1 [high] Email, system and Discord notification channels are untested
+      related files: src/notifications/channels/email.py, src/notifications/channels/system.py, src/notifications/channels/discord.py ┬╖ suggestion: Add unit tests mocking subprocess/HTTP for the three channels, including failure paths. ┬╖ evidence: tests/test_notification_channels.py imports only ConsoleChannel and WebhookChannel; email/system/discord channels have no coverage despite subprocess and network side effects.
+      note: Reopened (├ù1) ΓÇö reappeared in scan (was fixed)
+      review::.::holistic::test_strategy::untested_notification_channels
+    Γùï T1 [high] Watchlist save logs a disk error but callers report success, so failed writes are silently lost
+      related files: src/history/watchlist.py, src/cli/commands/history.py ┬╖ suggestion: Make _save return bool or raise a small WatchlistStorageError, propagate it through add_item/remove_item, and have the CLI print 'Error: could not save watchlist' and exit 1. ┬╖ evidence: src/history/watchlist.py::_save catches Exception and logs only
+      add_item and remove_item call _save() without checking a result
+      note: Reopened (├ù1) ΓÇö reappeared in scan (was fixed)
+      review::.::holistic::error_consistency::watchlist_save_silent_failure
+    Γùï T1 [high] _trust_for has if/elif branches whose bodies are both pass, hiding a single unknown-shipping condition.
+      related files: src/searcher/pricing.py ┬╖ suggestion: Collapse to `if shipping.is_free is not True and shipping.cost_eur is None: trust *= 0.90; warnings.append('shipping unknown')`, preserving behavior and deleting the no-op branches. ┬╖ evidence: shipping.is_free is True and shipping.cost_eur is not None both execute `pass`, so only the else branch (trust *= 0.90; warnings.append('shipping unknown')) does work
+      review::.::holistic::low_level_elegance::trust_for_noop_branches
+    Γùï T1 [high] CLI split is half-finished: app.py and commands/*.py both own run, doctor and config-check
+      related files: src/cli/app.py, src/cli/commands/run.py, src/cli/commands/doctor.py, src/cli/commands/config_check.py, src/cli/main.py +2 ┬╖ suggestion: Finish the split by moving run/doctor/config-check Typer command bodies into commands/*.py and registering them on app, or delete the three unused shim modules plus src/cli/main.py and keep app.py as  ┬╖ evidence: src/cli/app.py:194-244 defines the Typer run command, while src/cli/commands/run.py:6-19 defines a second run that wraps app.run_async; its typer_run is never registered.
+      Only history, monitor and watch are imported from src/cli/commands into app.py; commands/run.py is imported only by tests, doctor.py has no importer, config_check.py has no importer.
+      review::.::holistic::incomplete_migration::cli_split_incomplete
+    Γùï T1 [high] Legacy `search` command duplicates `run` and silently ignores --max-pages/--headless
+      related files: src/cli/app.py, README.md ┬╖ suggestion: Delete the search command and _search_async so run is the sole search entry point, or make search a thin alias of run_search; remove --max-pages and --headless at minimum. ┬╖ evidence: src/cli/app.py:836-879 defines an @app.command() named search; README.md documents only run for the same use case.
+      The search command passes max_pages/headless to _search_async, which declares them but never references them in its body.
+      review::.::holistic::incomplete_migration::legacy_search_command
+    Γùï T1 [high] Deal.comparable_price_eur duplicates pricing.comparable_price; only tests use the property
+      related files: src/searcher/adapters/base.py, src/searcher/pricing.py, src/storage/manager.py, src/output/processor.py, tests/test_pricing.py ┬╖ suggestion: Delete Deal.comparable_price_eur and update tests/test_pricing.py to call pricing.comparable_price(deal). ┬╖ evidence: src/searcher/adapters/base.py defines comparable_price_eur with the same effective-price fallback as src/searcher/pricing.py:195-209.
+      Production storage and output code calls pricing.comparable_price; only tests/test_pricing.py references the Deal property.
+      review::.::holistic::incomplete_migration::comparable_price_dual_api
+    Γùï T1 [high] filters._parse_number duplicates currency.parse_number with a second numeric regex
+      related files: src/searcher/filters.py, src/searcher/currency.py ┬╖ suggestion: Import parse_number from src.searcher.currency in filters.py, delete filters._parse_number and _NUMBER_RE, and update the four call sites. ┬╖ evidence: src/searcher/filters.py:128 defines _NUMBER_RE and lines 168-199 implement _parse_number with the same EU/US separator handling as src/searcher/currency.py:66,69-106.
+      filters.py uses its private parser at lines 209 and 437-452, so fixes to the shared parser do not reach prompt parsing.
+      review::.::holistic::incomplete_migration::number_parser_duplicate
+    Γùï T1 [high] config.example.yaml advertises local_endpoint/model_name keys that the schema silently ignores
+      related files: config.example.yaml, src/config/models.py ┬╖ suggestion: Remove the legacy block from config.example.yaml, or add an explicit validator that maps the keys into llm.local[0] with a deprecation warning. ┬╖ evidence: config.example.yaml:346-350 labels local_endpoint and model_name as legacy fields for backward compatibility.
+      LLMConfig models only local and api_fallback (src/config/models.py:65-75); a direct pydantic load drops both keys and no reader exists.
+      review::.::holistic::incomplete_migration::legacy_llm_config_keys
+    Γùï T1 [high] load_config imports src.searcher.currency.set_rates, coupling foundational config to the searcher layer
+      related files: src/config/__init__.py, src/searcher/currency.py ┬╖ suggestion: Apply configured rates at the call site (or move the rate table into a shared lower-level utility) so src.config has no dependency on src.searcher. ┬╖ evidence: load_config ends with `from src.searcher.currency import set_rates` then `set_rates(config.search.currency_rates)`.
+      review::.::holistic::cross_module_architecture::config_depends_on_searcher_currency
+    Γùï T1 [high] LLM client depends on searcher domain Deal type, inverting layering
+      related files: src/llm/client.py, src/searcher/adapters/base.py ┬╖ suggestion: Introduce a small protocol or TypedDict in src/llm (or src/text) for the minimal deal shape needed by LLM prompts, or accept Sequence[Mapping[str, str]] to remove the searcher dependency. ┬╖ evidence: src/llm/client.py line 14 imports Deal from src.searcher.adapters.base and uses list[Deal] in refine_query/judge_results/rank_results.
+      review::.::holistic::high_level_elegance::llm_depends_on_searcher_deal
+    Γùï T1 [high] Coordinator flattens failed and budget-skipped agents to strings, so downstream .get() raises AttributeError
+      related files: src/agents/coordinator.py, src/agents/synthesis/recommendation.py, src/searcher/playwright_searcher.py ┬╖ suggestion: Return {} or a small typed outcome for every failure and budget skip, keep the reason in a separate errors map, and guard nested lookups before calling .get(). ┬╖ evidence: src/agents/coordinator.py::_extract_result returns str(result.error) or str(result) for failures
+      budget-skip branches return strings such as 'Budget exceeded, skipped'
+      review::.::holistic::error_consistency::coordinator_flattens_failed_agents
+    Γùï T1 [high] A crashed per-site search never reaches site_plan.skipped, so the report calls the site searched with zero deals
+      related files: src/searcher/playwright_searcher.py, src/output/processor.py ┬╖ suggestion: Append {"name": site.name, "reason": f"search failed: {type(exc).__name__}: {exc}"} to self._skipped_sites before returning [] in the generic except branch. ┬╖ evidence: src/searcher/playwright_searcher.py generic except logs and returns [] without appending to self._skipped_sites
+      review::.::holistic::error_consistency::playwright_search_crash_not_skipped
+    Γùï T1 [high] sqlite-utils is a runtime dependency but storage/schema.py uses it only as a thin Database wrapper
+      related files: src/storage/schema.py, pyproject.toml, requirements.txt ┬╖ suggestion: Replace sqlite-utils with stdlib sqlite3 in storage/schema.py, or move sqlite-utils to an optional dependency group ┬╖ evidence: src/storage/schema.py imports Database from sqlite_utils and uses only Database(), table_names(), execute() and insert()
+      review::.::holistic::dependency_health::heavy-sqlite-utils-dependency
+    Γùï T1 [high] greenlet and pydantic-core are declared as direct dependencies but are only transitive dependencies of playwright and pydantic
+      related files: pyproject.toml, requirements.txt ┬╖ suggestion: Remove greenlet and pydantic-core from direct dependencies and let playwright/pydantic manage their own transitive versions ┬╖ evidence: No imports of greenlet or pydantic_core exist in src/
+      review::.::holistic::dependency_health::transitive-deps-declared-direct
+    Γùï T1 [high] Canonical price number parser is reimplemented in filters, BaseAdapter, watch and other modules; watch misreads '1.299 EUR' as 1.299.
+      related files: src/searcher/currency.py, src/searcher/filters.py, src/searcher/adapters/base.py, src/cli/commands/watch.py, src/searcher/extract.py +2 ┬╖ suggestion: Make currency.parse_number/parse_price_detail the only number extractors: delete filters._parse_number, reduce BaseAdapter.parse_price_eur to parse_number, and replace watch/extract/selectors/product_ ┬╖ evidence: filters._parse_number duplicates currency.parse_number with a different _NUMBER_RE and separator handling
+      BaseAdapter.parse_price_eur just calls parse_number, but watch.py uses its own regex/replace logic
+      watch.py does num.replace(' ', '').replace(',', '.') without handling 3-digit European thousands, so '1.299' becomes 1.299
+      review::.::holistic::low_level_elegance::canonical_price_number_parser_reimplemented
+    Γùï T1 [high] ChangeDetector has two ~90-line report builders that duplicate every comparison loop and count.
+      related files: src/intelligence/change_detector.py ┬╖ suggestion: Normalize both inputs to mapping[url, dict] and extract one _build_report(current_by_url, previous_by_url) helper containing the comparison loops; let generate_run_report fetch rows and generate_repor ┬╖ evidence: generate_run_report and generate_report_from_deals both inline new/removed/price/condition/availability comparison loops and recompute the same summary counts
+      review::.::holistic::low_level_elegance::change_detector_duplicate_report_builders
+    Γùï T1 [high] diamond_search output path constructs ResultProcessor without llm and skips site_plan/price_alerts in save_results
+      related files: src/cli/app.py ┬╖ suggestion: Construct ResultProcessor(config, llm, brand_filter=filters.brand) and pass site_plan and price_alerts to save_results, mirroring run_search. ┬╖ evidence: In _diamond_search_async, `processor = ResultProcessor(config, brand_filter=filters.brand)` omits llm, while run_search passes llm.
+      save_results is called as `await processor.save_results(deals, output_dir, prompt=prompt)` without site_plan or price_alerts.
+      review::.::holistic::mid_level_elegance::diamond_search_output_drops_llm_and_site_plan
+    Γùï T1 [high] Comparable price is computed both in pricing.comparable_price and Deal.comparable_price_eur
+      related files: src/searcher/pricing.py, src/searcher/adapters/base.py ┬╖ suggestion: Make Deal.comparable_price_eur delegate to pricing.comparable_price (or remove the property) so one place owns the translation. ┬╖ evidence: pricing.comparable_price reads deal.price_quote.effective_price_eur or falls back to price_eur.
+      Deal.comparable_price_eur duplicates this logic, so storage and output may translate the same boundary value two ways.
+      review::.::holistic::mid_level_elegance::comparable_price_translation_duplicated_at_deal_boundary
+    Γùï T1 [high] Anti-bot fingerprint module (400 LOC) has no tests
+      related files: src/browser/fingerprint.py ┬╖ suggestion: Add focused unit tests for fingerprint scoring/heuristic functions with representative HTML fixtures. ┬╖ evidence: Mechanical test_coverage flags src/browser/fingerprint.py as untested (400 LOC, 0 importers); it implements detection heuristics used by browser automation.
+      review::.::holistic::test_strategy::untested_fingerprint_module
+    Γùï T1 [high] Tests rely on compatibility aliases slated for removal
+      related files: tests/test_adapters.py, tests/test_storage_persistence.py, tests/test_resolve_request.py, src/searcher/filters.py, src/storage/manager.py +1 ┬╖ suggestion: Migrate tests to canonical APIs (resolve_request, get_deal_by_url, parse_price_with_currency, pricing.comparable_price) and delete aliases. ┬╖ evidence: Historical issue notes production modules retain resolve_filters/get_deal/parse_price_eur aliases used only by tests; Deal.comparable_price_eur is used only by tests/test_pricing.py.
+      review::.::holistic::test_strategy::test_alias_coupling
+    Γùï T1 [high] Notification manager is built in two places with divergent env-var fallback and channel gating
+      related files: src/cli/app.py, src/cli/commands/monitor.py ┬╖ suggestion: Extract a single _build_notification_manager(config) (or move it into NotificationManager.from_config) and use it from both app.py and monitor.py, including env fallback and configured-channel gating. ┬╖ evidence: app.py::_build_notification_manager falls back to os.environ.get("ADS_WEBHOOK_URL")/ADS_DISCORD_WEBHOOK_URL when settings lack a URL.
+      monitor.py reads only (ch.settings or {}).get("url"/"webhook_url") and logs 'no settings.url' without checking env vars.
+      monitor.py always calls notif.add_channel(EmailChannel()) and SystemChannel(), whereas app.py only instantiates channels declared in config.
+      review::.::holistic::authorization_consistency::notif_manager_duplication
+    Γùï T1 [high] Six zero-fan-in desloppify triage scripts (complete_triage.py, enrich.py, fix_paths.py, get_ids.py, get_ids2.py, run_steps.py) sit at the repo root instead of under scripts/.
+      related files: complete_triage.py, enrich.py, fix_paths.py, get_ids.py, get_ids2.py +1 ┬╖ suggestion: Move the six root-level .py helpers into scripts/ (or .desloppify/tools/) in one commit, update any internal relative paths, then validate with python -m compileall scripts and confirm git status show ┬╖ evidence: holistic_context.structure.root_files lists all six with fan_in 0 and role peripheral
+      scripts/ already hosts discover_sites.py, login.py, map_site.py, strip_stale_noqa.py
+      review::.::holistic::package_organization::root_desloppify_straggler_scripts
+    Γùï T1 [high] SystemChannel.send returns True even when the OS notification fails
+      related files: src/notifications/channels/system.py ┬╖ suggestion: Return False from the except block (and when subprocess fails) so the shared send() contract holds across channels. ┬╖ evidence: The except block logs, prints a console fallback, and then returns True instead of False.
+      DiscordChannel, WebhookChannel, and EmailChannel all return False on failure.
+      review::.::holistic::contract_coherence::system_channel_false_success
+    Γùï T1 [high] Agent helper methods are declared async but never await, wrapping synchronous work in async
+      related files: src/agents/expertise/domain_expert.py, src/agents/expertise/latest_tech_tracker.py, src/agents/price/price_hunter.py, src/agents/research/market_intel.py, src/agents/research/site_selection.py +1 ┬╖ suggestion: Either make these helpers synchronous and update their callers to drop await, or have them perform genuinely asynchronous work; avoid async wrappers around purely CPU-bound deterministic logic. ┬╖ evidence: src/agents/expertise/domain_expert.py:82 _score_deal has no await
+      src/agents/expertise/domain_expert.py:132 _analyze_deal has no await
+      src/agents/expertise/domain_expert.py:156 _answer_critical_questions has no await
+      src/agents/expertise/latest_tech_tracker.py:25 _check_latest_tech has no await
+      src/agents/price/price_hunter.py:36 _enrich_deal has no await
+      review::.::holistic::logic_clarity::async-agent-helpers-no-await
+    Γùï T1 [high] ProductCard.condition redefines Condition values as a Literal and _detect_condition returns str, masked by type: ignore
+      related files: src/searcher/extract.py, src/config/models.py ┬╖ suggestion: Return Condition from _detect_condition and type ProductCard.condition as Condition, removing the type: ignore. ┬╖ evidence: src/searcher/extract.py:28 condition: Literal["new", "used", "refurbished", "open_box", "unknown"]
+      src/searcher/extract.py:151 condition=condition, # type: ignore[arg-type]
+      src/searcher/extract.py:158 def _detect_condition(text: str) -> str
+      src/config/models.py:9 class Condition(StrEnum)
+      review::.::holistic::type_safety::extract-condition-literal-duplicates-enum
+    Γùï T1 [high] CLI --format is typed str but assigned to Literal OutputConfig.format via unexplained type: ignore
+      related files: src/cli/app.py, src/config/models.py ┬╖ suggestion: Type the CLI option as Literal["json", "markdown", "both"] | None or validate/convert before assignment. ┬╖ evidence: src/cli/app.py:206 output_format: str | None = typer.Option(None, "--format", ...)
+      src/cli/app.py:319 config.output.format = output_format  # type: ignore[assignment]
+      src/config/models.py:92 format: Literal["json", "markdown", "both"]
+      review::.::holistic::type_safety::cli-output-format-str-to-literal
+    Γùï T1 [high] PlaywrightSearcher.__init__ leaves browser_manager unannotated despite a concrete BrowserManager type
+      related files: src/searcher/playwright_searcher.py, src/browser/manager.py ┬╖ suggestion: Annotate browser_manager: BrowserManager (import under TYPE_CHECKING if needed). ┬╖ evidence: src/searcher/playwright_searcher.py:73 browser_manager (no annotation)
+      src/browser/manager.py declares class BrowserManager
+      review::.::holistic::type_safety::playwright-searcher-untyped-browser-manager
+    Γùï T2 [medium] requests and aiohttp are both used for HTTP access across LLM, health, specs, research and notification channels
+      related files: src/llm/client.py, src/notifications/channels/webhook.py, src/notifications/channels/discord.py ┬╖ suggestion: Standardize on one HTTP client that supports both sync and async (for example httpx), or document the sync/async split as an intentional boundary ┬╖ evidence: requests is used in src/llm/client.py, src/llm/health.py, src/intelligence/specs_researcher.py and src/research/web_search.py
+      aiohttp is used in src/notifications/channels/webhook.py and src/notifications/channels/discord.py
+      note: Reopened (├ù1) ΓÇö reappeared in scan (was fixed)
+      review::.::holistic::dependency_health::multiple-http-client-libraries
+    Γùï T2 [medium] Production modules retain compatibility aliases used only by tests (resolve_filters, get_deal, parse_price_eur)
+      related files: src/searcher/filters.py, src/storage/manager.py, src/searcher/adapters/base.py, tests/test_resolve_request.py, tests/test_storage_persistence.py +2 ┬╖ suggestion: Migrate tests to canonical APIs (resolve_request, get_deal_by_url, parse_price_with_currency) and delete resolve_filters, get_deal and parse_price_eur; update README adapter surface list. ┬╖ evidence: src/searcher/filters.py:633 keeps resolve_filters as a thin wrapper used by tests/test_resolve_request.py.
+      src/storage/manager.py:103 keeps get_deal as an alias for get_deal_by_url used by tests/test_storage_persistence.py.
+      src/searcher/adapters/base.py:200 keeps BaseAdapter.parse_price_eur for tests/test_adapters.py even though adapters use parse_price_with_currency.
+      review::.::holistic::incomplete_migration::test_only_compat_aliases
+    Γùï T2 [medium] selectors.py is a second, drifting selector catalogue beside validated site profiles
+      related files: src/searcher/selectors.py, src/searcher/site_profiles/bazos.yaml, scripts/discover_sites.py ┬╖ suggestion: Retire per-site SELECTORS entries once a validated profile exists, keep DEFAULT_SELECTORS only as a fallback for unknown sites, make discovery load existing profiles before seeding, and delete _extrac ┬╖ evidence: src/searcher/selectors.py:7-127 hand-maintains listing/title/price/link/search-URL data also stored in site_profiles/*.yaml.
+      The bazos entry has drifted: selectors.py uses https://www.bazos.sk/search.php?hledat={query}, while site_profiles/bazos.yaml stores the validated URL with rubriky/location/radius.
+      src/searcher/selectors.py:147-167 defines _extract_price with zero references.
+      review::.::holistic::incomplete_migration::selector_table_duplicate
+    Γùï T2 [medium] MockLLMClient keeps legacy method names and unused helpers alongside the renamed surface
+      related files: src/llm/mock_client.py, src/llm/client.py, src/searcher/playwright_searcher.py, tests/test_live_sites.py ┬╖ suggestion: Remove _judge_results_async and collapse _generate_search_query_async into generate_search_query_async; add a unit test running PlaywrightSearcher.search with MockLLMClient. ┬╖ evidence: src/llm/mock_client.py still defines _generate_search_query_async and an unused _judge_results_async legacy method.
+      The public generate_search_query_async now exists, but the private duplicate and legacy helper remain.
+      review::.::holistic::incomplete_migration::mock_client_stale_api
+    Γùï T2 [medium] Top-level packages (agents, llm, searcher, config, diagnostics) form import cycles held together by deferred imports
+      related files: src/searcher/playwright_searcher.py, src/llm/client.py, src/config/__init__.py, src/diagnostics/selector_health.py ┬╖ suggestion: Extract shared contracts/types into a lower-level module and replace function-level imports with direct imports to remove cycle pressure. ┬╖ evidence: Module graph shows src.agents -> src.llm -> src.searcher -> src.agents and src.config -> src.diagnostics -> src.searcher -> src.config.
+      review::.::holistic::cross_module_architecture::top_level_package_import_cycles
+    Γùï T2 [medium] src/searcher is a 4802-LOC catch-all mixing orchestration, filtering, currency, profiles, selection, pagination, caching and extraction
+      related files: src/searcher/playwright_searcher.py, src/searcher/filters.py, src/searcher/filter_engine.py, src/searcher/currency.py, src/searcher/site_selection.py +8 ┬╖ suggestion: Split searcher into focused subpackages such as searcher/core (orchestration), searcher/filters, searcher/profiles, searcher/extraction and searcher/runtime (cache, sessions, pagination) so change bou ┬╖ evidence: structure.directory_profiles shows src/searcher with 18 files, 4802 total LOC and avg fan-in 6.8.
+      playwright_searcher.py alone is 835 LOC and re-exports 42 symbols (facade ratio 0.93).
+      review::.::holistic::high_level_elegance::searcher_catchall_package
+    Γùï T2 [medium] bazos and facebook adapters skip detect_block after navigation, unlike sibling adapters
+      related files: src/searcher/adapters/bazos.py, src/searcher/adapters/facebook.py, src/searcher/adapters/alza.py ┬╖ suggestion: Add `blocked = await self.detect_block(page)` (and the same early-return handling as alza.py) to bazos.py and facebook.py right after _goto_search. ┬╖ evidence: alza.py calls `blocked = await self.detect_block(page)` immediately after `await self._goto_search(...)`.
+      bazos.py and facebook.py call `await self._goto_search(...)` but never call detect_block.
+      review::.::holistic::convention_outlier::adapter_detect_block_omitted
+    Γùï T2 [medium] run_search takes ~20 keyword parameters instead of a request object
+      related files: src/cli/app.py, src/searcher/filters.py ┬╖ suggestion: Accept a SearchRequest (or SearchFilters plus a small options dataclass) and unpack internally. ┬╖ evidence: run_search signature lists condition, category, winners, output_format, min_price, ... debug, domain as separate kwargs
+      SearchRequest dataclass already exists in filters.py
+      review::.::holistic::abstraction_fitness::run_search_wide_params
+    Γùï T2 [medium] BaseAdapter imports FilterEngine lazily inside methods to avoid a circular import with filter_engine
+      related files: src/searcher/adapters/base.py, src/searcher/filter_engine.py ┬╖ suggestion: Break the cycle by moving shared types such as Deal to a neutral module or by passing build functions explicitly ┬╖ evidence: src/searcher/adapters/base.py lines 132 and 151 use `from src.searcher.filter_engine import FilterEngine` inside methods
+      src/searcher/filter_engine.py imports Deal from base only under TYPE_CHECKING
+      review::.::holistic::dependency_health::adapter-filter-engine-lazy-import-cycle
+    Γùï T2 [medium] DealScorer repeats identical metadata JSON parsing boilerplate in four _deal_* helpers.
+      related files: src/intelligence/deal_scorer.py ┬╖ suggestion: Extract a small _metadata(deal) -> dict helper that performs the string-to-dict normalization once, and have each _deal_* helper call it before reading its field. ┬╖ evidence: _deal_power_kw, _deal_weight_kg, _deal_battery_kwh and _deal_range_km each duplicate the same getattr/extras/json.loads/try-except parsing before reading one field
+      review::.::holistic::low_level_elegance::deal_scorer_repeated_metadata_parsing
+    Γùï T2 [medium] Diamond search runs the agent pipeline twice and re-extracts research between stages
+      related files: src/searcher/playwright_searcher.py ┬╖ suggestion: Run the research layer once, fetch deals using its queries, then call score_deals with that research; avoid the initial deal-less coordinator run. ┬╖ evidence: search_with_diamond calls `_diamond_coordinator.run(input_data)` with no deals, then `self.search(...)`, then `score_deals(...)`, and reads research back via `_diamond_research(result.payload)`.
+      The first pipeline pass produces no scored deals, so its expertise/price/synthesis work is discarded.
+      review::.::holistic::mid_level_elegance::search_with_diamond_double_pipeline
+    Γùï T2 [medium] Legacy search command skips prune_missing and reorders processor creation vs run_search
+      related files: src/cli/app.py ┬╖ suggestion: Align _search_async with run_search: prune before saving, create processor up front, and pass price_alerts. ┬╖ evidence: _search_async does not call storage.prune_missing, unlike run_search.
+      ResultProcessor is created after searching and after storage.save_deal, and site_plan is passed but price_alerts are omitted.
+      review::.::holistic::mid_level_elegance::legacy_search_command_inconsistent_seams
+    Γùï T2 [medium] find_replacement closes the browser inside the inner coroutine and never persists deals
+      related files: src/cli/app.py ┬╖ suggestion: Move browser close to the outer scope and persist candidate deals via storage.save_deal, matching run_search. ┬╖ evidence: _run calls `await browser_mgr.close()` inside the async block, then returns deals; storage.save_deal is not called for the candidates.
+      The outer sync command builds storage but only uses it for specs research.
+      review::.::holistic::mid_level_elegance::find_replacement_missing_storage_and_browser_lifecycle
+    Γùï T2 [medium] Output domain modules (base, registry, phone, car, computer, furniture, bike) are untested
+      related files: src/output/domains/base.py, src/output/domains/registry.py, src/output/domains/phone.py, src/output/domains/car.py, src/output/domains/computer.py +2 ┬╖ suggestion: Add tests for domain profile loading/rendering and registry lookup, at least for base and registry. ┬╖ evidence: Mechanical test_coverage flags seven domain modules as untested; src/output/domains/base.py has 10 importers.
+      review::.::holistic::test_strategy::untested_output_domains
+    Γùï T2 [medium] Only one cross-module integration test exists
+      related files: tests/test_integration.py ┬╖ suggestion: Add at least one integration test exercising PlaywrightSearcher with a mock adapter/LLM through storage and output. ┬╖ evidence: The suite is dominated by isolated unit tests; test_integration.py covers a single storage+notification seam, with no end-to-end search/processing flow test.
+      review::.::holistic::test_strategy::missing_integration_coverage
+    Γùï T2 [medium] Cache TTL tests depend on real wall-clock sleeps
+      related files: tests/test_search_cache.py, tests/test_llm_cache.py ┬╖ suggestion: Inject a clock or use freezegun/monkeypatched time instead of real sleeps. ┬╖ evidence: tests use time.sleep(1.1) before asserting cache expiry, making them slow and timing-sensitive.
+      review::.::holistic::test_strategy::timing_dependent_tests
+    Γùï T2 [medium] selectors.py (168 LOC) has no tests
+      related files: src/searcher/selectors.py ┬╖ suggestion: Add parsing/extraction tests or retire the module in favor of site profiles. ┬╖ evidence: Mechanical test_coverage flags src/searcher/selectors.py as untested (168 LOC, 0 importers); it is a second selector catalogue beside site profiles.
+      review::.::holistic::test_strategy::untested_selectors_module
+    Γùï T2 [medium] filters module mixes sync parsing helpers with async resolution entry points without a clear sync/async boundary
+      related files: src/searcher/filters.py ┬╖ suggestion: Separate async resolution orchestration from sync filter parsing or document the boundary explicitly ┬╖ evidence: resolve_request and resolve_filters are async while from_cli, filters_from_mapping, and parse_filters_from_text are sync in the same module
+      review::.::holistic::api_surface_coherence::mixed_sync_async_filters
+    Γùï T2 [medium] Notification channels use inconsistent constructor signatures and required name parameters
+      related files: src/notifications/channels/discord.py, src/notifications/channels/webhook.py, src/notifications/base.py ┬╖ suggestion: Standardize channel constructors around common keyword arguments such as name, target, and cooldown_minutes ┬╖ evidence: discord requires name plus webhook_url; console/email/system default name; webhook uses url instead of a consistent target parameter
+      review::.::holistic::api_surface_coherence::notification_channel_ctor_inconsistency
+    Γùï T2 [medium] LLMClient exposes sync and async methods with inconsistent naming suffixes
+      related files: src/llm/client.py ┬╖ suggestion: Adopt a consistent async suffix convention or split sync and async client surfaces ┬╖ evidence: keyword_query is sync while generate_search_query_async is async; _filename_slug_async pairs with _generate_filename_slug_sync
+      review::.::holistic::api_surface_coherence::llm_client_mixed_sync_async_naming
+    Γùï T2 [medium] LLM API key handling differs between availability check, health probe, and client retrieval
+      related files: src/cli/app.py, src/llm/health.py, src/llm/client.py ┬╖ suggestion: Introduce one helper (e.g. get_api_key(env_var) -> str | None) that strips and treats empty as missing, and use it in all three sites. ┬╖ evidence: _available_llm_backends treats os.environ.get(api.api_key_env, "") truthiness as configured.
+      health.py does (os.environ.get(api.api_key_env) or "").strip() before deciding auth status.
+      client.py::_get_api_key returns os.environ.get(env_var) without stripping, so a whitespace-only key can pass availability but fail at request time.
+      review::.::holistic::authorization_consistency::api_key_handling_inconsistent
+    Γùï T2 [medium] tests/ contains 79 flat test_*.py files spanning every domain, so ownership and navigation are poor.
+      related files: tests/ ┬╖ suggestion: Stage the split: (1) create tests subpackages mirroring src/ (tests/searcher, tests/cli, tests/llm, tests/output, tests/notifications, tests/browser, tests/agents, tests/storage, tests/intelligence, t ┬╖ evidence: mechanical flat_dirs::tests flags 68+ files with 0 child dirs
+      file names cover adapters, cli, llm, output, notifications, browser, searcher, intelligence, storage, history
+      review::.::holistic::package_organization::tests_flat_overload
+    Γùï T2 [medium] Two 'research' packages (src/research and src/agents/research) plus two site_selection modules obscure which component owns research/site selection.
+      related files: src/research/__init__.py, src/research/site_discovery.py, src/research/web_search.py, src/agents/research/site_selection.py, src/searcher/site_selection.py ┬╖ suggestion: Clarify ownership: keep src/research for web/site discovery, move Diamond site selection into agents/research, and rename searcher/site_selection to a clearly named module (e.g. site_ranking.py); upda ┬╖ evidence: directory_profiles contain both src/research/ and src/agents/research/
+      historical high_level_elegance issue flagged the same two-research-packages ambiguity
+      review::.::holistic::package_organization::dual_research_packages
+    Γùï T2 [medium] Dynamic env-derived timeout constants can be imported as stale snapshots
+      related files: src/llm/client.py, tests/test_llm_timeouts.py ┬╖ suggestion: Replace the __getattr__ constants with explicit getter functions or documented module globals refreshed by a single init routine, and update callers/tests to call the getter. ┬╖ evidence: src/llm/client.py defines __getattr__ returning _timeout_from_env(...) for LOCAL_TIMEOUT/CLOUD_TIMEOUT/GEMINI_MIN_OUTPUT_TOKENS.
+      Importing these names binds the value returned at import time rather than re-evaluating the environment.
+      review::.::holistic::initialization_coupling::stale_timeout_constants
+    Γùï T2 [medium] Currency conversion rates are stored in a module global initialized by load_config()
+      related files: src/config/__init__.py, src/searcher/currency.py ┬╖ suggestion: Encapsulate the active rate table behind an explicit context/config object or pass rates into parsing functions instead of mutating a process-wide global. ┬╖ evidence: load_config() calls set_rates(config.search.currency_rates), replacing src.searcher.currency._RATES.
+      Adapters and pricing code depend on this global being populated before price parsing.
+      review::.::holistic::initialization_coupling::currency_rates_global_state
+    Γùï T2 [medium] monitor._monitor_async has high cyclomatic complexity from repeated optional channel init blocks
+      related files: src/cli/commands/monitor.py ┬╖ suggestion: Extract a helper such as _register_optional_channels(notif, config) that loops over configured channel descriptors and keeps _monitor_async focused on run orchestration. ┬╖ evidence: Lines 62-99 repeat try/except blocks for System, Email, Webhook, and Discord channels inside one async function.
+      review::.::holistic::design_coherence::monitor_async_channel_registration_complexity
+    Γùï T2 [medium] PRICE_KEYWORDS typed dict[str, list[str]] with type: ignore when iterating as Language keys
+      related files: src/searcher/filter_extractor.py ┬╖ suggestion: Type PRICE_KEYWORDS as dict[Language, list[str]] so iteration keys are Language without ignores. ┬╖ evidence: src/searcher/filter_extractor.py:21 Language = Literal["sk", "cs", "de", "pl", "en"]
+      src/searcher/filter_extractor.py:153 PRICE_KEYWORDS: dict[str, list[str]] = {...}
+      src/searcher/filter_extractor.py:229-231 type: ignore[assignment]
+      review::.::holistic::type_safety::filter-extractor-price-keywords-type-ignore
+    Γùï T2 [medium] Alert.severity is str though only info/warning/critical are used; metadata is bare dict
+      related files: src/notifications/base.py, src/notifications/channels/discord.py ┬╖ suggestion: Type severity as Literal["info", "warning", "critical"] and metadata as dict[str, Any]. ┬╖ evidence: src/notifications/base.py:16 severity: str = "info"
+      src/notifications/base.py:19 metadata: dict = field(default_factory=dict)
+      src/notifications/channels/discord.py:22 color_map keys info/warning/critical
+      review::.::holistic::type_safety::alert-severity-untyped-str
+    Γùï T2 [medium] Condition enum exists but recommendation and other agents compare condition against raw string literals
+      related files: src/agents/synthesis/recommendation.py, src/config/models.py ┬╖ suggestion: Use Condition members (Condition.NEW, etc.) for comparisons and type deal condition as Condition. ┬╖ evidence: src/agents/synthesis/recommendation.py:131 if condition == "new":
+      src/agents/synthesis/recommendation.py:133 elif condition == "refurbished":
+      src/agents/synthesis/recommendation.py:135 elif condition == "used":
+      src/config/models.py:9 class Condition(StrEnum)
+      review::.::holistic::type_safety::enum-bypass-raw-condition-strings
+    Γùï T2 [medium] SearchFilters.as_dict and PriceQuote.as_dict return dict[str, Any] instead of a typed shape
+      related files: src/searcher/filters.py, src/searcher/pricing.py ┬╖ suggestion: Introduce TypedDicts for the serialized filter and quote shapes and use them as return types. ┬╖ evidence: src/searcher/filters.py:294 def as_dict(self) -> dict[str, Any]
+      src/searcher/pricing.py:69 def as_dict(self) -> dict[str, Any]
+      review::.::holistic::type_safety::as-dict-returns-untyped-dict
+    Γùï T3 [low] Three _normalize_* wrappers only forward to _normalize_choice with bound tables
+      related files: src/searcher/filters.py ┬╖ suggestion: Either inline at call sites or keep as named bindings, but document that they are intentional domain aliases. ┬╖ evidence: _normalize_shipping/_normalize_sort/_normalize_seller each single-line return _normalize_choice(...)
+      review::.::holistic::abstraction_fitness::thin_normalize_wrappers
+    Γùï T3 [low] Adapter modules import many base symbols, inflating re-export ratios
+      related files: src/searcher/adapters/alza.py, src/searcher/adapters/amazon.py, src/searcher/adapters/backmarket.py ┬╖ suggestion: Keep imports but avoid `from .base import *`; explicit imports are fine and do not need refactoring. ┬╖ evidence: Facade detector reports re_export_ratio 0.82-0.88 for adapter modules due to imported base symbols
+      review::.::holistic::abstraction_fitness::adapter_base_reexports
+    Γùï T3 [low] Several public helper functions accept more than five parameters, blurring API boundaries
+      related files: src/searcher/filters.py, src/history/watchlist.py, src/searcher/pricing.py ┬╖ suggestion: Use existing spec objects such as SearchFilters and PriceQuote to group related boundary inputs ┬╖ evidence: from_cli takes 9 parameters, WatchlistManager.add_item takes 8, build_price_quote takes 11
+      review::.::holistic::api_surface_coherence::public_helpers_many_parameters
+
+  Summary:
+    By tier:     T1:28, T2:30, T3:3
+    By detector: review:61
+
+  AGENT PLAN (use `desloppify next` to see your next task):
+  Living plan active: Queue: 67 items (67 planned ┬╖ 120 skipped)
+  Next command: `desloppify next`
+  View plan: `desloppify plan`
+  Subjective quality (<85%): Stale migration 52.0%, Cross-module arch 62.0%, Error consistency 64.0%
+  Next command to improve subjective scores: `desloppify show review --status open`
+

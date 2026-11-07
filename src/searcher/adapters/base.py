@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar
-
-from typing import Any, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from playwright.async_api import ElementHandle, Page
 
@@ -50,14 +48,6 @@ class Deal:
     price_quote: "PriceQuote | None" = None
     expert_score: float | None = None
     expert_analysis: str = ""
-
-    @property
-    def comparable_price_eur(self) -> float:
-        """Price used for ranking: effective when a quote exists, else listed."""
-        if self.price_quote is not None and self.price_quote.effective_price_eur > 0:
-            return self.price_quote.effective_price_eur
-        return self.price_eur
-
 
 class BaseAdapter(ABC):
     """Abstract adapter for a single marketplace/site."""

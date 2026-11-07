@@ -1,0 +1,2124 @@
+You are a Big Picture Strategist.
+Analyze cross-cycle codebase health history and produce strategic guidance for the upcoming triage cycle.
+Repo root: C:\Users\DracieVajko\Downloads\PC_Commands\AI\PersonalAIDealSearcher
+
+## Job
+- Read the structured history below.
+- Detect strategic mistakes that the per-stage triage flow cannot see on its own.
+- Focus on rework loops, score-neutral churn, dimension neglect, skip-heavy execution, and growing wontfix debt.
+- Produce valid JSON only. No prose outside the JSON object.
+
+## Score Trajectory
+```json
+{
+  "all_time_high": 77.8,
+  "best_scan_delta": 0.2,
+  "cycle_start_score": 77.4,
+  "strict_delta": 0.0,
+  "strict_scores": [
+    77.4,
+    77.4,
+    77.4,
+    77.6,
+    77.4
+  ],
+  "trend": "stable",
+  "worst_scan_delta": -0.2
+}
+```
+
+## Structured History
+```json
+{
+  "backlog_by_dimension": {
+    "high_level_elegance": 1,
+    "unknown": 369
+  },
+  "cluster_names": [
+    "agents-notifications-types",
+    "auto/security-B110",
+    "auto/security-B112",
+    "auto/security-B310",
+    "auto/security-B324",
+    "auto/security-B404",
+    "auto/security-B603",
+    "auto/security-B607",
+    "auto/security-log_sensitive",
+    "auto/stale_exclude",
+    "auto/test_coverage-untested_critical",
+    "auto/test_coverage-untested_module",
+    "auto/unused",
+    "browser-security",
+    "cli-api-contracts",
+    "diamond",
+    "error-observability",
+    "naming-tests",
+    "package-hygiene",
+    "search-types-contracts",
+    "storage-watchlist"
+  ],
+  "commit_history": {
+    "committed_issue_count": 0,
+    "latest_note": null,
+    "recent_cluster_names": [],
+    "recent_commits": 0,
+    "total_commits": 0
+  },
+  "completed_clusters": [
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 2,
+      "name": "auto/stale_exclude",
+      "thesis": "Fix 2 stale exclude issues"
+    },
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 4,
+      "name": "storage-watchlist",
+      "thesis": "Storage transaction correctness, the watchlist persistence bugs, the duplicate Deal model and price-trend key consistency; all touch src/storage, src/history or src/intelligence."
+    },
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 5,
+      "name": "agents-notifications-types",
+      "thesis": "Agent lifecycle state, notification callback/optional types, channel construction and osascript hardening; all touch src/agents, src/notifications or src/config."
+    },
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 4,
+      "name": "search-types-contracts",
+      "thesis": "Search-side type and parser contracts in src/searcher: condition normalization, price parsing, currency annotation and untyped accumulators."
+    },
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 5,
+      "name": "cli-api-contracts",
+      "thesis": "CLI request shape, filter-builder error contracts, brand filtering and the monolithic app split; all centre on src/cli/app.py, src/searcher/filters.py and src/output/processor.py."
+    },
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 3,
+      "name": "error-observability",
+      "thesis": "Best-effort browser, processor and watch paths swallow failures without debug logs; all are local logging changes in src/browser/pom, src/output or src/cli/commands."
+    },
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 1,
+      "name": "browser-security",
+      "thesis": "BrowserManager disables TLS verification and web security globally in src/browser/manager.py; make the unsafe parts opt-in through src/config/models.py."
+    },
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 2,
+      "name": "package-hygiene",
+      "thesis": "Declare the optional Excel dependency and standardize package __init__.py files across src; both are packaging hygiene."
+    },
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 6,
+      "name": "naming-tests",
+      "thesis": "Identifier naming, source-coupled and import-only tests, plus the MockLLMClient drift; all are small test or naming changes."
+    },
+    {
+      "completed_at": "2026-11-03T14:51:45+00:00",
+      "issue_count": 1,
+      "name": "diamond",
+      "thesis": "The Diamond Search intermediate payload is discarded in src/searcher/playwright_searcher.py because the result keys do not match RecommendationAgent."
+    }
+  ],
+  "current_dimension_scores": {
+    "AI generated debt": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 77.0,
+          "components": [],
+          "configured_weight": 1.0,
+          "dimension_key": "ai_generated_debt",
+          "failing": 8,
+          "pass_rate": 0.77,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.3
+        }
+      },
+      "failing": 8,
+      "score": 77.0,
+      "strict": 77.0,
+      "tier": 4,
+      "verified_strict_score": 77.0
+    },
+    "API coherence": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 65.0,
+          "components": [],
+          "configured_weight": 1.0,
+          "dimension_key": "api_surface_coherence",
+          "failing": 7,
+          "pass_rate": 0.65,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 3.5
+        }
+      },
+      "failing": 7,
+      "score": 65.0,
+      "strict": 65.0,
+      "tier": 4,
+      "verified_strict_score": 65.0
+    },
+    "Abstraction fit": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 81.5,
+          "component_scores": {
+            "Abstraction Leverage": 80.0,
+            "Definition Directness": 79.0,
+            "Delegation Density": 96.0,
+            "Indirection Cost": 76.0,
+            "Interface Honesty": 68.0,
+            "Type Discipline": 75.0
+          },
+          "components": [
+            "Abstraction Leverage",
+            "Indirection Cost",
+            "Interface Honesty",
+            "Delegation Density",
+            "Definition Directness",
+            "Type Discipline"
+          ],
+          "configured_weight": 8.0,
+          "dimension_key": "abstraction_fitness",
+          "failing": 5,
+          "pass_rate": 0.815,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 1.85
+        }
+      },
+      "failing": 5,
+      "score": 81.5,
+      "strict": 81.5,
+      "tier": 4,
+      "verified_strict_score": 81.5
+    },
+    "Auth consistency": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 76.0,
+          "components": [],
+          "configured_weight": 1.0,
+          "dimension_key": "authorization_consistency",
+          "failing": 6,
+          "pass_rate": 0.76,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.4
+        }
+      },
+      "failing": 6,
+      "score": 76.0,
+      "strict": 76.0,
+      "tier": 4,
+      "verified_strict_score": 76.0
+    },
+    "Code quality": {
+      "checks": 885,
+      "detectors": {
+        "dict_keys": {
+          "failing": 48,
+          "pass_rate": 0.8721311475409836,
+          "potential": 122,
+          "weighted_failures": 15.6
+        },
+        "facade": {
+          "failing": 4,
+          "pass_rate": 0.9770491803278689,
+          "potential": 122,
+          "weighted_failures": 2.8
+        },
+        "flat_dirs": {
+          "failing": 2,
+          "pass_rate": 0.9533333333333334,
+          "potential": 30,
+          "weighted_failures": 1.4
+        },
+        "global_mutable_config": {
+          "failing": 1,
+          "pass_rate": 0.9942622950819672,
+          "potential": 122,
+          "weighted_failures": 0.7
+        },
+        "orphaned": {
+          "failing": 0,
+          "pass_rate": 1.0,
+          "potential": 122,
+          "weighted_failures": 0.0
+        },
+        "private_imports": {
+          "failing": 0,
+          "pass_rate": 1.0,
+          "potential": 122,
+          "weighted_failures": 0.0
+        },
+        "props": {
+          "failing": 0,
+          "pass_rate": 1.0,
+          "potential": 1,
+          "weighted_failures": 0.0
+        },
+        "smells": {
+          "failing": 165,
+          "pass_rate": 0.4213114754098361,
+          "potential": 122,
+          "weighted_failures": 70.6
+        },
+        "unused": {
+          "failing": 25,
+          "pass_rate": 0.7950819672131147,
+          "potential": 122,
+          "weighted_failures": 25.0
+        }
+      },
+      "failing": 245,
+      "score": 86.9,
+      "strict": 79.2,
+      "tier": 3,
+      "verified_strict_score": 86.9
+    },
+    "Contracts": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 74.0,
+          "components": [],
+          "configured_weight": 12.0,
+          "dimension_key": "contract_coherence",
+          "failing": 7,
+          "pass_rate": 0.74,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.6
+        }
+      },
+      "failing": 7,
+      "score": 74.0,
+      "strict": 74.0,
+      "tier": 4,
+      "verified_strict_score": 74.0
+    },
+    "Convention drift": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 86.0,
+          "components": [],
+          "configured_weight": 1.0,
+          "dimension_key": "convention_outlier",
+          "failing": 5,
+          "pass_rate": 0.86,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 1.4
+        }
+      },
+      "failing": 5,
+      "score": 86.0,
+      "strict": 86.0,
+      "tier": 4,
+      "verified_strict_score": 86.0
+    },
+    "Cross-module arch": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 71.0,
+          "components": [],
+          "configured_weight": 1.0,
+          "dimension_key": "cross_module_architecture",
+          "failing": 6,
+          "pass_rate": 0.71,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.9
+        }
+      },
+      "failing": 6,
+      "score": 71.0,
+      "strict": 71.0,
+      "tier": 4,
+      "verified_strict_score": 71.0
+    },
+    "Dep health": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 83.0,
+          "components": [],
+          "configured_weight": 1.0,
+          "dimension_key": "dependency_health",
+          "failing": 2,
+          "pass_rate": 0.83,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 1.7
+        }
+      },
+      "failing": 2,
+      "score": 83.0,
+      "strict": 83.0,
+      "tier": 4,
+      "verified_strict_score": 83.0
+    },
+    "Design coherence": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 73.0,
+          "components": [],
+          "configured_weight": 10.0,
+          "dimension_key": "design_coherence",
+          "failing": 9,
+          "pass_rate": 0.73,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.7
+        }
+      },
+      "failing": 9,
+      "score": 73.0,
+      "strict": 73.0,
+      "tier": 4,
+      "verified_strict_score": 73.0
+    },
+    "Duplication": {
+      "checks": 574,
+      "detectors": {
+        "boilerplate_duplication": {
+          "failing": 13,
+          "pass_rate": 0.35000000000000003,
+          "potential": 14,
+          "weighted_failures": 9.1
+        },
+        "dupes": {
+          "failing": 1,
+          "pass_rate": 0.9994642857142858,
+          "potential": 560,
+          "weighted_failures": 0.3
+        }
+      },
+      "failing": 14,
+      "score": 98.4,
+      "strict": 97.9,
+      "tier": 3,
+      "verified_strict_score": 98.4
+    },
+    "Error consistency": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 76.0,
+          "components": [],
+          "configured_weight": 3.0,
+          "dimension_key": "error_consistency",
+          "failing": 7,
+          "pass_rate": 0.76,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.4
+        }
+      },
+      "failing": 7,
+      "score": 76.0,
+      "strict": 76.0,
+      "tier": 4,
+      "verified_strict_score": 76.0
+    },
+    "File health": {
+      "checks": 122,
+      "detectors": {
+        "structural": {
+          "failing": 12,
+          "pass_rate": 0.9418032786885246,
+          "potential": 122,
+          "weighted_failures": 7.1000000000000005
+        }
+      },
+      "failing": 12,
+      "score": 94.2,
+      "strict": 94.2,
+      "tier": 3,
+      "verified_strict_score": 94.2
+    },
+    "High elegance": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 73.0,
+          "components": [],
+          "configured_weight": 22.0,
+          "dimension_key": "high_level_elegance",
+          "failing": 6,
+          "pass_rate": 0.73,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.7
+        }
+      },
+      "failing": 6,
+      "score": 73.0,
+      "strict": 73.0,
+      "tier": 4,
+      "verified_strict_score": 73.0
+    },
+    "Init coupling": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 83.0,
+          "components": [],
+          "configured_weight": 1.0,
+          "dimension_key": "initialization_coupling",
+          "failing": 4,
+          "pass_rate": 0.83,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 1.7
+        }
+      },
+      "failing": 4,
+      "score": 83.0,
+      "strict": 83.0,
+      "tier": 4,
+      "verified_strict_score": 83.0
+    },
+    "Logic clarity": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 76.0,
+          "components": [],
+          "configured_weight": 6.0,
+          "dimension_key": "logic_clarity",
+          "failing": 10,
+          "pass_rate": 0.76,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.4
+        }
+      },
+      "failing": 10,
+      "score": 76.0,
+      "strict": 76.0,
+      "tier": 4,
+      "verified_strict_score": 76.0
+    },
+    "Low elegance": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 76.0,
+          "components": [],
+          "configured_weight": 12.0,
+          "dimension_key": "low_level_elegance",
+          "failing": 6,
+          "pass_rate": 0.76,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.4
+        }
+      },
+      "failing": 6,
+      "score": 76.0,
+      "strict": 76.0,
+      "tier": 4,
+      "verified_strict_score": 76.0
+    },
+    "Mid elegance": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 73.0,
+          "components": [],
+          "configured_weight": 22.0,
+          "dimension_key": "mid_level_elegance",
+          "failing": 8,
+          "pass_rate": 0.73,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.7
+        }
+      },
+      "failing": 8,
+      "score": 73.0,
+      "strict": 73.0,
+      "tier": 4,
+      "verified_strict_score": 73.0
+    },
+    "Naming quality": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 84.0,
+          "components": [],
+          "configured_weight": 2.0,
+          "dimension_key": "naming_quality",
+          "failing": 8,
+          "pass_rate": 0.84,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 1.6
+        }
+      },
+      "failing": 8,
+      "score": 84.0,
+      "strict": 84.0,
+      "tier": 4,
+      "verified_strict_score": 84.0
+    },
+    "Security": {
+      "checks": 312,
+      "coverage_confidence": 0.6,
+      "coverage_impacts": [
+        {
+          "confidence": 0.6,
+          "detector": "security",
+          "status": "reduced",
+          "summary": "bandit is not installed \u2014 Python-specific security checks will be skipped."
+        }
+      ],
+      "coverage_status": "reduced",
+      "detectors": {
+        "cycles": {
+          "failing": 0,
+          "pass_rate": 1.0,
+          "potential": 122,
+          "weighted_failures": 0.0
+        },
+        "security": {
+          "coverage_confidence": 0.6,
+          "coverage_status": "reduced",
+          "coverage_summary": "bandit is not installed \u2014 Python-specific security checks will be skipped.",
+          "failing": 52,
+          "pass_rate": 0.9352631578947368,
+          "potential": 190,
+          "weighted_failures": 12.3
+        }
+      },
+      "failing": 52,
+      "score": 96.1,
+      "strict": 93.9,
+      "tier": 4,
+      "verified_strict_score": 96.1
+    },
+    "Stale migration": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 78.5,
+          "components": [],
+          "configured_weight": 1.0,
+          "dimension_key": "incomplete_migration",
+          "failing": 8,
+          "pass_rate": 0.785,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.15
+        }
+      },
+      "failing": 8,
+      "score": 78.5,
+      "strict": 78.5,
+      "tier": 4,
+      "verified_strict_score": 78.5
+    },
+    "Structure nav": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 80.0,
+          "components": [],
+          "configured_weight": 5.0,
+          "dimension_key": "package_organization",
+          "failing": 1,
+          "pass_rate": 0.8,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.0
+        }
+      },
+      "failing": 1,
+      "score": 80.0,
+      "strict": 80.0,
+      "tier": 4,
+      "verified_strict_score": 80.0
+    },
+    "Test health": {
+      "checks": 1139,
+      "detectors": {
+        "test_coverage": {
+          "failing": 24,
+          "pass_rate": 0.7914113897390405,
+          "potential": 1139,
+          "weighted_failures": 237.58242708723282
+        }
+      },
+      "failing": 24,
+      "score": 79.1,
+      "strict": 70.7,
+      "tier": 4,
+      "verified_strict_score": 79.1
+    },
+    "Test strategy": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 78.0,
+          "components": [],
+          "configured_weight": 1.0,
+          "dimension_key": "test_strategy",
+          "failing": 5,
+          "pass_rate": 0.78,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 2.2
+        }
+      },
+      "failing": 5,
+      "score": 78.0,
+      "strict": 78.0,
+      "tier": 4,
+      "verified_strict_score": 78.0
+    },
+    "Type safety": {
+      "checks": 10,
+      "detectors": {
+        "subjective_assessment": {
+          "assessment_score": 64.0,
+          "components": [],
+          "configured_weight": 12.0,
+          "dimension_key": "type_safety",
+          "failing": 9,
+          "pass_rate": 0.64,
+          "placeholder": false,
+          "potential": 10,
+          "weighted_failures": 3.6
+        }
+      },
+      "failing": 9,
+      "score": 64.0,
+      "strict": 64.0,
+      "tier": 4,
+      "verified_strict_score": 64.0
+    }
+  },
+  "debt_trajectory": {
+    "current_wontfix": 31,
+    "trend": "stable",
+    "worst_dimension": "Test health",
+    "worst_dimension_gap": 8.4
+  },
+  "deferred_count": 0,
+  "dimension_trajectories": {
+    "AI generated debt": {
+      "headroom": 23.0,
+      "name": "AI generated debt",
+      "recent_investment": 0,
+      "strict_scores": [
+        77.0,
+        77.0,
+        77.0,
+        77.0,
+        77.0
+      ],
+      "trend": "stagnant"
+    },
+    "API coherence": {
+      "headroom": 35.0,
+      "name": "API coherence",
+      "recent_investment": 0,
+      "strict_scores": [
+        66.0,
+        66.0,
+        65.0,
+        65.0,
+        65.0
+      ],
+      "trend": "declining"
+    },
+    "Abstraction fit": {
+      "headroom": 18.5,
+      "name": "Abstraction fit",
+      "recent_investment": 0,
+      "strict_scores": [
+        81.5,
+        81.5,
+        81.5,
+        81.5,
+        81.5
+      ],
+      "trend": "stagnant"
+    },
+    "Auth consistency": {
+      "headroom": 24.0,
+      "name": "Auth consistency",
+      "recent_investment": 0,
+      "strict_scores": [
+        76.0,
+        76.0,
+        76.0,
+        76.0,
+        76.0
+      ],
+      "trend": "stagnant"
+    },
+    "Code quality": {
+      "headroom": 20.8,
+      "name": "Code quality",
+      "recent_investment": 0,
+      "strict_scores": [
+        79.3,
+        79.2,
+        79.2,
+        79.2,
+        79.2
+      ],
+      "trend": "stagnant"
+    },
+    "Contracts": {
+      "headroom": 26.0,
+      "name": "Contracts",
+      "recent_investment": 0,
+      "strict_scores": [
+        74.0,
+        74.0,
+        74.0,
+        74.0,
+        74.0
+      ],
+      "trend": "stagnant"
+    },
+    "Convention drift": {
+      "headroom": 14.0,
+      "name": "Convention drift",
+      "recent_investment": 0,
+      "strict_scores": [
+        86.0,
+        86.0,
+        86.0,
+        86.0,
+        86.0
+      ],
+      "trend": "stagnant"
+    },
+    "Cross-module arch": {
+      "headroom": 29.0,
+      "name": "Cross-module arch",
+      "recent_investment": 0,
+      "strict_scores": [
+        71.0,
+        71.0,
+        71.0,
+        71.0,
+        71.0
+      ],
+      "trend": "stagnant"
+    },
+    "Dep health": {
+      "headroom": 17.0,
+      "name": "Dep health",
+      "recent_investment": 0,
+      "strict_scores": [
+        83.0,
+        83.0,
+        83.0,
+        83.0,
+        83.0
+      ],
+      "trend": "stagnant"
+    },
+    "Design coherence": {
+      "headroom": 27.0,
+      "name": "Design coherence",
+      "recent_investment": 0,
+      "strict_scores": [
+        73.0,
+        73.0,
+        73.0,
+        73.0,
+        73.0
+      ],
+      "trend": "stagnant"
+    },
+    "Duplication": {
+      "headroom": 2.1,
+      "name": "Duplication",
+      "recent_investment": 0,
+      "strict_scores": [
+        97.9,
+        97.9,
+        97.9,
+        97.9,
+        97.9
+      ],
+      "trend": "stagnant"
+    },
+    "Error consistency": {
+      "headroom": 24.0,
+      "name": "Error consistency",
+      "recent_investment": 0,
+      "strict_scores": [
+        80.0,
+        80.0,
+        76.0,
+        76.0,
+        76.0
+      ],
+      "trend": "declining"
+    },
+    "File health": {
+      "headroom": 5.8,
+      "name": "File health",
+      "recent_investment": 0,
+      "strict_scores": [
+        94.3,
+        94.2,
+        94.2,
+        94.2,
+        94.2
+      ],
+      "trend": "stagnant"
+    },
+    "High elegance": {
+      "headroom": 27.0,
+      "name": "High elegance",
+      "recent_investment": 0,
+      "strict_scores": [
+        74.0,
+        74.0,
+        73.0,
+        73.0,
+        73.0
+      ],
+      "trend": "declining"
+    },
+    "Init coupling": {
+      "headroom": 17.0,
+      "name": "Init coupling",
+      "recent_investment": 0,
+      "strict_scores": [
+        83.0,
+        83.0,
+        83.0,
+        83.0,
+        83.0
+      ],
+      "trend": "stagnant"
+    },
+    "Logic clarity": {
+      "headroom": 24.0,
+      "name": "Logic clarity",
+      "recent_investment": 0,
+      "strict_scores": [
+        76.0,
+        76.0,
+        76.0,
+        76.0,
+        76.0
+      ],
+      "trend": "stagnant"
+    },
+    "Low elegance": {
+      "headroom": 24.0,
+      "name": "Low elegance",
+      "recent_investment": 0,
+      "strict_scores": [
+        76.0,
+        76.0,
+        76.0,
+        76.0,
+        76.0
+      ],
+      "trend": "stagnant"
+    },
+    "Mid elegance": {
+      "headroom": 27.0,
+      "name": "Mid elegance",
+      "recent_investment": 0,
+      "strict_scores": [
+        72.0,
+        72.0,
+        73.0,
+        73.0,
+        73.0
+      ],
+      "trend": "improving"
+    },
+    "Naming quality": {
+      "headroom": 16.0,
+      "name": "Naming quality",
+      "recent_investment": 0,
+      "strict_scores": [
+        84.0,
+        84.0,
+        84.0,
+        84.0,
+        84.0
+      ],
+      "trend": "stagnant"
+    },
+    "Security": {
+      "headroom": 6.1,
+      "name": "Security",
+      "recent_investment": 0,
+      "strict_scores": [
+        93.6,
+        93.9,
+        93.9,
+        93.9,
+        93.9
+      ],
+      "trend": "stagnant"
+    },
+    "Stale migration": {
+      "headroom": 21.5,
+      "name": "Stale migration",
+      "recent_investment": 0,
+      "strict_scores": [
+        78.5,
+        78.5,
+        78.5,
+        78.5,
+        78.5
+      ],
+      "trend": "stagnant"
+    },
+    "Structure nav": {
+      "headroom": 20.0,
+      "name": "Structure nav",
+      "recent_investment": 0,
+      "strict_scores": [
+        80.0,
+        80.0,
+        80.0,
+        80.0,
+        80.0
+      ],
+      "trend": "stagnant"
+    },
+    "Test health": {
+      "headroom": 29.3,
+      "name": "Test health",
+      "recent_investment": 0,
+      "strict_scores": [
+        69.8,
+        70.7,
+        70.7,
+        70.7,
+        70.7
+      ],
+      "trend": "improving"
+    },
+    "Test strategy": {
+      "headroom": 22.0,
+      "name": "Test strategy",
+      "recent_investment": 0,
+      "strict_scores": [
+        76.0,
+        76.0,
+        78.0,
+        78.0,
+        78.0
+      ],
+      "trend": "improving"
+    },
+    "Type safety": {
+      "headroom": 36.0,
+      "name": "Type safety",
+      "recent_investment": 0,
+      "strict_scores": [
+        63.0,
+        63.0,
+        64.0,
+        67.0,
+        64.0
+      ],
+      "trend": "improving"
+    }
+  },
+  "execution_patterns": {
+    "avg_cluster_size": 0.0,
+    "skip_rate": 0.174,
+    "total_done": 86,
+    "total_resolved": 66,
+    "total_skipped": 32
+  },
+  "file_churn": [
+    {
+      "current_open_count": 127,
+      "detectors": [
+        "review",
+        "subjective_review"
+      ],
+      "file": ".",
+      "resolved_count": 256
+    },
+    {
+      "current_open_count": 21,
+      "detectors": [
+        "dict_keys",
+        "security",
+        "smells",
+        "test_coverage",
+        "unused"
+      ],
+      "file": "src/history/watchlist.py",
+      "resolved_count": 15
+    },
+    {
+      "current_open_count": 14,
+      "detectors": [
+        "security",
+        "smells"
+      ],
+      "file": "src/scheduler/tasks.py",
+      "resolved_count": 12
+    },
+    {
+      "current_open_count": 20,
+      "detectors": [
+        "dict_keys",
+        "smells",
+        "structural"
+      ],
+      "file": "src/storage/manager.py",
+      "resolved_count": 1
+    },
+    {
+      "current_open_count": 15,
+      "detectors": [
+        "dict_keys",
+        "smells",
+        "structural",
+        "test_coverage",
+        "unused"
+      ],
+      "file": "src/cli/commands/history.py",
+      "resolved_count": 4
+    },
+    {
+      "current_open_count": 7,
+      "detectors": [
+        "security",
+        "smells",
+        "test_coverage",
+        "unused"
+      ],
+      "file": "src/cli/commands/watch.py",
+      "resolved_count": 12
+    },
+    {
+      "current_open_count": 10,
+      "detectors": [
+        "security",
+        "smells",
+        "test_coverage"
+      ],
+      "file": "src/notifications/channels/system.py",
+      "resolved_count": 8
+    },
+    {
+      "current_open_count": 6,
+      "detectors": [
+        "security",
+        "smells"
+      ],
+      "file": "src/cli/commands/monitor.py",
+      "resolved_count": 8
+    },
+    {
+      "current_open_count": 9,
+      "detectors": [
+        "signature",
+        "smells",
+        "structural",
+        "test_coverage"
+      ],
+      "file": "scripts/login.py",
+      "resolved_count": 1
+    },
+    {
+      "current_open_count": 8,
+      "detectors": [
+        "dict_keys",
+        "smells",
+        "structural"
+      ],
+      "file": "src/output/processor.py",
+      "resolved_count": 2
+    },
+    {
+      "current_open_count": 5,
+      "detectors": [
+        "security",
+        "smells",
+        "structural"
+      ],
+      "file": "src/llm/client.py",
+      "resolved_count": 4
+    },
+    {
+      "current_open_count": 3,
+      "detectors": [
+        "security",
+        "smells",
+        "uncalled_functions",
+        "unused"
+      ],
+      "file": "src/agents/coordinator.py",
+      "resolved_count": 4
+    },
+    {
+      "current_open_count": 3,
+      "detectors": [
+        "security",
+        "smells",
+        "test_coverage"
+      ],
+      "file": "src/browser/pom/base.py",
+      "resolved_count": 4
+    },
+    {
+      "current_open_count": 4,
+      "detectors": [
+        "boilerplate_duplication",
+        "smells"
+      ],
+      "file": "src/searcher/adapters/bazos.py",
+      "resolved_count": 2
+    },
+    {
+      "current_open_count": 2,
+      "detectors": [
+        "private_imports",
+        "smells"
+      ],
+      "file": "src/searcher/adapters/base.py",
+      "resolved_count": 1
+    },
+    {
+      "current_open_count": 1,
+      "detectors": [
+        "single_use",
+        "smells"
+      ],
+      "file": "src/llm/health.py",
+      "resolved_count": 1
+    },
+    {
+      "current_open_count": 1,
+      "detectors": [
+        "smells",
+        "test_coverage"
+      ],
+      "file": "src/notifications/channels/webhook.py",
+      "resolved_count": 1
+    },
+    {
+      "current_open_count": 1,
+      "detectors": [
+        "smells",
+        "test_coverage"
+      ],
+      "file": "src/notifications/rules.py",
+      "resolved_count": 1
+    },
+    {
+      "current_open_count": 1,
+      "detectors": [
+        "test_coverage",
+        "unused"
+      ],
+      "file": "src/output/charts.py",
+      "resolved_count": 1
+    },
+    {
+      "current_open_count": 1,
+      "detectors": [
+        "smells"
+      ],
+      "file": "src/agents/base.py",
+      "resolved_count": 1
+    }
+  ],
+  "open_issue_count": 496,
+  "prioritized_ids": [
+    "review::.::holistic::authorization_consistency::browser_security_disabled_globally",
+    "review::.::holistic::dependency_health::undeclared-openpyxl-optional",
+    "review::.::holistic::naming_quality::opaque_private_helpers",
+    "review::.::holistic::abstraction_fitness::adapter_search_flow_duplicated",
+    "review::.::holistic::abstraction_fitness::agent_base_messagebus_bypassed",
+    "review::.::holistic::abstraction_fitness::cli_search_request_not_adopted",
+    "review::.::holistic::abstraction_fitness::dead_command_wrapper_modules",
+    "review::.::holistic::abstraction_fitness::pom_alias_package_unused",
+    "review::.::holistic::ai_generated_debt::adapter_flow_duplication",
+    "review::.::holistic::ai_generated_debt::dead_result_dataclasses",
+    "review::.::holistic::ai_generated_debt::defensive_getattr_on_typed_fields",
+    "review::.::holistic::ai_generated_debt::duplicate_csv_xlsx_row_building",
+    "review::.::holistic::ai_generated_debt::message_bus_noop_scaffolding",
+    "review::.::holistic::ai_generated_debt::notification_channel_init_swallows_errors",
+    "review::.::holistic::ai_generated_debt::unused_cli_wrappers",
+    "review::.::holistic::ai_generated_debt::watchlist_placeholder_pipeline",
+    "review::.::holistic::api_surface_coherence::watchlist_check_async_nested_event_loop",
+    "review::.::holistic::authorization_consistency::email_starttls_unverified",
+    "review::.::holistic::authorization_consistency::gemini_api_key_logged",
+    "review::.::holistic::authorization_consistency::login_gate_file_presence_only",
+    "review::.::holistic::authorization_consistency::login_policy_config_ignored",
+    "review::.::holistic::authorization_consistency::storage_state_dead_config",
+    "review::.::holistic::contract_coherence::alert_rule_condition_not_a_type",
+    "review::.::holistic::contract_coherence::browser_cdp_contract_drift",
+    "review::.::holistic::contract_coherence::console_channel_missing_name",
+    "review::.::holistic::contract_coherence::currency_rates_ignored_in_symbol_path",
+    "review::.::holistic::contract_coherence::history_price_history_missing_method",
+    "review::.::holistic::contract_coherence::implicit_optional_api_defaults",
+    "review::.::holistic::contract_coherence::watchlist_add_item_positional_mismatch",
+    "review::.::holistic::convention_outlier::adapter_block_detection_opt_out",
+    "review::.::holistic::convention_outlier::adapter_price_quote_opt_out",
+    "review::.::holistic::convention_outlier::agent_base_protocol_bypass",
+    "review::.::holistic::convention_outlier::cli_command_organization_split",
+    "review::.::holistic::convention_outlier::legacy_storage_domain_models",
+    "review::.::holistic::cross_module_architecture::config_mutates_global_currency_rates",
+    "review::.::holistic::cross_module_architecture::duplicate_deal_and_history_models",
+    "review::.::holistic::cross_module_architecture::llm_client_owns_domain_policy",
+    "review::.::holistic::cross_module_architecture::orphan_pom_and_selector_stacks",
+    "review::.::holistic::cross_module_architecture::searcher_package_hub_cycles",
+    "review::.::holistic::cross_module_architecture::site_metadata_and_status_split",
+    "review::.::holistic::dependency_health::conflicting-transitive-pins",
+    "review::.::holistic::design_coherence::cli_helper_naming_drift_nameerror",
+    "review::.::holistic::design_coherence::cli_positional_parameter_chain",
+    "review::.::holistic::design_coherence::cli_search_pipeline_triplication",
+    "review::.::holistic::design_coherence::cookie_consent_selector_triplication",
+    "review::.::holistic::design_coherence::discover_site_multi_responsibility",
+    "review::.::holistic::design_coherence::domain_expert_hardcoded_drone_rules",
+    "review::.::holistic::design_coherence::llm_provider_call_duplication",
+    "review::.::holistic::design_coherence::notification_channel_wiring_copy_paste",
+    "review::.::holistic::design_coherence::save_results_multi_responsibility",
+    "review::.::holistic::error_consistency::cli_file_input_traceback",
+    "review::.::holistic::error_consistency::coordinator_error_flattening",
+    "review::.::holistic::error_consistency::domain_override_unvalidated",
+    "review::.::holistic::error_consistency::site_failure_omitted_from_plan",
+    "review::.::holistic::error_consistency::watchlist_save_silent_failure",
+    "review::.::holistic::incomplete_migration::cli_split_incomplete",
+    "review::.::holistic::incomplete_migration::comparable_price_dual_api",
+    "review::.::holistic::incomplete_migration::legacy_llm_config_keys",
+    "review::.::holistic::incomplete_migration::legacy_search_command",
+    "review::.::holistic::incomplete_migration::mock_client_stale_api",
+    "review::.::holistic::incomplete_migration::number_parser_duplicate",
+    "review::.::holistic::incomplete_migration::selector_table_duplicate",
+    "review::.::holistic::incomplete_migration::test_only_compat_aliases",
+    "review::.::holistic::initialization_coupling::currency_rates_global_side_effect",
+    "review::.::holistic::initialization_coupling::selector_health_import_io",
+    "review::.::holistic::initialization_coupling::silent_agent_import_guard",
+    "review::.::holistic::initialization_coupling::timeout_module_getattr_shim",
+    "review::.::holistic::logic_clarity::cdp_close_closes_user_context",
+    "review::.::holistic::logic_clarity::change_threshold_ignored",
+    "review::.::holistic::logic_clarity::currency_rates_bypassed",
+    "review::.::holistic::logic_clarity::doctor_calls_missing_function",
+    "review::.::holistic::logic_clarity::monitor_channel_ctor_crash",
+    "review::.::holistic::logic_clarity::notify_never_sends",
+    "review::.::holistic::logic_clarity::selector_health_decay_dead_branch",
+    "review::.::holistic::logic_clarity::watch_report_missing_stock_key",
+    "review::.::holistic::logic_clarity::watchlist_add_threshold_mispassed",
+    "review::.::holistic::logic_clarity::watchlist_alert_path_unreachable",
+    "review::.::holistic::low_level_elegance::adapter_search_skeleton_duplicated",
+    "review::.::holistic::low_level_elegance::change_report_builder_duplicated",
+    "review::.::holistic::low_level_elegance::duplicated_price_number_parsing",
+    "review::.::holistic::low_level_elegance::processor_export_schema_duplicated",
+    "review::.::holistic::low_level_elegance::trust_for_noop_branches",
+    "review::.::holistic::low_level_elegance::watchlist_dead_price_check_scaffolding",
+    "review::.::holistic::naming_quality::agentbase_not_agent_base",
+    "review::.::holistic::naming_quality::domain_matches_returns_score",
+    "review::.::holistic::naming_quality::duplicate_record_model_names",
+    "review::.::holistic::naming_quality::generic_domain_get",
+    "review::.::holistic::naming_quality::notify_does_not_notify",
+    "review::.::holistic::naming_quality::site_identity_vocabulary",
+    "review::.::holistic::naming_quality::spelling_drift_british_american",
+    "review::.::holistic::package_organization::site_profiles_dir_shadows_module",
+    "review::.::holistic::api_surface_coherence::browser_get_browser_union_return",
+    "review::.::holistic::api_surface_coherence::cli_duplicate_wide_signatures",
+    "review::.::holistic::api_surface_coherence::doctor_undefined_async_helper",
+    "review::.::holistic::api_surface_coherence::llm_failure_returns_user_prompt",
+    "review::.::holistic::api_surface_coherence::llm_public_surface_undefined",
+    "review::.::holistic::api_surface_coherence::watchlist_check_prices_no_op",
+    "review::.::holistic::error_consistency::adapter_failure_as_empty_results",
+    "review::.::holistic::error_consistency::config_load_uncaught",
+    "review::.::holistic::high_level_elegance::cli_command_ownership_split",
+    "review::.::holistic::high_level_elegance::parallel_search_cycles",
+    "review::.::holistic::high_level_elegance::price_analytics_ownership",
+    "review::.::holistic::high_level_elegance::research_and_site_selection_duplication",
+    "review::.::holistic::high_level_elegance::result_processor_scope",
+    "review::.::holistic::mid_level_elegance::analytics_sql_bypasses_storage_api",
+    "review::.::holistic::mid_level_elegance::cli_search_orchestration_duplicated",
+    "review::.::holistic::mid_level_elegance::deal_storage_implicit_attribute_contract",
+    "review::.::holistic::mid_level_elegance::diamond_outputs_not_consumed",
+    "review::.::holistic::mid_level_elegance::diamond_price_payload_nesting",
+    "review::.::holistic::mid_level_elegance::llm_agent_chat_contract_mismatch",
+    "review::.::holistic::mid_level_elegance::watch_command_bypasses_browser_adapter_stack",
+    "review::.::holistic::mid_level_elegance::watchlist_check_path_is_stub",
+    "review::.::holistic::test_strategy::no_ci_or_coverage_gate",
+    "review::.::holistic::test_strategy::notification_channels_untested",
+    "review::.::holistic::test_strategy::operational_paths_untested",
+    "review::.::holistic::test_strategy::vacuous_and_source_text_tests",
+    "review::.::holistic::test_strategy::watchlist_price_check_untested",
+    "review::.::holistic::type_safety::agent_deal_dict_shadow",
+    "review::.::holistic::type_safety::duplicate_price_history_types",
+    "review::.::holistic::type_safety::enum_bypass_domain_model",
+    "review::.::holistic::type_safety::output_format_type_ignore",
+    "review::.::holistic::type_safety::public_api_annotation_gaps",
+    "review::.::holistic::type_safety::site_status_raw_string",
+    "review::.::holistic::type_safety::sitehome_goto_override",
+    "review::.::holistic::type_safety::undeclared_deal_attributes",
+    "review::.::holistic::type_safety::untyped_deal_metadata"
+  ],
+  "promoted_count": 0,
+  "recurring_patterns": {
+    "abstraction_fitness": {
+      "open": [
+        "review::.::holistic::abstraction_fitness::cli_search_request_not_adopted",
+        "review::.::holistic::abstraction_fitness::pom_alias_package_unused",
+        "review::.::holistic::abstraction_fitness::agent_base_messagebus_bypassed",
+        "review::.::holistic::abstraction_fitness::adapter_search_flow_duplicated",
+        "review::.::holistic::abstraction_fitness::dead_command_wrapper_modules"
+      ],
+      "resolved": [
+        "review::.::holistic::abstraction_fitness::price_tracker_delegation",
+        "review::.::holistic::abstraction_fitness::enum_bypass_raw_strings",
+        "review::.::holistic::abstraction_fitness::dead_facade_modules",
+        "review::.::holistic::abstraction_fitness::wide_param_bags_cli",
+        "review::.::holistic::abstraction_fitness::strip_diacritics_alias",
+        "review::.::holistic::abstraction_fitness::search_request_not_adopted",
+        "review::.::holistic::abstraction_fitness::thin_normalise_wrappers",
+        "review::.::holistic::abstraction_fitness::cli_loose_filter_params",
+        "review::.::holistic::abstraction_fitness::filters_as_dict_untyped"
+      ]
+    },
+    "ai_generated_debt": {
+      "open": [
+        "review::.::holistic::ai_generated_debt::adapter_flow_duplication",
+        "review::.::holistic::ai_generated_debt::defensive_getattr_on_typed_fields",
+        "review::.::holistic::ai_generated_debt::dead_result_dataclasses",
+        "review::.::holistic::ai_generated_debt::watchlist_placeholder_pipeline",
+        "review::.::holistic::ai_generated_debt::notification_channel_init_swallows_errors",
+        "review::.::holistic::ai_generated_debt::duplicate_csv_xlsx_row_building",
+        "review::.::holistic::ai_generated_debt::unused_cli_wrappers",
+        "review::.::holistic::ai_generated_debt::message_bus_noop_scaffolding"
+      ],
+      "resolved": [
+        "review::.::holistic::ai_generated_debt::pass_through_chat_wrapper",
+        "review::.::holistic::ai_generated_debt::dead_discarded_pct_change_detector",
+        "review::.::holistic::ai_generated_debt::dead_discarded_path_scheduler",
+        "review::.::holistic::ai_generated_debt::copied_adapter_error_boilerplate",
+        "review::.::holistic::ai_generated_debt::bloated_docstring_chat",
+        "review::.::holistic::ai_generated_debt::adapter_error_boilerplate",
+        "review::.::holistic::ai_generated_debt::client_redundant_comment"
+      ]
+    },
+    "api_surface_coherence": {
+      "open": [
+        "review::.::holistic::api_surface_coherence::watchlist_check_async_nested_event_loop",
+        "review::.::holistic::api_surface_coherence::doctor_undefined_async_helper",
+        "review::.::holistic::api_surface_coherence::watchlist_check_prices_no_op",
+        "review::.::holistic::api_surface_coherence::llm_public_surface_undefined",
+        "review::.::holistic::api_surface_coherence::llm_failure_returns_user_prompt",
+        "review::.::holistic::api_surface_coherence::cli_duplicate_wide_signatures",
+        "review::.::holistic::api_surface_coherence::browser_get_browser_union_return"
+      ],
+      "resolved": [
+        "review::.::holistic::api_surface_coherence::orchestrator_judge_deals_async_gen",
+        "review::.::holistic::api_surface_coherence::vlm_extract_listings_double_json",
+        "review::.::holistic::api_surface_coherence::notification_send_alert_mutable_default",
+        "review::.::holistic::api_surface_coherence::vlm_client_high_arity_constructor",
+        "review::.::holistic::api_surface_coherence::run_search_wide_parameter_list",
+        "review::.::holistic::api_surface_coherence::llm_client_mixed_sync_async_public_api",
+        "review::.::holistic::api_surface_coherence::vlm_client_overloaded_constructor",
+        "review::.::holistic::api_surface_coherence::storage_manager_inconsistent_lookup_naming",
+        "review::.::holistic::api_surface_coherence::filters_dual_resolver_overlap",
+        "review::.::holistic::api_surface_coherence::cli_wide_command_signatures",
+        "review::.::holistic::api_surface_coherence::llm_private_method_leakage",
+        "review::.::holistic::api_surface_coherence::llm_mixed_sync_async_naming",
+        "review::.::holistic::api_surface_coherence::filter_builders_inconsistent_contracts",
+        "review::.::holistic::api_surface_coherence::cli_doctor_undefined_async_helper",
+        "review::.::holistic::api_surface_coherence::llm_no_public_chat_surface",
+        "review::.::holistic::api_surface_coherence::mock_llm_missing_public_methods",
+        "review::.::holistic::api_surface_coherence::cli_positional_parameter_sprawl",
+        "review::.::holistic::api_surface_coherence::lenient_filter_builders_raise",
+        "review::.::holistic::api_surface_coherence::adapter_block_error_contract_uneven",
+        "review::.::holistic::api_surface_coherence::duplicate_cli_command_entry_points"
+      ]
+    },
+    "authorization_consistency": {
+      "open": [
+        "review::.::holistic::authorization_consistency::browser_security_disabled_globally",
+        "review::.::holistic::authorization_consistency::gemini_api_key_logged",
+        "review::.::holistic::authorization_consistency::email_starttls_unverified",
+        "review::.::holistic::authorization_consistency::login_policy_config_ignored",
+        "review::.::holistic::authorization_consistency::login_gate_file_presence_only",
+        "review::.::holistic::authorization_consistency::storage_state_dead_config"
+      ],
+      "resolved": [
+        "review::.::holistic::authorization_consistency::system_channel_shell_injection",
+        "review::.::holistic::authorization_consistency::windows_scheduler_unquoted_interpolation",
+        "review::.::holistic::authorization_consistency::profile_secret_allowlist_incomplete",
+        "review::.::holistic::authorization_consistency::sanitizer_secret_key_asymmetry",
+        "review::.::holistic::authorization_consistency::login_state_terminology_split",
+        "review::.::holistic::authorization_consistency::system_channel_osascript_escaping_gap"
+      ]
+    },
+    "contract_coherence": {
+      "open": [
+        "review::.::holistic::contract_coherence::console_channel_missing_name",
+        "review::.::holistic::contract_coherence::history_price_history_missing_method",
+        "review::.::holistic::contract_coherence::currency_rates_ignored_in_symbol_path",
+        "review::.::holistic::contract_coherence::browser_cdp_contract_drift",
+        "review::.::holistic::contract_coherence::alert_rule_condition_not_a_type",
+        "review::.::holistic::contract_coherence::implicit_optional_api_defaults",
+        "review::.::holistic::contract_coherence::watchlist_add_item_positional_mismatch"
+      ],
+      "resolved": [
+        "review::.::holistic::contract_coherence::currency_to_eur_default_rates_docstring",
+        "review::.::holistic::contract_coherence::record_price_sighting_return_type",
+        "review::.::holistic::contract_coherence::browser_manager_get_page_untyped",
+        "review::.::holistic::contract_coherence::agents_get_history_message_type_contract",
+        "review::.::holistic::contract_coherence::price_tracker_record_sighting_return_type",
+        "review::.::holistic::contract_coherence::agent_base_run_is_running_never_true",
+        "review::.::holistic::contract_coherence::price_trend_fallback_key_mismatch",
+        "review::.::holistic::contract_coherence::to_eur_amount_optional_untyped"
+      ]
+    },
+    "convention_outlier": {
+      "open": [
+        "review::.::holistic::convention_outlier::agent_base_protocol_bypass",
+        "review::.::holistic::convention_outlier::adapter_block_detection_opt_out",
+        "review::.::holistic::convention_outlier::adapter_price_quote_opt_out",
+        "review::.::holistic::convention_outlier::cli_command_organization_split",
+        "review::.::holistic::convention_outlier::legacy_storage_domain_models"
+      ],
+      "resolved": [
+        "review::.::holistic::convention_outlier::legacy_shim_incomplete_exports",
+        "review::.::holistic::convention_outlier::console_channel_missing_logging",
+        "review::.::holistic::convention_outlier::product_card_style_island",
+        "review::.::holistic::convention_outlier::agents_analysis_shim_incomplete_reexport",
+        "review::.::holistic::convention_outlier::console_channel_no_logger",
+        "review::.::holistic::convention_outlier::product_card_standalone_parser"
+      ]
+    },
+    "cross_module_architecture": {
+      "open": [
+        "review::.::holistic::cross_module_architecture::searcher_package_hub_cycles",
+        "review::.::holistic::cross_module_architecture::duplicate_deal_and_history_models",
+        "review::.::holistic::cross_module_architecture::llm_client_owns_domain_policy",
+        "review::.::holistic::cross_module_architecture::config_mutates_global_currency_rates",
+        "review::.::holistic::cross_module_architecture::site_metadata_and_status_split",
+        "review::.::holistic::cross_module_architecture::orphan_pom_and_selector_stacks"
+      ],
+      "resolved": [
+        "review::.::holistic::cross_module_architecture::private_cli_doctor_import",
+        "review::.::holistic::cross_module_architecture::private_cli_run_import",
+        "review::.::holistic::cross_module_architecture::cli_app_god_module",
+        "review::.::holistic::cross_module_architecture::cli_private_doctor_import",
+        "review::.::holistic::cross_module_architecture::cli_private_run_import",
+        "review::.::holistic::cross_module_architecture::cli_app_hub_module",
+        "review::.::holistic::cross_module_architecture::adapters_filter_engine_circular_import",
+        "review::.::holistic::cross_module_architecture::agents_analysis_dead_shim",
+        "review::.::holistic::cross_module_architecture::private_currency_helper_import"
+      ]
+    },
+    "dependency_health": {
+      "open": [
+        "review::.::holistic::dependency_health::undeclared-openpyxl-optional",
+        "review::.::holistic::dependency_health::conflicting-transitive-pins"
+      ],
+      "resolved": [
+        "review::.::holistic::dependency_health::unused-markdown-dep",
+        "review::.::holistic::dependency_health::undeclared-httpx",
+        "review::.::holistic::dependency_health::inconsistent-setup-metadata",
+        "review::.::holistic::dependency_health::circular-adapter-filter-import",
+        "review::.::holistic::dependency_health::multiple-http-clients",
+        "review::.::holistic::dependency_health::unused-markdown-dependency",
+        "review::.::holistic::dependency_health::undeclared-httpx-runtime-dependency",
+        "review::.::holistic::dependency_health::setup-py-dependency-drift",
+        "review::.::holistic::dependency_health::adapter-filter-engine-circular-import",
+        "review::.::holistic::dependency_health::multiple-http-client-libraries",
+        "review::.::holistic::dependency_health::stale-markdown-in-requirements"
+      ]
+    },
+    "design_coherence": {
+      "open": [
+        "review::.::holistic::design_coherence::cli_search_pipeline_triplication",
+        "review::.::holistic::design_coherence::cli_positional_parameter_chain",
+        "review::.::holistic::design_coherence::save_results_multi_responsibility",
+        "review::.::holistic::design_coherence::llm_provider_call_duplication",
+        "review::.::holistic::design_coherence::cookie_consent_selector_triplication",
+        "review::.::holistic::design_coherence::notification_channel_wiring_copy_paste",
+        "review::.::holistic::design_coherence::domain_expert_hardcoded_drone_rules",
+        "review::.::holistic::design_coherence::discover_site_multi_responsibility",
+        "review::.::holistic::design_coherence::cli_helper_naming_drift_nameerror"
+      ],
+      "resolved": [
+        "review::.::holistic::design_coherence::cli_app_mixed_responsibilities",
+        "review::.::holistic::design_coherence::output_processor_monolith",
+        "review::.::holistic::design_coherence::orphaned_orchestrator_dead_code",
+        "review::.::holistic::design_coherence::vlm_client_constructor_param_sprawl",
+        "review::.::holistic::design_coherence::silent_exception_handlers_design_smell",
+        "review::.::holistic::design_coherence::vlm_client_wide_constructor",
+        "review::.::holistic::design_coherence::llm_client_large_file",
+        "review::.::holistic::design_coherence::playwright_searcher_large_file",
+        "review::.::holistic::design_coherence::local_coordinator_complexity",
+        "review::.::holistic::design_coherence::filter_engine_complexity",
+        "review::.::holistic::design_coherence::orphaned_search_orchestrator",
+        "review::.::holistic::design_coherence::coordinator_dead_synthesis",
+        "review::.::holistic::design_coherence::coordinator_duplicated_extract"
+      ]
+    },
+    "error_consistency": {
+      "open": [
+        "review::.::holistic::error_consistency::coordinator_error_flattening",
+        "review::.::holistic::error_consistency::watchlist_save_silent_failure",
+        "review::.::holistic::error_consistency::site_failure_omitted_from_plan",
+        "review::.::holistic::error_consistency::cli_file_input_traceback",
+        "review::.::holistic::error_consistency::domain_override_unvalidated",
+        "review::.::holistic::error_consistency::config_load_uncaught",
+        "review::.::holistic::error_consistency::adapter_failure_as_empty_results"
+      ],
+      "resolved": [
+        "review::.::holistic::error_consistency::monitor_report_path_before_assignment",
+        "review::.::holistic::error_consistency::watch_deal_import_wrong_module",
+        "review::.::holistic::error_consistency::monitor_channel_init_silent_swallow",
+        "review::.::holistic::error_consistency::orchestrator_site_errors_lose_context",
+        "review::.::holistic::error_consistency::monitor_alert_report_path_before_defined",
+        "review::.::holistic::error_consistency::watch_price_history_deal_import",
+        "review::.::holistic::error_consistency::notification_channel_init_swallows_exceptions",
+        "review::.::holistic::error_consistency::per_site_search_failure_no_exc_info",
+        "review::.::holistic::error_consistency::monitor_mislabeled_channel_init",
+        "review::.::holistic::error_consistency::watch_silent_exception_swallowing",
+        "review::.::holistic::error_consistency::processor_nested_silent_storage_init",
+        "review::.::holistic::error_consistency::pom_base_silent_broad_catches",
+        "review::.::holistic::error_consistency::watch_silent_extraction",
+        "review::.::holistic::error_consistency::processor_chart_init_silent",
+        "review::.::holistic::error_consistency::pom_silent_catches"
+      ]
+    },
+    "high_level_elegance": {
+      "open": [
+        "review::.::holistic::high_level_elegance::readme_architecture_drift",
+        "review::.::holistic::high_level_elegance::cli_command_ownership_split",
+        "review::.::holistic::high_level_elegance::parallel_search_cycles",
+        "review::.::holistic::high_level_elegance::price_analytics_ownership",
+        "review::.::holistic::high_level_elegance::research_and_site_selection_duplication",
+        "review::.::holistic::high_level_elegance::result_processor_scope"
+      ],
+      "resolved": [
+        "review::.::holistic::high_level_elegance::dead_orchestrator_vlm_subsystem",
+        "review::.::holistic::high_level_elegance::empty_searcher_pom_dir",
+        "review::.::holistic::high_level_elegance::large_facade_reexports",
+        "review::.::holistic::high_level_elegance::inconsistent_package_init",
+        "review::.::holistic::high_level_elegance::monolithic_cli_app",
+        "review::.::holistic::high_level_elegance::cli_command_layer_split",
+        "review::.::holistic::high_level_elegance::duplicate_search_cycles",
+        "review::.::holistic::high_level_elegance::price_analytics_sprawl",
+        "review::.::holistic::high_level_elegance::mixed_package_init_policy"
+      ]
+    },
+    "incomplete_migration": {
+      "open": [
+        "review::.::holistic::incomplete_migration::cli_split_incomplete",
+        "review::.::holistic::incomplete_migration::legacy_search_command",
+        "review::.::holistic::incomplete_migration::comparable_price_dual_api",
+        "review::.::holistic::incomplete_migration::number_parser_duplicate",
+        "review::.::holistic::incomplete_migration::test_only_compat_aliases",
+        "review::.::holistic::incomplete_migration::legacy_llm_config_keys",
+        "review::.::holistic::incomplete_migration::selector_table_duplicate",
+        "review::.::holistic::incomplete_migration::mock_client_stale_api"
+      ],
+      "resolved": [
+        "review::.::holistic::incomplete_migration::stale_agents_analysis_shim",
+        "review::.::holistic::incomplete_migration::unused_browser_connect_alias",
+        "review::.::holistic::incomplete_migration::dead_llm_sync_compat_methods",
+        "review::.::holistic::incomplete_migration::llmconfig_duplicate_dead_legacy_fields",
+        "review::.::holistic::incomplete_migration::inconsistent_package_reexport_migration",
+        "review::.::holistic::incomplete_migration::duplicate_and_legacy_llm_config_fields",
+        "review::.::holistic::incomplete_migration::dual_llm_cloud_fallback_paths",
+        "review::.::holistic::incomplete_migration::unused_sync_llm_wrappers",
+        "review::.::holistic::incomplete_migration::unused_browser_connect_shim",
+        "review::.::holistic::incomplete_migration::os_path_remnants_in_cli_config"
+      ]
+    },
+    "initialization_coupling": {
+      "open": [
+        "review::.::holistic::initialization_coupling::selector_health_import_io",
+        "review::.::holistic::initialization_coupling::currency_rates_global_side_effect",
+        "review::.::holistic::initialization_coupling::timeout_module_getattr_shim",
+        "review::.::holistic::initialization_coupling::silent_agent_import_guard"
+      ],
+      "resolved": [
+        "review::.::holistic::initialization_coupling::stale_env_timeout_constants",
+        "review::.::holistic::initialization_coupling::mutable_global_rate_table",
+        "review::.::holistic::initialization_coupling::stale_llm_env_constants",
+        "review::.::holistic::initialization_coupling::currency_global_rate_table",
+        "review::.::holistic::initialization_coupling::gemini_min_output_tokens_stale_import_snapshot",
+        "review::.::holistic::initialization_coupling::currency_rates_global_mutable_singleton"
+      ]
+    },
+    "logic_clarity": {
+      "open": [
+        "review::.::holistic::logic_clarity::doctor_calls_missing_function",
+        "review::.::holistic::logic_clarity::monitor_channel_ctor_crash",
+        "review::.::holistic::logic_clarity::watchlist_add_threshold_mispassed",
+        "review::.::holistic::logic_clarity::watchlist_alert_path_unreachable",
+        "review::.::holistic::logic_clarity::watch_report_missing_stock_key",
+        "review::.::holistic::logic_clarity::selector_health_decay_dead_branch",
+        "review::.::holistic::logic_clarity::change_threshold_ignored",
+        "review::.::holistic::logic_clarity::currency_rates_bypassed",
+        "review::.::holistic::logic_clarity::cdp_close_closes_user_context",
+        "review::.::holistic::logic_clarity::notify_never_sends"
+      ],
+      "resolved": [
+        "review::.::holistic::logic_clarity::orchestrator_await_async_generator",
+        "review::.::holistic::logic_clarity::orchestrator_undefined_prompt",
+        "review::.::holistic::logic_clarity::watchlist_price_drop_unreachable",
+        "review::.::holistic::logic_clarity::watchlist_send_alert_missing_url_hash",
+        "review::.::holistic::logic_clarity::watchlist_check_prices_returns_empty",
+        "review::.::holistic::logic_clarity::async_methods_never_await",
+        "review::.::holistic::logic_clarity::watchlist_drop_check_after_update",
+        "review::.::holistic::logic_clarity::orchestrator_enriched_shape_mismatch",
+        "review::.::holistic::logic_clarity::async_helpers_without_await",
+        "review::.::holistic::logic_clarity::unreachable_legacy_block_in_score_deals"
+      ]
+    },
+    "low_level_elegance": {
+      "open": [
+        "review::.::holistic::low_level_elegance::duplicated_price_number_parsing",
+        "review::.::holistic::low_level_elegance::adapter_search_skeleton_duplicated",
+        "review::.::holistic::low_level_elegance::change_report_builder_duplicated",
+        "review::.::holistic::low_level_elegance::watchlist_dead_price_check_scaffolding",
+        "review::.::holistic::low_level_elegance::trust_for_noop_branches",
+        "review::.::holistic::low_level_elegance::processor_export_schema_duplicated"
+      ],
+      "resolved": [
+        "review::.::holistic::low_level_elegance::coordinator_duplicate_extract_result",
+        "review::.::holistic::low_level_elegance::base_adapter_duplicate_price_parser",
+        "review::.::holistic::low_level_elegance::processor_merge_llm_analysis_sprawl",
+        "review::.::holistic::low_level_elegance::browser_manager_connect_shim",
+        "review::.::holistic::low_level_elegance::extract_result_copy_paste",
+        "review::.::holistic::low_level_elegance::parse_price_eur_duplication",
+        "review::.::holistic::low_level_elegance::merge_llm_analysis_monolith",
+        "review::.::holistic::low_level_elegance::connect_shim_no_behavior",
+        "review::.::holistic::low_level_elegance::coordinator_synthesize_dead_code",
+        "review::.::holistic::low_level_elegance::coordinator_extract_result_duplication",
+        "review::.::holistic::low_level_elegance::base_adapter_parse_price_eur_not_delegating"
+      ]
+    },
+    "mid_level_elegance": {
+      "open": [
+        "review::.::holistic::mid_level_elegance::llm_agent_chat_contract_mismatch",
+        "review::.::holistic::mid_level_elegance::diamond_price_payload_nesting",
+        "review::.::holistic::mid_level_elegance::diamond_outputs_not_consumed",
+        "review::.::holistic::mid_level_elegance::cli_search_orchestration_duplicated",
+        "review::.::holistic::mid_level_elegance::analytics_sql_bypasses_storage_api",
+        "review::.::holistic::mid_level_elegance::deal_storage_implicit_attribute_contract",
+        "review::.::holistic::mid_level_elegance::watchlist_check_path_is_stub",
+        "review::.::holistic::mid_level_elegance::watch_command_bypasses_browser_adapter_stack"
+      ],
+      "resolved": [
+        "review::.::holistic::mid_level_elegance::diamond_private_seam_bypass",
+        "review::.::holistic::mid_level_elegance::orchestrator_judge_async_generator",
+        "review::.::holistic::mid_level_elegance::orchestrator_unused_browser_manager",
+        "review::.::holistic::mid_level_elegance::deal_storage_adhoc_translation",
+        "review::.::holistic::mid_level_elegance::coordinator_keyerror_optional_agents",
+        "review::.::holistic::mid_level_elegance::diamond_deal_mutation",
+        "review::.::holistic::mid_level_elegance::diamond_search_bypasses_coordinator_encapsulation",
+        "review::.::holistic::mid_level_elegance::private-brand-filter-field",
+        "review::.::holistic::mid_level_elegance::llm-private-search-query",
+        "review::.::holistic::mid_level_elegance::storage-mixed-db-access",
+        "review::.::holistic::mid_level_elegance::diamond-intermediate-result-dropped",
+        "review::.::holistic::mid_level_elegance::watchlist_check_noop_handoff",
+        "review::.::holistic::mid_level_elegance::agent_llm_call_silently_dead",
+        "review::.::holistic::mid_level_elegance::diamond_pipeline_discarded_rerun",
+        "review::.::holistic::mid_level_elegance::brand_filter_private_handoff",
+        "review::.::holistic::mid_level_elegance::search_command_duplicates_run_search",
+        "review::.::holistic::mid_level_elegance::adapter_block_detection_optin",
+        "review::.::holistic::mid_level_elegance::storage_boundary_leaks_sql",
+        "review::.::holistic::mid_level_elegance::monitor_double_price_sighting",
+        "review::.::holistic::mid_level_elegance::agent_failure_shape_mismatch"
+      ]
+    },
+    "naming_quality": {
+      "open": [
+        "review::.::holistic::naming_quality::opaque_private_helpers",
+        "review::.::holistic::naming_quality::spelling_drift_british_american",
+        "review::.::holistic::naming_quality::site_identity_vocabulary",
+        "review::.::holistic::naming_quality::duplicate_record_model_names",
+        "review::.::holistic::naming_quality::domain_matches_returns_score",
+        "review::.::holistic::naming_quality::notify_does_not_notify",
+        "review::.::holistic::naming_quality::generic_domain_get",
+        "review::.::holistic::naming_quality::agentbase_not_agent_base"
+      ],
+      "resolved": [
+        "review::.::holistic::naming_quality::normalise_spelling_drift",
+        "review::.::holistic::naming_quality::getter_creates_browser",
+        "review::.::holistic::naming_quality::score_name_shadowing",
+        "review::.::holistic::naming_quality::british_normalise_filters",
+        "review::.::holistic::naming_quality::british_normalise_domain_specs",
+        "review::.::holistic::naming_quality::browser_getters_create_state",
+        "review::.::holistic::naming_quality::mock_client_score_shadowing",
+        "review::.::holistic::naming_quality::british_normalised_locals"
+      ]
+    },
+    "package_organization": {
+      "open": [
+        "review::.::holistic::package_organization::site_profiles_dir_shadows_module"
+      ],
+      "resolved": [
+        "review::.::holistic::package_organization::root_straggler_strip_stale_noqa",
+        "review::.::holistic::package_organization::tests_flat_directory_overload",
+        "review::.::holistic::package_organization::searcher_flat_directory_overload",
+        "review::.::holistic::package_organization::bidirectional_searcher_adapters_coupling",
+        "review::.::holistic::package_organization::flat-tests-directory"
+      ]
+    },
+    "test_strategy": {
+      "open": [
+        "review::.::holistic::test_strategy::notification_channels_untested",
+        "review::.::holistic::test_strategy::watchlist_price_check_untested",
+        "review::.::holistic::test_strategy::operational_paths_untested",
+        "review::.::holistic::test_strategy::vacuous_and_source_text_tests",
+        "review::.::holistic::test_strategy::no_ci_or_coverage_gate"
+      ],
+      "resolved": [
+        "review::.::holistic::test_strategy::orchestrator_untested",
+        "review::.::holistic::test_strategy::vlm_client_untested",
+        "review::.::holistic::test_strategy::browser_manager_low_coverage",
+        "review::.::holistic::test_strategy::cli_commands_untested",
+        "review::.::holistic::test_strategy::adapter_coverage_uneven",
+        "review::.::holistic::test_strategy::integration_test_trivial",
+        "review::.::holistic::test_strategy::intelligence_modules_low_coverage",
+        "review::.::holistic::test_strategy::storage_manager_partial",
+        "review::.::holistic::test_strategy::tests_couple_to_private_helpers",
+        "review::.::holistic::test_strategy::untested-domain-profile",
+        "review::.::holistic::test_strategy::untested-notification-base",
+        "review::.::holistic::test_strategy::untested-browser-pom-base",
+        "review::.::holistic::test_strategy::missing-integration-tests",
+        "review::.::holistic::test_strategy::private-method-test-coupling",
+        "review::.::holistic::test_strategy::untested-critical-modules",
+        "review::.::holistic::test_strategy::trivial_integration_smoke",
+        "review::.::holistic::test_strategy::untested_watchlist_module",
+        "review::.::holistic::test_strategy::adapter_test_source_coupling",
+        "review::.::holistic::test_strategy::untested_notification_channels",
+        "review::.::holistic::test_strategy::watchlist_feature_untested",
+        "review::.::holistic::test_strategy::searcher_search_orchestration_untested",
+        "review::.::holistic::test_strategy::notification_delivery_untested",
+        "review::.::holistic::test_strategy::watch_url_extraction_untested",
+        "review::.::holistic::test_strategy::source_text_regression_guards",
+        "review::.::holistic::test_strategy::integration_test_is_import_smoke",
+        "review::.::holistic::test_strategy::tests_read_local_config_yaml"
+      ]
+    },
+    "type_safety": {
+      "open": [
+        "review::.::holistic::type_safety::enum_bypass_domain_model",
+        "review::.::holistic::type_safety::public_api_annotation_gaps",
+        "review::.::holistic::type_safety::undeclared_deal_attributes",
+        "review::.::holistic::type_safety::untyped_deal_metadata",
+        "review::.::holistic::type_safety::duplicate_price_history_types",
+        "review::.::holistic::type_safety::agent_deal_dict_shadow",
+        "review::.::holistic::type_safety::site_status_raw_string",
+        "review::.::holistic::type_safety::output_format_type_ignore",
+        "review::.::holistic::type_safety::sitehome_goto_override"
+      ],
+      "resolved": [
+        "review::.::holistic::type_safety::enum_bypass_condition_category",
+        "review::.::holistic::type_safety::llmconfig_duplicate_fields",
+        "review::.::holistic::type_safety::charts_unterminated_string",
+        "review::.::holistic::type_safety::site_profiles_name_collision",
+        "review::.::holistic::type_safety::missing_public_annotations",
+        "review::.::holistic::type_safety::agent_base_optional_defaults",
+        "review::.::holistic::type_safety::enum_bypass_in_deal_and_adapters",
+        "review::.::holistic::type_safety::search_request_str_typed_with_enum_values",
+        "review::.::holistic::type_safety::parallel_deal_dataclasses",
+        "review::.::holistic::type_safety::implicit_optional_none_defaults",
+        "review::.::holistic::type_safety::callable_builtin_used_as_annotation",
+        "review::.::holistic::type_safety::untyped_accumulators_and_returns",
+        "review::.::holistic::type_safety::enum_bypass_deal_pipeline",
+        "review::.::holistic::type_safety::parallel_deal_models",
+        "review::.::holistic::type_safety::implicit_optional_defaults",
+        "review::.::holistic::type_safety::callable_builtin_annotation",
+        "review::.::holistic::type_safety::public_annotation_gaps",
+        "review::.::holistic::type_safety::untyped_container_payloads",
+        "review::.::holistic::type_safety::to_eur_none_guard",
+        "review::.::holistic::type_safety::typer_watch_urls_none",
+        "review::.::holistic::type_safety::type_checking_not_enforced",
+        "review::.::holistic::type_safety::watchlist_deal_object_typing",
+        "review::.::holistic::type_safety::price_history_type_duplication",
+        "review::.::holistic::type_safety::deal_metadata_typeless",
+        "review::.::holistic::type_safety::site_status_stringly_typed",
+        "review::.::holistic::type_safety::cli_output_format_type_ignore",
+        "review::.::holistic::type_safety::site_home_goto_override"
+      ]
+    }
+  },
+  "rework_loops": [
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "type_safety",
+      "new_open_count": 9,
+      "reopen_count": 0,
+      "resolved_count": 28
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "test_strategy",
+      "new_open_count": 5,
+      "reopen_count": 1,
+      "resolved_count": 27
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "mid_level_elegance",
+      "new_open_count": 8,
+      "reopen_count": 0,
+      "resolved_count": 21
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "api_surface_coherence",
+      "new_open_count": 7,
+      "reopen_count": 0,
+      "resolved_count": 21
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "design_coherence",
+      "new_open_count": 9,
+      "reopen_count": 0,
+      "resolved_count": 14
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "error_consistency",
+      "new_open_count": 7,
+      "reopen_count": 0,
+      "resolved_count": 16
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "logic_clarity",
+      "new_open_count": 10,
+      "reopen_count": 0,
+      "resolved_count": 11
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "incomplete_migration",
+      "new_open_count": 8,
+      "reopen_count": 0,
+      "resolved_count": 11
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "low_level_elegance",
+      "new_open_count": 6,
+      "reopen_count": 0,
+      "resolved_count": 12
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "high_level_elegance",
+      "new_open_count": 6,
+      "reopen_count": 1,
+      "resolved_count": 10
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "naming_quality",
+      "new_open_count": 8,
+      "reopen_count": 0,
+      "resolved_count": 9
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "ai_generated_debt",
+      "new_open_count": 8,
+      "reopen_count": 0,
+      "resolved_count": 8
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "contract_coherence",
+      "new_open_count": 7,
+      "reopen_count": 0,
+      "resolved_count": 9
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "cross_module_architecture",
+      "new_open_count": 6,
+      "reopen_count": 0,
+      "resolved_count": 10
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "abstraction_fitness",
+      "new_open_count": 5,
+      "reopen_count": 0,
+      "resolved_count": 10
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "authorization_consistency",
+      "new_open_count": 6,
+      "reopen_count": 1,
+      "resolved_count": 7
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "dependency_health",
+      "new_open_count": 2,
+      "reopen_count": 0,
+      "resolved_count": 12
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "convention_outlier",
+      "new_open_count": 5,
+      "reopen_count": 0,
+      "resolved_count": 7
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "initialization_coupling",
+      "new_open_count": 4,
+      "reopen_count": 0,
+      "resolved_count": 7
+    },
+    {
+      "affected_files": [
+        "."
+      ],
+      "dimension": "package_organization",
+      "new_open_count": 1,
+      "reopen_count": 0,
+      "resolved_count": 6
+    }
+  ],
+  "scan_count": 16,
+  "score_trajectory": {
+    "all_time_high": 77.8,
+    "best_scan_delta": 0.2,
+    "cycle_start_score": 77.4,
+    "strict_delta": 0.0,
+    "strict_scores": [
+      77.4,
+      77.4,
+      77.4,
+      77.6,
+      77.4
+    ],
+    "trend": "stable",
+    "worst_scan_delta": -0.2
+  },
+  "skipped_by_reason": {
+    "permanent": 31
+  }
+}
+```
+
+## Anti-Pattern Checklist
+- repeated refactoring of the same area
+- dimension stagnation despite investment
+- score-neutral churn
+- neglected high-headroom dimensions
+- growing wontfix debt
+- skip-heavy execution
+
+## Output Contract
+Return a JSON object with these keys:
+- `computed_at`: ISO timestamp
+- `lookback_scans`: integer
+- `focus_dimensions`: list of `{name, reason, headroom, trend}`
+- `avoid_areas`: list of `{name, reason, type}`
+- `rework_warnings`: list of `{dimension, resolved, new_open, files}`
+- `file_churn_hotspots`: list of `{file, count, detectors}`
+- `stagnant_dimensions`: list of strings
+- `debt_trend`: `"growing" | "stable" | "shrinking"`
+- `score_trend`: `"improving" | "stable" | "declining" | "recovering"` (recovering = improving but still below all-time high)
+- `momentum_dimensions`: list of strings
+- `executive_summary`: 2-3 paragraph big-picture briefing
+- `observe_guidance`: prose for observe
+- `reflect_guidance`: prose for reflect
+- `organize_guidance`: prose for organize
+- `sense_check_guidance`: prose for sense-check value judgment
+- `anti_patterns`: list of `{type, description, evidence}`
+- `strategic_issues` (optional): list of `{identifier, summary, priority, recommendation, dimensions_affected}`
+  - `identifier`: short kebab-case id (e.g., "rework-loop-naming")
+  - `summary`: one-line description of the strategic concern
+  - `priority`: `"critical" | "high" | "medium"`
+  - `recommendation`: concrete recommended action
+  - `dimensions_affected`: list of dimension name strings
+
+When you detect score regressions, rework loops, or strategic misalignment, create strategic_issues with concrete recommendations. These will become high-priority work items at the front of the execution queue.
+
+Observe guidance should emphasize where verification effort is likely to be wasted or missed.
+Reflect guidance should describe focus dimensions, avoid areas, and recurring-loop constraints.
+Organize guidance should describe priority ordering and areas to avoid churning again.
+Sense-check guidance should call out rework risks and value traps.
+
+## Validation Requirements
+- Output must be valid JSON matching the StrategistBriefing schema
+- executive_summary must be 100+ characters
+- observe_guidance and reflect_guidance must each be 50+ characters
+- focus_dimensions must list at least 1 dimension
+- score_trend must be one of: improving, stable, declining
+- debt_trend must be one of: growing, stable, shrinking
+

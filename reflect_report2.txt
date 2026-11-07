@@ -1,0 +1,379 @@
+{
+  "stage": "reflect",
+  "recurring_dimensions": [
+    "abstraction_fitness",
+    "ai_generated_debt",
+    "api_surface_coherence",
+    "cross_module_architecture",
+    "design_coherence",
+    "error_consistency",
+    "incomplete_migration",
+    "init_coupling",
+    "logic_clarity",
+    "low_level_elegance",
+    "mid_level_elegance",
+    "naming_quality",
+    "test_strategy",
+    "type_safety"
+  ],
+  "coverage_ledger": {
+    "async_helpers_without_await": "cluster \"logic-clarity\"",
+    "watchlist_search_stub": "cluster \"logic-clarity\"",
+    "async_notification_channels_blocking": "cluster \"logic-clarity\"",
+    "duplicated_price_number_parsing": "cluster \"low-level-elegance\"",
+    "change_report_builder_duplicated": "cluster \"low-level-elegance\"",
+    "trust_for_noop_branches": "cluster \"low-level-elegance\"",
+    "cli_split_incomplete": "cluster \"incomplete-migration\"",
+    "legacy_search_command": "cluster \"incomplete-migration\"",
+    "comparable_price_dual_api": "cluster \"incomplete-migration\"",
+    "number_parser_duplicate": "cluster \"incomplete-migration\"",
+    "test_only_compat_aliases": "cluster \"incomplete-migration\"",
+    "legacy_llm_config_keys": "cluster \"incomplete-migration\"",
+    "selector_table_duplicate": "cluster \"incomplete-migration\"",
+    "mock_client_stale_api": "cluster \"incomplete-migration\"",
+    "coordinator_flattens_failures": "cluster \"error-consistency\"",
+    "watchlist_save_swallows_disk_error": "cluster \"error-consistency\"",
+    "per_site_crash_not_skipped": "cluster \"error-consistency\"",
+    "cli_prompt_watchlist_reads_bypass_contract": "cluster \"error-consistency\"",
+    "registry_miss_conventions_and_unvalidated_domain": "cluster \"error-consistency\"",
+    "dual-dependency-manifests-drift": "cluster \"dependency-health\"",
+    "circular-import-cycles-searcher-hub": "cluster \"dependency-health\"",
+    "notification_send_paths_untested": "cluster \"test-strategy\"",
+    "browser_fingerprint_untested": "cluster \"test-strategy\"",
+    "watch_command_untested": "cluster \"test-strategy\"",
+    "doctor_diagnostics_untested": "cluster \"test-strategy\"",
+    "output_domains_untested": "cluster \"test-strategy\"",
+    "watchlist_cli_over_mocked": "cluster \"test-strategy\"",
+    "run_search_long_param_list": "cluster \"api-surface-coherence\"",
+    "inconsistent_price_param_order": "cluster \"api-surface-coherence\"",
+    "duplicate_resolve_functions": "cluster \"api-surface-coherence\"",
+    "mixed_sync_async_cli_helpers": "cluster \"api-surface-coherence\"",
+    "login_requirement_declared_in_three_places": "cluster \"authorization-consistency\"",
+    "unused_storage_state_config": "cluster \"authorization-consistency\"",
+    "restating-comments-adapters": "cluster \"ai-generated-debt\"",
+    "import_time_file_io_in_selector_health_singleton": "cluster \"init-coupling\"",
+    "process_wide_mutable_currency_rates": "cluster \"init-coupling\"",
+    "module_level_mutable_singletons": "cluster \"init-coupling\"",
+    "lazy_imports_hide_circular_init_dependencies": "cluster \"init-coupling\"",
+    "parse_price_detail_ignores_rates": "cluster \"contract-coherence\"",
+    "browser_manager_get_browser_side_effect": "cluster \"contract-coherence\"",
+    "deal_storage_raw_str_enums": "cluster \"type-safety\"",
+    "extract_parallel_condition_literal": "cluster \"type-safety\"",
+    "output_format_str_to_literal_ignore": "cluster \"type-safety\"",
+    "readme_architecture_drift": "skip \"observe verdict: not-worth-it\"",
+    "cli_command_ownership_split": "skip \"observe verdict: not-worth-it\"",
+    "parallel_search_cycles": "skip \"observe verdict: not-worth-it\"",
+    "price_analytics_ownership": "skip \"observe verdict: not-worth-it\"",
+    "research_and_site_selection_duplication": "skip \"observe verdict: not-worth-it\"",
+    "result_processor_scope": "skip \"observe verdict: not-worth-it\"",
+    "watch_command_style_island": "skip \"observe verdict: not-worth-it\"",
+    "optional_vs_union_hint_drift": "skip \"observe verdict: not-worth-it\"",
+    "uneven_package_reexport_facades": "skip \"observe verdict: not-worth-it\"",
+    "generic_processor_class": "skip \"observe verdict: not-worth-it\"",
+    "generic_manager_class": "skip \"observe verdict: not-worth-it\"",
+    "root-straggler-scripts": "skip \"observe verdict: not-worth-it\"",
+    "searcher-flat-overload": "skip \"observe verdict: not-worth-it\"",
+    "browser_lifecycle_not_owned_by_context_manager": "skip \"observe verdict: not-worth-it\"",
+    "duplicate_notification_wiring": "skip \"observe verdict: not-worth-it\"",
+    "price_alert_boundary_two_shapes": "skip \"observe verdict: not-worth-it\"",
+    "inconsistent_deal_persistence_contract": "skip \"observe verdict: not-worth-it\"",
+    "oversized_result_processor": "skip \"observe verdict: not-worth-it\"",
+    "oversized_cli_app": "skip \"observe verdict: not-worth-it\"",
+    "oversized_playwright_searcher": "skip \"observe verdict: not-worth-it\"",
+    "monitor_high_cyclomatic": "skip \"observe verdict: not-worth-it\"",
+    "llm_client_hub": "skip \"observe verdict: not-worth-it\"",
+    "systemic_unsafe_file_write": "skip \"observe verdict: not-worth-it\"",
+    "adapter_base_hub_blast_radius": "skip \"observe verdict: over-engineering\"",
+    "deferred_import_cycle_pressure": "skip \"observe verdict: over-engineering\"",
+    "llm_layer_depends_on_adapter_dto": "skip \"observe verdict: over-engineering\"",
+    "output_depends_on_research": "skip \"observe verdict: over-engineering\"",
+    "scripts_sys_path_boundary_leak": "skip \"observe verdict: over-engineering\"",
+    "currency_global_mutable_rates": "skip \"observe verdict: over-engineering\"",
+    "playwright_searcher_facade_indirection": "skip \"observe verdict: over-engineering\"",
+    "processor_god_class": "skip \"observe verdict: over-engineering\"",
+    "cli_app_god_module": "skip \"observe verdict: over-engineering\"",
+    "config_bag_whole_config": "skip \"observe verdict: over-engineering\"",
+    "trivial_pass_through_shims": "skip \"observe verdict: over-engineering\""
+  },
+  "cluster_blueprint": [
+    {
+      "name": "logic-clarity",
+      "issues": [
+        "async_helpers_without_await",
+        "watchlist_search_stub",
+        "async_notification_channels_blocking"
+      ]
+    },
+    {
+      "name": "low-level-elegance",
+      "issues": [
+        "duplicated_price_number_parsing",
+        "change_report_builder_duplicated",
+        "trust_for_noop_branches"
+      ]
+    },
+    {
+      "name": "incomplete-migration",
+      "issues": [
+        "cli_split_incomplete",
+        "legacy_search_command",
+        "comparable_price_dual_api",
+        "number_parser_duplicate",
+        "test_only_compat_aliases",
+        "legacy_llm_config_keys",
+        "selector_table_duplicate",
+        "mock_client_stale_api"
+      ]
+    },
+    {
+      "name": "error-consistency",
+      "issues": [
+        "coordinator_flattens_failures",
+        "watchlist_save_swallows_disk_error",
+        "per_site_crash_not_skipped",
+        "cli_prompt_watchlist_reads_bypass_contract",
+        "registry_miss_conventions_and_unvalidated_domain"
+      ]
+    },
+    {
+      "name": "dependency-health",
+      "issues": [
+        "dual-dependency-manifests-drift",
+        "circular-import-cycles-searcher-hub"
+      ]
+    },
+    {
+      "name": "test-strategy",
+      "issues": [
+        "notification_send_paths_untested",
+        "browser_fingerprint_untested",
+        "watch_command_untested",
+        "doctor_diagnostics_untested",
+        "output_domains_untested",
+        "watchlist_cli_over_mocked"
+      ]
+    },
+    {
+      "name": "api-surface-coherence",
+      "issues": [
+        "run_search_long_param_list",
+        "inconsistent_price_param_order",
+        "duplicate_resolve_functions",
+        "mixed_sync_async_cli_helpers"
+      ]
+    },
+    {
+      "name": "authorization-consistency",
+      "issues": [
+        "login_requirement_declared_in_three_places",
+        "unused_storage_state_config"
+      ]
+    },
+    {
+      "name": "ai-generated-debt",
+      "issues": [
+        "restating-comments-adapters"
+      ]
+    },
+    {
+      "name": "init-coupling",
+      "issues": [
+        "import_time_file_io_in_selector_health_singleton",
+        "process_wide_mutable_currency_rates",
+        "module_level_mutable_singletons",
+        "lazy_imports_hide_circular_init_dependencies"
+      ]
+    },
+    {
+      "name": "contract-coherence",
+      "issues": [
+        "parse_price_detail_ignores_rates",
+        "browser_manager_get_browser_side_effect"
+      ]
+    },
+    {
+      "name": "type-safety",
+      "issues": [
+        "deal_storage_raw_str_enums",
+        "extract_parallel_condition_literal",
+        "output_format_str_to_literal_ignore"
+      ]
+    }
+  ],
+  "skip_decisions": [
+    {
+      "issue": "readme_architecture_drift",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "cli_command_ownership_split",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "parallel_search_cycles",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "price_analytics_ownership",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "research_and_site_selection_duplication",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "result_processor_scope",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "watch_command_style_island",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "optional_vs_union_hint_drift",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "uneven_package_reexport_facades",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "generic_processor_class",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "generic_manager_class",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "root-straggler-scripts",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "searcher-flat-overload",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "browser_lifecycle_not_owned_by_context_manager",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "duplicate_notification_wiring",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "price_alert_boundary_two_shapes",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "inconsistent_deal_persistence_contract",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "oversized_result_processor",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "oversized_cli_app",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "oversized_playwright_searcher",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "monitor_high_cyclomatic",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "llm_client_hub",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "systemic_unsafe_file_write",
+      "reason": "observe verdict: not-worth-it"
+    },
+    {
+      "issue": "adapter_base_hub_blast_radius",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "deferred_import_cycle_pressure",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "llm_layer_depends_on_adapter_dto",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "output_depends_on_research",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "scripts_sys_path_boundary_leak",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "currency_global_mutable_rates",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "playwright_searcher_facade_indirection",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "processor_god_class",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "cli_app_god_module",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "config_bag_whole_config",
+      "reason": "observe verdict: over-engineering"
+    },
+    {
+      "issue": "trivial_pass_through_shims",
+      "reason": "observe verdict: over-engineering"
+    }
+  ],
+  "backlog_decisions": [
+    {
+      "cluster": "auto/unused",
+      "decision": "promote",
+      "reason": "autofix unused-imports available; low risk"
+    },
+    {
+      "cluster": "auto/test_coverage-untested_module",
+      "decision": "defer",
+      "reason": "test coverage deferred until code quality fixes land"
+    },
+    {
+      "cluster": "auto/security-B112",
+      "decision": "skip",
+      "reason": "try/except/continue in pom; low value"
+    },
+    {
+      "cluster": "auto/security-B324",
+      "decision": "promote",
+      "reason": "MD5 usedforsecurity flag; small fix"
+    },
+    {
+      "cluster": "auto/test_coverage-untested_critical",
+      "decision": "defer",
+      "reason": "test coverage deferred until code quality fixes land"
+    },
+    {
+      "cluster": "auto/security-log_sensitive",
+      "decision": "promote",
+      "reason": "sensitive data may be logged in coordinator"
+    },
+    {
+      "cluster": "unclustered",
+      "decision": "defer",
+      "reason": "287 unclustered dict_keys findings deferred; revisit after cluster work"
+    }
+  ],
+  "summary": "Clustered 43 genuine review issues into 12 dimension/file-proximity clusters; skipped 34 over-engineering/not-worth-it per observe verdicts; deferred test coverage and unclustered backlog."
+}

@@ -1,0 +1,230 @@
+You are a triage subagent with full codebase access and the desloppify CLI.
+Your job is to complete the **SENSE-CHECK** stage of triage planning.
+
+Repo root: C:\Users\DracieVajko\Downloads\PC_Commands\AI\PersonalAIDealSearcher
+
+## Standards
+
+You are expected to produce **exceptional** work. The output of this triage becomes the
+actual plan that an executor follows — if you are lazy, vague, or sloppy, real work gets
+wasted. Concretely:
+
+- **Read the actual source code.** Every opinion you form must come from reading the file,
+  not from reading the issue title. Issues frequently exaggerate, miscount, or describe
+  code that has already been fixed. Trust nothing until you verify it.
+- **Have specific opinions.** "This seems like it could be an issue" is worthless. "This is
+  a false positive because line 47 already uses the pattern the issue suggests" is useful.
+- **Do the hard thinking.** If two issues seem related, figure out WHY. If something should
+  be skipped, explain the specific reason for THIS issue, not a generic category.
+- **Don't take shortcuts.** Reading 5 files and extrapolating to 30 is lazy. Read all 30.
+  If you have too many, use subagents to parallelize — don't skip.
+- The prompt below already contains the authoritative stage contract and prior reports.
+  Do NOT search old triage run artifacts for alternate instructions unless you hit a
+  concrete mismatch you need to explain.
+
+Use the desloppify CLI to record your work. Every command you run mutates plan.json directly.
+The orchestrator will review your work and confirm the stage after you record it.
+Use the exact CLI command prefix shown in the CLI Command Reference: `desloppify`.
+Do NOT debug, repair, reinstall, or inspect the CLI/environment. If the command fails, stop
+and explain the failure in your stdout summary.
+
+After you finish recording the stage, write a short plain-text summary to stdout describing
+what you changed, which commands you ran, and any blockers you hit. The runner requires
+non-empty stdout output.
+
+**CRITICAL: Only run commands for YOUR stage (SENSE-CHECK).** Do NOT re-run earlier stages
+(e.g., do not run `--stage observe` if you are the organize subagent). Earlier stages
+are already confirmed. Re-running them will corrupt the plan state.
+
+
+## Prior Stage Reports
+
+
+### STRATEGIZE Report
+{"executive_summary": "The codebase is in a declining strict-score trend (77.4 -> 74.8) after a sharp -5.6 scan delta, with 101 permanent wontfix skips and a 52.3% skip rate indicating heavy selective execution. Prior cycles resolved ~89 issues but reopened/new-open counts show rework loops, especially in incomplete_migration (8 new after 11 resolved) and test_strategy (2 reopens). High-headroom, declining dimensions such as Stale migration (52.0, headroom 48.0), Cross-module arch (62.0, headroom 38.0), and High elegance (62.0, headroom 38.0) remain neglected while effort churns on already-improved areas. Security coverage is reduced (bandit missing) and Test health is stagnant at 70.7 strict, leaving a 8.4-point gap on the worst dimension. Momentum exists in AI generated debt, Contracts, Design coherence, Logic clarity, and Naming quality; these should be protected rather than reworked.", "observe_guidance": "Verification effort is likely wasted re-checking churn-prone files such as src/history/watchlist.py, src/storage/manager.py, and scripts/map_site.py, which accumulate open issues across multiple detectors. Missed verification is most likely in stagnant dimensions (Code quality, Duplication, File health, Security, Test health) where scores do not move despite scans, and in reduced-coverage Security checks (bandit not installed). Confirm bandit availability and coverage confidence before trusting security findings.", "reflect_guidance": "Focus dimensions are Stale migration, Cross-module arch, High elegance, Error consistency, Mid elegance, and Type safety due to high headroom and declining or flat trends. Avoid re-churning incomplete_migration, test_strategy, abstraction_fitness, dependency_health, authorization_consistency, and high_level_elegance, which show rework loops. Do not spend effort on stagnant, low-headroom dimensions (Duplication 2.1, File health 5.8, Security 6.1). Respect recurring-loop constraints: thin wrappers, raw-string enum bypasses, and notification manager duplication keep recurring.", "organize_guidance": "Prioritize high-headroom declining dimensions first (Stale migration, Cross-module arch, High elegance, Error consistency, Mid elegance), then stable high-headroom Type safety. Keep momentum dimensions (AI generated debt, Contracts, Design coherence, Logic clarity, Naming quality) out of the churn queue. Avoid re-running completed clusters in incomplete_migration and test_strategy; instead close remaining 8/7 open issues surgically. Address the 101 permanent wontfix skips by sampling for false positives before adding new debt.", "sense_check_guidance": "Rework risk is high in incomplete_migration and test_strategy where resolved counts exceed new-open but reopens persist; value traps include score-neutral churn on already-high dimensions (Duplication, File health) and over-investing in subjective dimensions with low headroom. Sense-check any proposed refactor against whether it moves a declining high-headroom dimension rather than re-touching a churn hotspot file.", "focus_dimensions": ["Stale migration", "Cross-module arch", "High elegance", "Error consistency", "Mid elegance", "Type safety"], "score_trend": "declining", "debt_trend": "stable"}
+
+
+### ORGANIZE Report
+Organized 61 open review issues into 14 area clusters: price-parsing-and-comparable-price, cli-command-and-search-flow, cross-module-decoupling, searcher-architecture, error-contract-and-silent-failures, type-safety-enums-and-literals, incomplete-migration-and-aliases, code-duplication-and-report-builders, adapter-conventions, package-and-research-ownership, notification-channels, http-and-dependency-health, init-coupling-and-async-helpers, tests-and-coverage. Skipped 7 not-worth-it issues; promoted auto/unused and auto/security-log_sensitive.
+
+
+### ENRICH Report
+Enriched all 14 manual clusters: 34 steps now have 80+ char detail with verified file paths, issue refs, and individual effort tags.
+
+
+## Strategic Flags
+Rework risk is high in incomplete_migration and test_strategy where resolved counts exceed new-open but reopens persist; value traps include score-neutral churn on already-high dimensions (Duplication, File health) and over-investing in subjective dimensions with low headroom. Sense-check any proposed refactor against whether it moves a declining high-headroom dimension rather than re-touching a churn hotspot file.
+
+## Issue Summary
+Open review issues: 54
+Open dimensions: abstraction_fitness (2), api_surface_coherence (1), authorization_consistency (2), contract_coherence (1), convention_outlier (1), cross_module_architecture (2), dependency_health (4), design_coherence (1), error_consistency (3), high_level_elegance (2), incomplete_migration (8), initialization_coupling (2), logic_clarity (1), low_level_elegance (4), mid_level_elegance (5), package_organization (2), test_strategy (7), type_safety (6)
+Resolved since last triage: 68
+## Available Investigation Commands
+
+To see full detail for a specific issue:
+  desloppify show <issue-id-or-hash-pattern> --no-budget
+To see all open review issues with suggestions:
+  desloppify show review --status open --no-budget
+To see a cluster's steps, members, and suggestions:
+  desloppify plan cluster show <name>
+To list all clusters:
+  desloppify plan cluster list --verbose
+
+## SENSE-CHECK Stage Instructions
+
+This stage is handled by three subagents. If you are being run as a
+single-subprocess fallback, perform ALL three checks below.
+
+Execution order: content batches (parallel) → structure batch → value batch (sequential).
+Value runs last because it needs the corrected plan state from content and structure.
+
+### Content Check (per cluster)
+Use `desloppify show <issue-hash> --no-budget` to verify step details match the original reviewer analysis.
+
+For EVERY step in every cluster, read the actual source file and verify:
+1. OVER-ENGINEERING (check FIRST — if the fix fails this, skip the rest):
+   Would this change make the codebase *worse*? Flag steps that:
+   - Add abstractions, wrappers, or indirection for a one-time operation
+   - Introduce unnecessary config/feature-flags/generalization
+   - Make simple code harder to read for marginal benefit
+   - Gold-plate beyond what the issue actually requires
+   - Trade one smell for a worse one (e.g. fix duplication by adding a fragile base class)
+   - Add more lines of code than they remove (net complexity increase)
+   Also flag steps that:
+   - Do not extract code into new files or functions that would have exactly 1 consumer
+   - Do not use __internal or _test export hacks — test through the public API or export properly
+   - Do not rename for convention alone when no ambiguity exists
+   - Do not delete tests without equivalent replacement coverage
+   - Do not strip rationale comments — preserve comments explaining why, not what
+   - Refactors must preserve behavior — do not change test expectations in cleanup steps
+   - Net line count must decrease or stay flat in cleanup commits
+   Remove or simplify over-engineered steps. If the whole cluster is net-negative,
+   recommend removing it entirely — don't just flag it, say "skip this cluster."
+2. STALENESS: Is the problem still present, or already fixed?
+3. LINE NUMBERS: Does the code at the claimed lines match the step description?
+4. NAMES: Do function/variable/type names in the step exist in the file?
+5. COUNTS: Are counts ("update the 3 imports") accurate?
+6. VAGUENESS: Could a developer with zero context execute this step?
+7. EFFORT TAGS: Does the tag match actual scope?
+8. DUPLICATES: Flag steps that duplicate work in another cluster.
+
+Fix with: `desloppify plan cluster update <name> --update-step N --detail "..." --effort <tag>`
+
+### Structure Check (global)
+Build a file-touch graph and check:
+1. SHARED FILES: Two clusters touching same file without --depends-on → add dependency
+2. MISSING CASCADE: Rename/remove without importer updates → add cascade step
+3. CIRCULAR DEPS: Flag cycles, don't add them
+
+Fix with: `desloppify plan cluster update <name> --depends-on <other>`
+Fix with: `desloppify plan cluster update <name> --add-step "..." --detail "..." --effort trivial --issue-refs <hash>`
+
+
+### Value Check (global — YAGNI/KISS pass)
+
+Walk the CURRENT planned work item by item and make the final judgment about value.
+Ask: does doing this make the codebase genuinely better? Beauty is a valid reason to keep work,
+but not if it buys that beauty with new indirection, wrappers, abstraction layers, or confusion.
+
+For EVERY live queue target, choose exactly one:
+1. `keep` — clearly improves correctness, clarity, cohesion, simplicity, or elegance
+2. `tighten` — worth doing, but the plan must be simplified or made more concrete first
+3. `skip` — the fix would add churn, indirection, coordination, or abstraction for too little gain
+
+What should usually be skipped:
+- facade pruning that just spreads imports
+- abstraction-for-abstraction's-sake
+- tiny theoretical cleanups that make the code harder to follow
+- fixes whose implementation is more complicated than the current code
+
+What can still be worth keeping:
+- simplifications that delete layers or reduce branching
+- aesthetic cleanups that genuinely improve readability without adding machinery
+- focused unifications that make naming or flow more coherent with less confusion
+
+Use these commands aggressively:
+- `desloppify next --count 100` to inspect the current execution queue
+- `desloppify plan cluster show <name>` to inspect cluster members and steps
+- `desloppify show <issue-id-or-hash> --no-budget` to re-read the underlying finding
+- `desloppify plan cluster update <name> --description "..." --update-step N --detail "..." --effort small`
+- `desloppify plan skip --permanent <pattern> --note "<why>" --attest "I have reviewed this triage skip against the code and I am not gaming the score by suppressing a real defect."`
+- `desloppify plan cluster delete <name>` if you skipped everything it contained
+
+
+Required process:
+1. Re-read the actual code behind each queue target.
+2. Apply the rubric above, not the raw issue title.
+3. Tighten any keeper whose steps are too vague, too broad, or too complicated.
+4. Permanently skip anything that fails the value test.
+5. Delete dead clusters after skipping all their members.
+
+Required report structure — include a Decision Ledger section:
+```
+## Decision Ledger
+- cluster-or-id -> keep
+- cluster-or-id -> tighten
+- cluster-or-id -> skip
+```
+
+When done, run:
+```
+desloppify plan triage --stage sense-check --report "<findings summary>"
+```
+
+
+
+## CLI Command Reference
+
+### Stage recording
+```
+desloppify plan triage --stage strategize --report "<json briefing>"
+desloppify plan triage --stage observe --report "<analysis>"
+desloppify plan triage --stage reflect --report "<strategy>" --attestation "<80+ chars>"
+desloppify plan triage --stage organize --report "<summary>" --attestation "<80+ chars>"
+desloppify plan triage --stage enrich --report "<enrichment summary>" --attestation "<80+ chars>"
+desloppify plan triage --stage sense-check --report "<verification summary>" --attestation "<80+ chars>"
+```
+
+### Cluster management
+```
+desloppify plan cluster create <name> --description "<what this cluster addresses>"
+desloppify plan cluster add <name> <issue-patterns...>
+desloppify plan cluster remove <name> <issue-patterns...>
+desloppify plan cluster update <name> --description "<desc>" --steps "step 1" "step 2"
+desloppify plan cluster update <name> --add-step "<title>" --detail "<sub-points>" --effort small --issue-refs <id1> <id2>
+desloppify plan cluster update <name> --update-step N --detail "<sub-points>" --effort medium --issue-refs <id1>
+desloppify plan cluster update <name> --depends-on <other-cluster-name>
+desloppify plan cluster delete <name>
+desloppify plan cluster show <name>
+desloppify plan cluster list --verbose
+desloppify plan promote <pattern>
+desloppify plan promote <pattern> top
+desloppify plan promote <pattern> before -t <target>
+```
+
+### Skip/dismiss
+```
+desloppify plan skip --permanent <pattern> --note "<reason>" --attest "I have reviewed this triage skip against the code and I am not gaming the score by suppressing a real defect."
+```
+**Important:** The --attest value MUST contain the words "reviewed" and "not gaming" (exact phrases required by validation).
+Every review issue in the active triage run must end up either in a manual cluster or permanently skipped. Leaving issues unassigned is an invalid triage result.
+
+### Issue investigation
+```
+desloppify show <issue-id-or-pattern> --no-budget    # full issue detail with suggestion
+desloppify show review --status open --no-budget     # all open review issues
+desloppify backlog --count 20                        # inspect backlog-only detector work
+```
+
+### Effort tags
+Valid values: trivial, small, medium, large. Set on steps via --effort flag.
+
+
+## Validation Requirements (ALL BLOCKING)
+- Re-runs ALL enrich-level checks (detail, issue_refs, effort, paths, vagueness)
+- Stage must be recorded with a 100+ char report
+- Report must include a `## Decision Ledger` with one line per live queue target
+- Every live queue target must appear exactly once as keep, tighten, or skip
+- Report must cite real file paths to prove the code was re-read
+- Stage must be confirmed with an 80+ char attestation mentioning cluster names or clearly describing the verified sense-check work
+

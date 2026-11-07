@@ -1,0 +1,43 @@
+{
+  "stage": "organize",
+  "round": 3,
+  "summary": "Organized 61 open review issues into 14 file-area clusters per reflect blueprint; skipped 7 not-worth-it issues; promoted auto/unused and auto/security-log_sensitive; deleted 27 stale dimension clusters; added consolidated steps and depends-on links.",
+  "clusters": [
+    "price-parsing-and-comparable-price",
+    "cli-command-and-search-flow",
+    "cross-module-decoupling",
+    "searcher-architecture",
+    "error-contract-and-silent-failures",
+    "type-safety-enums-and-literals",
+    "incomplete-migration-and-aliases",
+    "code-duplication-and-report-builders",
+    "adapter-conventions",
+    "package-and-research-ownership",
+    "notification-channels",
+    "http-and-dependency-health",
+    "init-coupling-and-async-helpers",
+    "tests-and-coverage"
+  ],
+  "issues_clustered": 54,
+  "issues_skipped": 7,
+  "skipped_issues": [
+    "adapter_base_reexports",
+    "thin_normalize_wrappers",
+    "llm_client_mixed_sync_async_naming",
+    "notification_channel_ctor_inconsistency",
+    "public_helpers_many_parameters",
+    "as-dict-returns-untyped-dict",
+    "tests_flat_overload"
+  ],
+  "promoted": ["auto/unused", "auto/security-log_sensitive"],
+  "depends_on": {
+    "price-parsing-and-comparable-price": ["cross-module-decoupling"],
+    "searcher-architecture": ["cross-module-decoupling"],
+    "cli-command-and-search-flow": ["searcher-architecture", "cross-module-decoupling"],
+    "error-contract-and-silent-failures": ["searcher-architecture"],
+    "incomplete-migration-and-aliases": ["price-parsing-and-comparable-price", "cli-command-and-search-flow"],
+    "tests-and-coverage": ["incomplete-migration-and-aliases"]
+  },
+  "deleted_legacy_clusters": 27,
+  "status": "recorded"
+}

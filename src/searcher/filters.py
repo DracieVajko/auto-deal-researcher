@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from src.config.models import Category, Condition
-
+from src.searcher.currency import parse_number
 from src.text.normalize import fold
 
 logger = logging.getLogger(__name__)
@@ -125,7 +125,7 @@ _SELLER_ALIASES = {
     "aukcia": "auction",
 }
 
-_NUMBER_RE = re.compile(r"\d[\d\s\u00a0\u202f.,]*")
+# _NUMBER_RE and _parse_number removed — use parse_number from src.searcher.currency
 _MIN_RE = re.compile(
     r"\b(?:od|min(?:imum)?|nad|above|over|viac\s+ako|from|ab|mindestens)\s*"
     r"(\d[\d\s\u00a0\u202f.,]*)\s*(?:eur|euro|€|kč|kc|czk|zł|zl|pln|ft|huf)?",
@@ -165,38 +165,7 @@ def _clean(text: Any) -> str | None:
     return value or None
 
 
-def _parse_number(text: str) -> float | None:
-    """Parse a European or US formatted price from a short string."""
-    raw = _NUMBER_RE.search(text or "")
-    if not raw:
-        return None
-    num = raw.group(0).replace(" ", "").replace("\u00a0", "").replace("\u202f", "")
-    num = num.rstrip(".,")
-    if not num:
-        return None
-
-    last_dot = num.rfind(".")
-    last_comma = num.rfind(",")
-    last_sep = max(last_dot, last_comma)
-    if last_sep == -1:
-        try:
-            return float(num)
-        except ValueError:
-            return None
-
-    tail = num[last_sep + 1 :]
-    if len(tail) in (1, 2):
-        head = num[:last_sep].replace(".", "").replace(",", "")
-        frac = tail
-        try:
-            return float(f"{head}.{frac}")
-        except ValueError:
-            return None
-
-    try:
-        return float(num.replace(".", "").replace(",", ""))
-    except ValueError:
-        return None
+# _parse_number removed — use parse_number from src.searcher.currency
 
 
 def _optional_float(value: Any) -> float | None:
@@ -206,7 +175,7 @@ def _optional_float(value: Any) -> float | None:
         return None
     if isinstance(value, (int, float)):
         return float(value)
-    return _parse_number(str(value))
+    return parse_number(str(value))
 
 
 def _normalize_choice(value: Any, aliases: Mapping[str, str], allowed: tuple, *, strict: bool) -> str | None:
@@ -451,22 +420,22 @@ def parse_filters_from_text(prompt: str) -> SearchFilters:
     max_price = None
     between = _BETWEEN_RE.search(text)
     if between:
-        min_price = _parse_number(between.group(1))
-        max_price = _parse_number(between.group(2))
+        min_price = parse_number(between.group(1))
+        max_price = parse_number(between.group(2))
     else:
         price_range = _RANGE_RE.search(text)
         if price_range:
-            min_price = _parse_number(price_range.group(1))
-            max_price = _parse_number(price_range.group(2))
+            min_price = parse_number(price_range.group(1))
+            max_price = parse_number(price_range.group(2))
 
     if min_price is None:
         match = _MIN_RE.search(text)
         if match:
-            min_price = _parse_number(match.group(1))
+            min_price = parse_number(match.group(1))
     if max_price is None:
         match = _MAX_RE.search(text)
         if match:
-            max_price = _parse_number(match.group(1))
+            max_price = parse_number(match.group(1))
 
     min_price, max_price = _lenient_prices(min_price, max_price)
 

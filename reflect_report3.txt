@@ -1,0 +1,100 @@
+## Coverage Ledger
+- adapter_base_reexports -> skip "not-worth-it: explicit imports already fine, no refactor needed"
+- enum_bypass_raw_strings -> cluster "type-safety-enums-and-literals"
+- run_search_wide_params -> cluster "cli-command-and-search-flow"
+- thin_normalize_wrappers -> skip "not-worth-it: intentional domain aliases, inlining reduces readability"
+- llm_client_mixed_sync_async_naming -> skip "not-worth-it: cosmetic rename risks breaking callers for no functional benefit"
+- mixed_sync_async_filters -> cluster "searcher-architecture"
+- notification_channel_ctor_inconsistency -> skip "not-worth-it: constructor differences minor, standardizing adds churn"
+- public_helpers_many_parameters -> skip "not-worth-it: high param counts inherent to filter construction, spec objects already used"
+- api_key_handling_inconsistent -> cluster "cli-command-and-search-flow"
+- notif_manager_duplication -> cluster "cli-command-and-search-flow"
+- system_channel_false_success -> cluster "error-contract-and-silent-failures"
+- adapter_detect_block_omitted -> cluster "adapter-conventions"
+- config_depends_on_searcher_currency -> cluster "cross-module-decoupling"
+- top_level_package_import_cycles -> cluster "cross-module-decoupling"
+- adapter-filter-engine-lazy-import-cycle -> cluster "cross-module-decoupling"
+- heavy-sqlite-utils-dependency -> cluster "http-and-dependency-health"
+- multiple-http-client-libraries -> cluster "http-and-dependency-health"
+- transitive-deps-declared-direct -> cluster "http-and-dependency-health"
+- monitor_async_channel_registration_complexity -> cluster "notification-channels"
+- coordinator_flattens_failed_agents -> cluster "error-contract-and-silent-failures"
+- playwright_search_crash_not_skipped -> cluster "error-contract-and-silent-failures"
+- watchlist_save_silent_failure -> cluster "error-contract-and-silent-failures"
+- llm_depends_on_searcher_deal -> cluster "cross-module-decoupling"
+- searcher_catchall_package -> cluster "searcher-architecture"
+- cli_split_incomplete -> cluster "cli-command-and-search-flow"
+- comparable_price_dual_api -> cluster "price-parsing-and-comparable-price"
+- legacy_llm_config_keys -> cluster "incomplete-migration-and-aliases"
+- legacy_search_command -> cluster "cli-command-and-search-flow"
+- mock_client_stale_api -> cluster "incomplete-migration-and-aliases"
+- number_parser_duplicate -> cluster "price-parsing-and-comparable-price"
+- selector_table_duplicate -> cluster "incomplete-migration-and-aliases"
+- test_only_compat_aliases -> cluster "incomplete-migration-and-aliases"
+- currency_rates_global_state -> cluster "cross-module-decoupling"
+- stale_timeout_constants -> cluster "init-coupling-and-async-helpers"
+- async-agent-helpers-no-await -> cluster "init-coupling-and-async-helpers"
+- canonical_price_number_parser_reimplemented -> cluster "price-parsing-and-comparable-price"
+- change_detector_duplicate_report_builders -> cluster "code-duplication-and-report-builders"
+- deal_scorer_repeated_metadata_parsing -> cluster "code-duplication-and-report-builders"
+- trust_for_noop_branches -> cluster "price-parsing-and-comparable-price"
+- comparable_price_translation_duplicated_at_deal_boundary -> cluster "price-parsing-and-comparable-price"
+- diamond_search_output_drops_llm_and_site_plan -> cluster "cli-command-and-search-flow"
+- find_replacement_missing_storage_and_browser_lifecycle -> cluster "cli-command-and-search-flow"
+- legacy_search_command_inconsistent_seams -> cluster "cli-command-and-search-flow"
+- search_with_diamond_double_pipeline -> cluster "searcher-architecture"
+- dual_research_packages -> cluster "package-and-research-ownership"
+- root_desloppify_straggler_scripts -> cluster "package-and-research-ownership"
+- tests_flat_overload -> skip "not-worth-it: moving 79 test files is large churn with high regression risk"
+- missing_integration_coverage -> cluster "tests-and-coverage"
+- test_alias_coupling -> cluster "tests-and-coverage"
+- timing_dependent_tests -> cluster "tests-and-coverage"
+- untested_fingerprint_module -> cluster "tests-and-coverage"
+- untested_notification_channels -> cluster "tests-and-coverage"
+- untested_output_domains -> cluster "tests-and-coverage"
+- untested_selectors_module -> cluster "tests-and-coverage"
+- alert-severity-untyped-str -> cluster "type-safety-enums-and-literals"
+- as-dict-returns-untyped-dict -> skip "not-worth-it: TypedDicts add overhead for marginal type safety on internal dict outputs"
+- cli-output-format-str-to-literal -> cluster "cli-command-and-search-flow"
+- enum-bypass-raw-condition-strings -> cluster "type-safety-enums-and-literals"
+- extract-condition-literal-duplicates-enum -> cluster "type-safety-enums-and-literals"
+- filter-extractor-price-keywords-type-ignore -> cluster "type-safety-enums-and-literals"
+- playwright-searcher-untyped-browser-manager -> cluster "searcher-architecture"
+
+## Cluster Blueprint
+Cluster "price-parsing-and-comparable-price" (currency.py, pricing.py, adapters/base.py, filters.py, watch.py, extract.py): unify price number parsing and comparable-price translation behind currency.parse_number/pricing.comparable_price; collapse trust_for noop branches.
+Cluster "cli-command-and-search-flow" (cli/app.py, cli/commands/*): finish CLI split, remove legacy search, align _search_async/run_search seams, persist deals in find_replacement, add llm/site_plan/price_alerts to diamond search, type CLI format, standardize API key + notification manager construction.
+Cluster "cross-module-decoupling" (config, currency, llm/client.py, adapters/base.py, filter_engine.py): break config->searcher and llm->searcher coupling, encapsulate currency rates, extract shared contracts to remove import cycles.
+Cluster "searcher-architecture" (searcher/playwright_searcher.py, filters.py, browser/manager.py): split catch-all searcher package, run diamond research once, annotate browser_manager, separate mixed sync/async filter boundary.
+Cluster "error-contract-and-silent-failures" (history/watchlist.py, notifications/channels/system.py, agents/coordinator.py, playwright_searcher.py): propagate save failures, fix false success, typed failure outcomes, record skipped sites.
+Cluster "type-safety-enums-and-literals" (adapters/base.py, filter_engine.py, price_tracker.py, extract.py, filter_extractor.py, notifications/base.py, discord.py, recommendation.py, config/models.py): replace raw string enum bypasses with Condition/Category members and typed literals.
+Cluster "incomplete-migration-and-aliases" (config.example.yaml, selectors.py, site_profiles, llm/mock_client.py, filters.py, storage/manager.py, adapters/base.py): remove legacy config keys, retire selector table, collapse mock client, migrate tests off compat aliases.
+Cluster "code-duplication-and-report-builders" (intelligence/change_detector.py, intelligence/deal_scorer.py): extract shared report builder and metadata helper.
+Cluster "adapter-conventions" (adapters/bazos.py, adapters/facebook.py, adapters/alza.py): add detect_block calls after navigation.
+Cluster "package-and-research-ownership" (src/research, src/agents/research, searcher/site_selection.py, root scripts): clarify research ownership and move straggler scripts into scripts/.
+Cluster "notification-channels" (cli/commands/monitor.py): extract _register_optional_channels helper.
+Cluster "http-and-dependency-health" (pyproject.toml, requirements.txt, storage/schema.py, llm/client.py, notification channels): replace sqlite-utils with stdlib, remove transitive direct deps, standardize HTTP client.
+Cluster "init-coupling-and-async-helpers" (llm/client.py, agents/*): replace stale timeout constants with getters, make async agent helpers sync.
+Cluster "tests-and-coverage" (tests/, browser/fingerprint.py, output/domains, selectors.py): add fingerprint/output/integration tests, fix alias coupling and timing-dependent tests.
+
+## Backlog Decisions
+- auto/test_coverage-untested_module -> defer "low-value per observe sampling; code quality dimensions below 80%"
+- auto/unused -> promote "actionable, 0% false positive rate; overlaps files in multiple clusters"
+- auto/security-B110 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-B112 -> skip "50% false positive rate per observe sampling; mixed verdict"
+- auto/security-B310 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-B324 -> skip "100% false positive rate per observe sampling (MD5 used for non-security)"
+- auto/security-B404 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-B603 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-B607 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-log_sensitive -> promote "actionable, 0% false positive rate"
+- auto/stale-review -> skip "stale subjective dimensions; low value, revisit after core clusters"
+- auto/stale_exclude -> skip "stale exclude entries; low value"
+- auto/test_coverage-untested_critical -> defer "low-value per observe sampling"
+- unclustered 287 dict_keys items -> defer "bulk deferred; revisit after core cluster execution; promote individually if a cluster touches the same file"
+
+## Skip Decisions
+Skip "not-worth-it-low-value" (7 review issues: adapter_base_reexports, thin_normalize_wrappers, llm_client_mixed_sync_async_naming, notification_channel_ctor_inconsistency, public_helpers_many_parameters, as-dict-returns-untyped-dict, tests_flat_overload) — observe verdict not-worth-it; fixes add churn/abstraction for marginal clarity gain.
+
+## Recurring Patterns
+Cross-module architecture, incomplete_migration, and type_safety recur across rounds with open peers; root causes are shared contracts (Deal, currency rates, FilterEngine) needing neutral lower-level modules rather than repeated per-issue fixes. Error consistency and low-level elegance recur via duplicated parsing/report builders. Test strategy recurring but deferred until code-quality dimensions exceed 80% per strategy.

@@ -1,0 +1,10 @@
+{
+  "stage": "organize",
+  "clusters_created": 13,
+  "issues_clustered": 127,
+  "steps_added": true,
+  "backlog_promoted": ["auto/unused", "auto/security-B324", "auto/security-log_sensitive"],
+  "backlog_skipped": ["auto/security-B603", "auto/security-B607", "auto/security-B110", "auto/security-B404", "auto/security-B310", "auto/stale_exclude"],
+  "depends_on_set": ["mid-level-elegance->cli-api-contracts", "design-coherence->cli-api-contracts", "incomplete-migration->cli-api-contracts", "cross-module-arch->search-types-contracts"],
+  "status": "recorded"
+}

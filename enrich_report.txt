@@ -1,0 +1,1 @@
+{"stage":"enrich","summary":"Enriched all 44 steps across 22 manual clusters with verified file paths, issue refs, and individual effort tags; removed non-existent path references and confirmed enrich stage.","clusters":22,"steps":44,"bad_paths_fixed":["src/cli/commands/run.py","src/storage/models.py","src/models/deal.py","src/llm/json_utils.py","src/text/json.py"]}

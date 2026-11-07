@@ -1,0 +1,605 @@
+{
+  "storage-watchlist": {
+    "issue_ids": [
+      "review::.::holistic::mid_level_elegance::storage-mixed-db-access",
+      "review::.::holistic::test_strategy::untested_watchlist_module",
+      "review::.::holistic::type_safety::parallel_deal_dataclasses",
+      "review::.::holistic::contract_coherence::price_trend_fallback_key_mismatch"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Make storage writes transactional and consistent",
+        "detail": "Use self.db.execute or an explicit transaction in src/storage/manager.py, use self.db.conn in prune_missing, and make get_price_trend return data_points on both branches. Add a reopen test in tests/test_storage_persistence.py.",
+        "effort": "small",
+        "refs": []
+      },
+      {
+        "i": 2,
+        "title": "Fix watchlist save and threshold bugs",
+        "detail": "Call _save() on update and fix the threshold positional argument in src/history/watchlist.py and src/cli/commands/history.py. Add tests/test_watchlist.py with a patched STORAGE_FILE.",
+        "effort": "medium",
+        "refs": []
+      },
+      {
+        "i": 3,
+        "title": "Unify the Deal dataclass",
+        "detail": "Delete storage.models.Deal and import adapters.base.Deal in src/cli/commands/watch.py and tests/test_storage.py. Keep one canonical model.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "agents-notifications-types": {
+    "issue_ids": [
+      "review::.::holistic::contract_coherence::agent_base_run_is_running_never_true",
+      "review::.::holistic::type_safety::callable_builtin_used_as_annotation",
+      "review::.::holistic::type_safety::implicit_optional_none_defaults",
+      "review::.::holistic::test_strategy::untested_notification_channels",
+      "review::.::holistic::authorization_consistency::system_channel_osascript_escaping_gap"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Fix agent running state",
+        "detail": "Set self._running = True before the try in src/agents/base.py and add an async test that observes True during execute and False afterwards.",
+        "effort": "small",
+        "refs": []
+      },
+      {
+        "i": 2,
+        "title": "Type notification contracts",
+        "detail": "Use Callable[[dict], bool] and | None/default_factory in src/notifications/rules.py, src/notifications/base.py, src/notifications/channels/webhook.py and src/config/models.py.",
+        "effort": "small",
+        "refs": []
+      },
+      {
+        "i": 3,
+        "title": "Test and fix notification channels",
+        "detail": "Add tests/test_notification_channels.py constructing every channel, fix ConsoleChannel/WebhookChannel/DiscordChannel calls in src/cli/commands/monitor.py, and test send success/failure.",
+        "effort": "medium",
+        "refs": []
+      },
+      {
+        "i": 4,
+        "title": "Harden osascript interpolation",
+        "detail": "Normalize CR/LF or pass title/message through osascript argv in src/notifications/channels/system.py; add a newline and quote test.",
+        "effort": "small",
+        "refs": []
+      }
+    ]
+  },
+  "search-types-contracts": {
+    "issue_ids": [
+      "review::.::holistic::type_safety::enum_bypass_in_deal_and_adapters",
+      "review::.::holistic::contract_coherence::to_eur_amount_optional_untyped",
+      "review::.::holistic::low_level_elegance::base_adapter_parse_price_eur_not_delegating",
+      "review::.::holistic::type_safety::untyped_accumulators_and_returns",
+      "review::.::holistic::type_safety::agent_deal_dict_shadow",
+      "review::.::holistic::type_safety::duplicate_price_history_types",
+      "review::.::holistic::type_safety::enum_bypass_domain_model",
+      "review::.::holistic::type_safety::output_format_type_ignore",
+      "review::.::holistic::type_safety::public_api_annotation_gaps",
+      "review::.::holistic::type_safety::site_status_raw_string",
+      "review::.::holistic::type_safety::sitehome_goto_override",
+      "review::.::holistic::type_safety::undeclared_deal_attributes",
+      "review::.::holistic::type_safety::untyped_deal_metadata"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Normalize parsed condition",
+        "detail": "Use _normalize_condition(strict=False) in parse_filters_from_text in src/searcher/filters.py and add a regression test.",
+        "effort": "trivial",
+        "refs": []
+      },
+      {
+        "i": 2,
+        "title": "Delegate price parsing",
+        "detail": "Return parse_number(text) in src/searcher/adapters/base.py and keep the existing tests/test_adapters.py cases as the guard.",
+        "effort": "small",
+        "refs": []
+      },
+      {
+        "i": 3,
+        "title": "Annotate currency and accumulators",
+        "detail": "Annotate to_eur with float | None in src/searcher/currency.py and add concrete container types in src/history/trends.py, src/intelligence/change_detector.py and src/searcher/adapters/bazos.py.",
+        "effort": "medium",
+        "refs": []
+      },
+      {
+        "i": 4,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "cli-api-contracts": {
+    "issue_ids": [
+      "review::.::holistic::api_surface_coherence::cli_wide_command_signatures",
+      "review::.::holistic::api_surface_coherence::filter_builders_inconsistent_contracts",
+      "review::.::holistic::mid_level_elegance::private-brand-filter-field",
+      "review::.::holistic::high_level_elegance::monolithic_cli_app",
+      "review::.::holistic::abstraction_fitness::cli_loose_filter_params",
+      "review::.::holistic::api_surface_coherence::browser_get_browser_union_return",
+      "review::.::holistic::api_surface_coherence::cli_duplicate_wide_signatures",
+      "review::.::holistic::api_surface_coherence::doctor_undefined_async_helper",
+      "review::.::holistic::api_surface_coherence::llm_failure_returns_user_prompt",
+      "review::.::holistic::api_surface_coherence::llm_public_surface_undefined",
+      "review::.::holistic::api_surface_coherence::watchlist_check_async_nested_event_loop",
+      "review::.::holistic::api_surface_coherence::watchlist_check_prices_no_op",
+      "review::.::holistic::contract_coherence::alert_rule_condition_not_a_type",
+      "review::.::holistic::contract_coherence::browser_cdp_contract_drift",
+      "review::.::holistic::contract_coherence::console_channel_missing_name",
+      "review::.::holistic::contract_coherence::currency_rates_ignored_in_symbol_path",
+      "review::.::holistic::contract_coherence::history_price_history_missing_method",
+      "review::.::holistic::contract_coherence::implicit_optional_api_defaults",
+      "review::.::holistic::contract_coherence::watchlist_add_item_positional_mismatch"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Make lenient filter builders non-throwing",
+        "detail": "Normalize or drop invalid price pairs in src/searcher/filters.py and add negative/inverted-price tests for filters_from_mapping and parse_filters_from_text.",
+        "effort": "medium",
+        "refs": []
+      },
+      {
+        "i": 2,
+        "title": "Thread brand filter through every CLI path",
+        "detail": "Add brand_filter to ResultProcessor in src/output/processor.py and pass filters.brand from run, search and diamond-search in src/cli/app.py; add a --brand report test.",
+        "effort": "small",
+        "refs": []
+      },
+      {
+        "i": 3,
+        "title": "Phase the CLI request object and app split",
+        "detail": "Make run_async/_search_async keyword-only with SearchRequest, move run/search into src/cli/commands/run.py, then extract the remaining commands from src/cli/app.py and remove the orphan wrappers.",
+        "effort": "large",
+        "refs": []
+      },
+      {
+        "i": 4,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "error-observability": {
+    "issue_ids": [
+      "review::.::holistic::error_consistency::pom_base_silent_broad_catches",
+      "review::.::holistic::error_consistency::processor_nested_silent_storage_init",
+      "review::.::holistic::error_consistency::watch_silent_exception_swallowing",
+      "review::.::holistic::error_consistency::adapter_failure_as_empty_results",
+      "review::.::holistic::error_consistency::cli_file_input_traceback",
+      "review::.::holistic::error_consistency::config_load_uncaught",
+      "review::.::holistic::error_consistency::coordinator_error_flattening",
+      "review::.::holistic::error_consistency::domain_override_unvalidated",
+      "review::.::holistic::error_consistency::site_failure_omitted_from_plan",
+      "review::.::holistic::error_consistency::watchlist_save_silent_failure"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Log POM and watch failures",
+        "detail": "Add logger.debug with the failed selector or URL in src/browser/pom/base.py and src/cli/commands/watch.py while preserving the same False/continue fallbacks.",
+        "effort": "small",
+        "refs": []
+      },
+      {
+        "i": 2,
+        "title": "Log processor storage init",
+        "detail": "Log the storage-init exception at debug in _price_history_lines in src/output/processor.py before returning an empty chart list.",
+        "effort": "trivial",
+        "refs": []
+      },
+      {
+        "i": 3,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "browser-security": {
+    "issue_ids": [
+      "review::.::holistic::authorization_consistency::browser_security_disabled_globally"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Make browser security opt-in",
+        "detail": "Remove --disable-web-security and the origin-isolation disable from src/browser/manager.py defaults; add browser.ignore_https_errors=False in src/config/models.py and pass it to both context paths.",
+        "effort": "medium",
+        "refs": [
+          "review::.::holistic::authorization_consistency::browser_security_disabled_globally"
+        ]
+      }
+    ]
+  },
+  "package-hygiene": {
+    "issue_ids": [
+      "review::.::holistic::dependency_health::undeclared-openpyxl-optional",
+      "review::.::holistic::high_level_elegance::inconsistent_package_init",
+      "review::.::holistic::package_organization::site_profiles_dir_shadows_module"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Declare openpyxl and package init files",
+        "detail": "Add the excel extra in pyproject.toml, document the optional install in README.md, and add docstring __init__.py files to the seven namespace packages under src.",
+        "effort": "small",
+        "refs": [
+          "review::.::holistic::dependency_health::undeclared-openpyxl-optional"
+        ]
+      },
+      {
+        "i": 2,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      },
+      {
+        "i": 3,
+        "title": "Standardize package init files",
+        "detail": "Add docstrings and __all__ to src namespace packages.",
+        "effort": "small",
+        "refs": []
+      }
+    ]
+  },
+  "naming-tests": {
+    "issue_ids": [
+      "review::.::holistic::naming_quality::opaque_private_helpers",
+      "review::.::holistic::naming_quality::british_normalised_locals",
+      "review::.::holistic::test_strategy::adapter_test_source_coupling",
+      "review::.::holistic::test_strategy::trivial_integration_smoke",
+      "review::.::holistic::api_surface_coherence::llm_private_method_leakage",
+      "review::.::holistic::mid_level_elegance::llm-private-search-query",
+      "review::.::holistic::naming_quality::agentbase_not_agent_base",
+      "review::.::holistic::naming_quality::domain_matches_returns_score",
+      "review::.::holistic::naming_quality::duplicate_record_model_names",
+      "review::.::holistic::naming_quality::generic_domain_get",
+      "review::.::holistic::naming_quality::notify_does_not_notify",
+      "review::.::holistic::naming_quality::site_identity_vocabulary",
+      "review::.::holistic::naming_quality::spelling_drift_british_american",
+      "review::.::holistic::test_strategy::no_ci_or_coverage_gate",
+      "review::.::holistic::test_strategy::notification_channels_untested",
+      "review::.::holistic::test_strategy::operational_paths_untested",
+      "review::.::holistic::test_strategy::vacuous_and_source_text_tests",
+      "review::.::holistic::test_strategy::watchlist_price_check_untested"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Rename identifiers and remove dead indirection",
+        "detail": "Rename normalised/normalised_key in src/output/domains/base.py, src/searcher/filters.py and src/searcher/adapters/profile_adapter.py; inline _win in src/browser/browsers.py.",
+        "effort": "small",
+        "refs": [
+          "review::.::holistic::naming_quality::opaque_private_helpers"
+        ]
+      },
+      {
+        "i": 2,
+        "title": "Replace source-coupled and import-only tests",
+        "detail": "Call BackMarketAdapter().default_search_url in tests/test_adapters.py, remove inspect, and replace tests/test_integration.py with a real SQLite plus fake notification seam.",
+        "effort": "small",
+        "refs": []
+      },
+      {
+        "i": 3,
+        "title": "Fix MockLLMClient public API",
+        "detail": "Add generate_search_query_async and keyword_query to src/llm/mock_client.py and add a query-ladder regression test with the mock.",
+        "effort": "small",
+        "refs": []
+      },
+      {
+        "i": 4,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "diamond": {
+    "issue_ids": [
+      "review::.::holistic::mid_level_elegance::diamond-intermediate-result-dropped"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Fix Diamond payload keys",
+        "detail": "Read all_candidates.research and final_recommendation in search_with_diamond in src/searcher/playwright_searcher.py, run score_deals once after fetching, and add a stub-agent payload test.",
+        "effort": "large",
+        "refs": []
+      }
+    ]
+  },
+  "abstraction-fitness": {
+    "issue_ids": [
+      "review::.::holistic::abstraction_fitness::adapter_search_flow_duplicated",
+      "review::.::holistic::abstraction_fitness::agent_base_messagebus_bypassed",
+      "review::.::holistic::abstraction_fitness::cli_search_request_not_adopted",
+      "review::.::holistic::abstraction_fitness::dead_command_wrapper_modules",
+      "review::.::holistic::abstraction_fitness::pom_alias_package_unused"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "ai-generated-debt": {
+    "issue_ids": [
+      "review::.::holistic::ai_generated_debt::adapter_flow_duplication",
+      "review::.::holistic::ai_generated_debt::dead_result_dataclasses",
+      "review::.::holistic::ai_generated_debt::defensive_getattr_on_typed_fields",
+      "review::.::holistic::ai_generated_debt::duplicate_csv_xlsx_row_building",
+      "review::.::holistic::ai_generated_debt::message_bus_noop_scaffolding",
+      "review::.::holistic::ai_generated_debt::notification_channel_init_swallows_errors",
+      "review::.::holistic::ai_generated_debt::unused_cli_wrappers",
+      "review::.::holistic::ai_generated_debt::watchlist_placeholder_pipeline"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "authorization-consistency": {
+    "issue_ids": [
+      "review::.::holistic::authorization_consistency::browser_security_disabled_globally",
+      "review::.::holistic::authorization_consistency::email_starttls_unverified",
+      "review::.::holistic::authorization_consistency::gemini_api_key_logged",
+      "review::.::holistic::authorization_consistency::login_gate_file_presence_only",
+      "review::.::holistic::authorization_consistency::login_policy_config_ignored",
+      "review::.::holistic::authorization_consistency::storage_state_dead_config"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "convention-outlier": {
+    "issue_ids": [
+      "review::.::holistic::convention_outlier::adapter_block_detection_opt_out",
+      "review::.::holistic::convention_outlier::adapter_price_quote_opt_out",
+      "review::.::holistic::convention_outlier::agent_base_protocol_bypass",
+      "review::.::holistic::convention_outlier::cli_command_organization_split",
+      "review::.::holistic::convention_outlier::legacy_storage_domain_models"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "cross-module-arch": {
+    "issue_ids": [
+      "review::.::holistic::cross_module_architecture::config_mutates_global_currency_rates",
+      "review::.::holistic::cross_module_architecture::duplicate_deal_and_history_models",
+      "review::.::holistic::cross_module_architecture::llm_client_owns_domain_policy",
+      "review::.::holistic::cross_module_architecture::orphan_pom_and_selector_stacks",
+      "review::.::holistic::cross_module_architecture::searcher_package_hub_cycles",
+      "review::.::holistic::cross_module_architecture::site_metadata_and_status_split"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "dependency-health": {
+    "issue_ids": [
+      "review::.::holistic::dependency_health::conflicting-transitive-pins",
+      "review::.::holistic::dependency_health::undeclared-openpyxl-optional"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      },
+      {
+        "i": 2,
+        "title": "Resolve greenlet pin",
+        "detail": "Remove direct greenlet/pydantic-core pins and let playwright supply them.",
+        "effort": "small",
+        "refs": []
+      }
+    ]
+  },
+  "design-coherence": {
+    "issue_ids": [
+      "review::.::holistic::design_coherence::cli_helper_naming_drift_nameerror",
+      "review::.::holistic::design_coherence::cli_positional_parameter_chain",
+      "review::.::holistic::design_coherence::cli_search_pipeline_triplication",
+      "review::.::holistic::design_coherence::cookie_consent_selector_triplication",
+      "review::.::holistic::design_coherence::discover_site_multi_responsibility",
+      "review::.::holistic::design_coherence::domain_expert_hardcoded_drone_rules",
+      "review::.::holistic::design_coherence::llm_provider_call_duplication",
+      "review::.::holistic::design_coherence::notification_channel_wiring_copy_paste",
+      "review::.::holistic::design_coherence::save_results_multi_responsibility"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "high-level-elegance": {
+    "issue_ids": [
+      "review::.::holistic::high_level_elegance::cli_command_ownership_split",
+      "review::.::holistic::high_level_elegance::parallel_search_cycles",
+      "review::.::holistic::high_level_elegance::price_analytics_ownership",
+      "review::.::holistic::high_level_elegance::readme_architecture_drift",
+      "review::.::holistic::high_level_elegance::research_and_site_selection_duplication",
+      "review::.::holistic::high_level_elegance::result_processor_scope"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "incomplete-migration": {
+    "issue_ids": [
+      "review::.::holistic::incomplete_migration::cli_split_incomplete",
+      "review::.::holistic::incomplete_migration::comparable_price_dual_api",
+      "review::.::holistic::incomplete_migration::legacy_llm_config_keys",
+      "review::.::holistic::incomplete_migration::legacy_search_command",
+      "review::.::holistic::incomplete_migration::mock_client_stale_api",
+      "review::.::holistic::incomplete_migration::number_parser_duplicate",
+      "review::.::holistic::incomplete_migration::selector_table_duplicate",
+      "review::.::holistic::incomplete_migration::test_only_compat_aliases"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "init-coupling": {
+    "issue_ids": [
+      "review::.::holistic::initialization_coupling::currency_rates_global_side_effect",
+      "review::.::holistic::initialization_coupling::selector_health_import_io",
+      "review::.::holistic::initialization_coupling::silent_agent_import_guard",
+      "review::.::holistic::initialization_coupling::timeout_module_getattr_shim"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      },
+      {
+        "i": 2,
+        "title": "Remove selector health singleton",
+        "detail": "Construct tracker inside run_health_check with explicit path.",
+        "effort": "small",
+        "refs": []
+      },
+      {
+        "i": 3,
+        "title": "Thread currency rates explicitly",
+        "detail": "Create converter from config and pass to adapters.",
+        "effort": "medium",
+        "refs": []
+      },
+      {
+        "i": 4,
+        "title": "Remove timeout getattr shim",
+        "detail": "Expose plain functions and update callers.",
+        "effort": "small",
+        "refs": []
+      }
+    ]
+  },
+  "logic-clarity": {
+    "issue_ids": [
+      "review::.::holistic::logic_clarity::cdp_close_closes_user_context",
+      "review::.::holistic::logic_clarity::change_threshold_ignored",
+      "review::.::holistic::logic_clarity::currency_rates_bypassed",
+      "review::.::holistic::logic_clarity::doctor_calls_missing_function",
+      "review::.::holistic::logic_clarity::monitor_channel_ctor_crash",
+      "review::.::holistic::logic_clarity::notify_never_sends",
+      "review::.::holistic::logic_clarity::selector_health_decay_dead_branch",
+      "review::.::holistic::logic_clarity::watch_report_missing_stock_key",
+      "review::.::holistic::logic_clarity::watchlist_add_threshold_mispassed",
+      "review::.::holistic::logic_clarity::watchlist_alert_path_unreachable"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "low-level-elegance": {
+    "issue_ids": [
+      "review::.::holistic::low_level_elegance::adapter_search_skeleton_duplicated",
+      "review::.::holistic::low_level_elegance::change_report_builder_duplicated",
+      "review::.::holistic::low_level_elegance::duplicated_price_number_parsing",
+      "review::.::holistic::low_level_elegance::processor_export_schema_duplicated",
+      "review::.::holistic::low_level_elegance::trust_for_noop_branches",
+      "review::.::holistic::low_level_elegance::watchlist_dead_price_check_scaffolding"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  },
+  "mid-level-elegance": {
+    "issue_ids": [
+      "review::.::holistic::mid_level_elegance::analytics_sql_bypasses_storage_api",
+      "review::.::holistic::mid_level_elegance::cli_search_orchestration_duplicated",
+      "review::.::holistic::mid_level_elegance::deal_storage_implicit_attribute_contract",
+      "review::.::holistic::mid_level_elegance::diamond_outputs_not_consumed",
+      "review::.::holistic::mid_level_elegance::diamond_price_payload_nesting",
+      "review::.::holistic::mid_level_elegance::llm_agent_chat_contract_mismatch",
+      "review::.::holistic::mid_level_elegance::watch_command_bypasses_browser_adapter_stack",
+      "review::.::holistic::mid_level_elegance::watchlist_check_path_is_stub"
+    ],
+    "steps": [
+      {
+        "i": 1,
+        "title": "Implement cluster fixes",
+        "detail": "Apply the suggested changes for all issues in this cluster, consolidating shared edits per file.",
+        "effort": "medium",
+        "refs": []
+      }
+    ]
+  }
+}

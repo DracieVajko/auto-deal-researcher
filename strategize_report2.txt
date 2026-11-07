@@ -1,0 +1,262 @@
+{
+  "computed_at": "2026-11-07T12:00:00+00:00",
+  "lookback_scans": 17,
+  "focus_dimensions": [
+    {
+      "name": "High elegance",
+      "reason": "Collapsed from 73 to 42 in one cycle; highest headroom (58) and largest single regression in the repo. Root cause must be diagnosed before further churn.",
+      "headroom": 58.0,
+      "trend": "declining"
+    },
+    {
+      "name": "Stale migration",
+      "reason": "Dropped from 78.5 to 55; 8 new open issues after 11 resolved indicates an incomplete migration rework loop.",
+      "headroom": 45.0,
+      "trend": "declining"
+    },
+    {
+      "name": "Mid elegance",
+      "reason": "Fell from 73 to 62; high configured weight (22) means regression here drags the overall score heavily.",
+      "headroom": 38.0,
+      "trend": "declining"
+    },
+    {
+      "name": "Error consistency",
+      "reason": "Dropped from 76 to 64; 5 new open issues after 23 resolved; high headroom and configured weight 3.",
+      "headroom": 36.0,
+      "trend": "declining"
+    },
+    {
+      "name": "Test health",
+      "reason": "Stagnant at 70.7 with the largest debt gap (8.4) and 67 permanent wontfix skips; coverage confidence is the binding constraint.",
+      "headroom": 29.3,
+      "trend": "stagnant"
+    }
+  ],
+  "avoid_areas": [
+    {
+      "name": "Stale migration",
+      "reason": "8 new open issues appeared after 11 were resolved (73% churn); re-running migration cleanup without a completion gate just reopens work.",
+      "type": "rework"
+    },
+    {
+      "name": "Design coherence",
+      "reason": "6 new open issues after 23 resolved; oversized modules keep regenerating findings after each pass.",
+      "type": "rework"
+    },
+    {
+      "name": "High elegance",
+      "reason": "6 new open issues plus 1 reopen after 10 resolved; thrashing here already cost 31 points.",
+      "type": "rework"
+    },
+    {
+      "name": "Code quality",
+      "reason": "Stagnant at 79.2 strict despite 88 completed issues; 165 smell failures and 25 unused findings remain, so more passes yield diminishing returns.",
+      "type": "stagnant"
+    },
+    {
+      "name": "Abstraction fit",
+      "reason": "Stagnant at 81.5-82.0; 14 abstraction issues resolved but score did not move, indicating score-neutral churn.",
+      "type": "stagnant"
+    }
+  ],
+  "rework_warnings": [
+    {
+      "dimension": "Stale migration",
+      "resolved": 11,
+      "new_open": 8,
+      "files": ["."]
+    },
+    {
+      "dimension": "Design coherence",
+      "resolved": 23,
+      "new_open": 6,
+      "files": ["."]
+    },
+    {
+      "dimension": "High elegance",
+      "resolved": 10,
+      "new_open": 6,
+      "files": ["."]
+    },
+    {
+      "dimension": "Test strategy",
+      "resolved": 32,
+      "new_open": 6,
+      "files": ["."]
+    },
+    {
+      "dimension": "Cross-module arch",
+      "resolved": 16,
+      "new_open": 6,
+      "files": ["."]
+    },
+    {
+      "dimension": "Error consistency",
+      "resolved": 23,
+      "new_open": 5,
+      "files": ["."]
+    },
+    {
+      "dimension": "Abstraction fit",
+      "resolved": 15,
+      "new_open": 5,
+      "files": ["."]
+    },
+    {
+      "dimension": "Logic clarity",
+      "resolved": 20,
+      "new_open": 3,
+      "files": ["."]
+    },
+    {
+      "dimension": "Authorization consistency",
+      "resolved": 13,
+      "new_open": 2,
+      "files": ["."]
+    }
+  ],
+  "file_churn_hotspots": [
+    {
+      "file": ".",
+      "count": 77,
+      "detectors": ["review", "subjective_review"]
+    },
+    {
+      "file": "src/storage/manager.py",
+      "count": 20,
+      "detectors": ["dict_keys", "smells", "structural"]
+    },
+    {
+      "file": "src/history/watchlist.py",
+      "count": 21,
+      "detectors": ["dict_keys", "security", "smells", "test_coverage", "unused"]
+    },
+    {
+      "file": "scripts/map_site.py",
+      "count": 17,
+      "detectors": ["dict_keys", "security", "smells", "structural", "test_coverage", "unused"]
+    },
+    {
+      "file": "src/cli/commands/history.py",
+      "count": 15,
+      "detectors": ["dict_keys", "smells", "structural", "test_coverage", "unused"]
+    },
+    {
+      "file": "src/cli/commands/watch.py",
+      "count": 7,
+      "detectors": ["security", "smells", "test_coverage", "unused"]
+    },
+    {
+      "file": "src/notifications/channels/system.py",
+      "count": 9,
+      "detectors": ["security", "smells", "test_coverage"]
+    },
+    {
+      "file": "src/output/processor.py",
+      "count": 8,
+      "detectors": ["dict_keys", "smells", "structural"]
+    }
+  ],
+  "stagnant_dimensions": [
+    "Abstraction fit",
+    "Code quality",
+    "Convention drift",
+    "Duplication",
+    "File health",
+    "Logic clarity",
+    "Security",
+    "Test health"
+  ],
+  "debt_trend": "stable",
+  "score_trend": "declining",
+  "momentum_dimensions": [
+    "AI generated debt",
+    "API coherence",
+    "Auth consistency",
+    "Contracts",
+    "Cross-module arch",
+    "Type safety"
+  ],
+  "executive_summary": "The codebase is in a declining trajectory: strict score fell from 77.4 to 71.8 in the latest cycle, the worst single-cycle delta on record (-5.6). Despite 88 completed issues and 89 resolved, the strict score barely moved for most of the cycle and then dropped sharply, indicating score-neutral churn and a late regression concentrated in High elegance (73 to 42), Stale migration (78.5 to 55), and Mid elegance (73 to 62). Several dimensions are stagnant despite sustained investment (Code quality, Abstraction fit, Logic clarity, Test health), while a small set of dimensions (Type safety, API coherence, Contracts) show genuine momentum. Wontfix debt is stable at 67 permanent skips but represents a large backlog, and execution is skip-heavy at 33%.",
+  "observe_guidance": "Verification effort is likely to be wasted on dimensions that are stagnant despite investment (Code quality, Abstraction fit) and on rework-prone dimensions where new issues regenerate after each pass (Stale migration, Design coherence, High elegance). Focus verification on the declining high-headroom dimensions (High elegance, Stale migration, Mid elegance, Error consistency) and on the binding coverage gap in Test health, where bandit is not installed and coverage confidence is only 0.6. Avoid re-verifying already-resolved items in churn-heavy areas.",
+  "reflect_guidance": "Focus dimensions are High elegance (headroom 58, collapsed to 42), Stale migration (headroom 45, rework loop), Mid elegance (headroom 38, high weight), Error consistency (headroom 36), and Test health (headroom 29.3, worst debt gap). Avoid churning Design coherence, High elegance, and Stale migration again without a completion gate, and avoid further passes on stagnant Code quality and Abstraction fit. Rework loops are concentrated in incomplete migration and design coherence; constrain repeat work there until root causes are addressed.",
+  "organize_guidance": "Prioritize, in order: (1) diagnose and fix the High elegance regression (largest single drop, 58 headroom); (2) close the Stale migration rework loop with an explicit completion gate; (3) reduce Mid elegance and Error consistency regressions given their high configured weights; (4) install bandit and raise Test health coverage confidence; (5) stop score-neutral churn on Code quality and Abstraction fit. Avoid re-running migration and design-coherence cleanup passes that have repeatedly reopened issues.",
+  "sense_check_guidance": "Rework risks: incomplete migration, design coherence, and high-level elegance repeatedly reopen issues after resolution, so fixes there must be verified against a completion gate rather than assumed. Value traps: further passes on stagnant dimensions (Code quality, Abstraction fit, Logic clarity) are unlikely to move scores; the binding constraint is Test health coverage and the High elegance regression. Watch for score-neutral churn masquerading as progress.",
+  "anti_patterns": [
+    {
+      "type": "rework_loop",
+      "description": "Incomplete migration work repeatedly reopens: 8 new open issues after 11 resolved in the latest cycle.",
+      "evidence": "rework_loops[incomplete_migration]: resolved 11, new_open 8, reopen 0"
+    },
+    {
+      "type": "score_neutral_churn",
+      "description": "88 issues completed and 89 resolved, yet strict score fell from 77.4 to 71.8; most dimensions are stagnant.",
+      "evidence": "execution_patterns: total_done 88, total_resolved 89; score_trajectory strict_delta -5.6"
+    },
+    {
+      "type": "dimension_neglect",
+      "description": "High elegance collapsed from 73 to 42 and Stale migration from 78.5 to 55, both high-headroom dimensions.",
+      "evidence": "dimension_trajectories High elegance 73->42; Stale migration 78.5->55"
+    },
+    {
+      "type": "skip_heavy_execution",
+      "description": "33% skip rate with 87 skipped issues against 88 done.",
+      "evidence": "execution_patterns skip_rate 0.33, total_skipped 87, total_done 88"
+    },
+    {
+      "type": "growing_wontfix_debt",
+      "description": "67 permanent wontfix skips remain, with Test health showing the largest debt gap (8.4).",
+      "evidence": "skipped_by_reason permanent 67; debt_trajectory current_wontfix 67, worst_dimension Test health"
+    },
+    {
+      "type": "reduced_security_coverage",
+      "description": "bandit is not installed, so Python-specific security checks are skipped and coverage confidence is 0.6.",
+      "evidence": "Security coverage_confidence 0.6, coverage_status reduced"
+    }
+  ],
+  "strategic_issues": [
+    {
+      "identifier": "high-elegance-regression",
+      "summary": "High elegance collapsed from 73 to 42 in one cycle, the largest single regression in the repo.",
+      "priority": "critical",
+      "recommendation": "Diagnose the root cause of the 31-point drop before any further refactoring; compare the subjective assessment inputs and recent commits in the elegance dimension.",
+      "dimensions_affected": ["High elegance"]
+    },
+    {
+      "identifier": "stale-migration-rework-loop",
+      "summary": "Stale migration score fell from 78.5 to 55 with 8 new open issues after 11 resolved.",
+      "priority": "high",
+      "recommendation": "Establish an explicit completion gate for the CLI split and legacy parser removal; stop partial migration passes that reopen findings.",
+      "dimensions_affected": ["Stale migration", "Incomplete migration"]
+    },
+    {
+      "identifier": "mid-elegance-regression",
+      "summary": "Mid elegance dropped from 73 to 62 despite a configured weight of 22.",
+      "priority": "high",
+      "recommendation": "Audit the mid-level elegance findings (browser lifecycle ownership, duplicate notification wiring, price alert boundary shapes) and fix them in a single coordinated pass.",
+      "dimensions_affected": ["Mid elegance"]
+    },
+    {
+      "identifier": "test-health-coverage-gap",
+      "summary": "Test health is stagnant at 70.7 with the largest debt gap (8.4) and reduced coverage confidence.",
+      "priority": "high",
+      "recommendation": "Install bandit, add coverage gating, and target the untested critical modules (browser fingerprint, doctor diagnostics, notification send paths, output domains).",
+      "dimensions_affected": ["Test health", "Security"]
+    },
+    {
+      "identifier": "score-neutral-churn",
+      "summary": "88 issues completed but strict score declined 5.6 points, indicating churn without net improvement.",
+      "priority": "medium",
+      "recommendation": "Shift from breadth (many small fixes) to depth (root-cause fixes in declining dimensions); require a measurable score delta per cycle.",
+      "dimensions_affected": ["Code quality", "Abstraction fit", "Logic clarity"]
+    },
+    {
+      "identifier": "skip-debt-backlog",
+      "summary": "67 permanent wontfix skips plus a 33% skip rate are masking unresolved debt.",
+      "priority": "medium",
+      "recommendation": "Triage the permanent skip list: resolve or formally document each, and reduce the skip rate below 20%.",
+      "dimensions_affected": ["Test health"]
+    }
+  ]
+}

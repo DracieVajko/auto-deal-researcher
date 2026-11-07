@@ -1,0 +1,283 @@
+You are a triage subagent with full codebase access and the desloppify CLI.
+Your job is to complete the **ORGANIZE** stage of triage planning.
+
+Repo root: C:\Users\DracieVajko\Downloads\PC_Commands\AI\PersonalAIDealSearcher
+
+## Standards
+
+You are expected to produce **exceptional** work. The output of this triage becomes the
+actual plan that an executor follows — if you are lazy, vague, or sloppy, real work gets
+wasted. Concretely:
+
+- **Read the actual source code.** Every opinion you form must come from reading the file,
+  not from reading the issue title. Issues frequently exaggerate, miscount, or describe
+  code that has already been fixed. Trust nothing until you verify it.
+- **Have specific opinions.** "This seems like it could be an issue" is worthless. "This is
+  a false positive because line 47 already uses the pattern the issue suggests" is useful.
+- **Do the hard thinking.** If two issues seem related, figure out WHY. If something should
+  be skipped, explain the specific reason for THIS issue, not a generic category.
+- **Don't take shortcuts.** Reading 5 files and extrapolating to 30 is lazy. Read all 30.
+  If you have too many, use subagents to parallelize — don't skip.
+- The prompt below already contains the authoritative stage contract and prior reports.
+  Do NOT search old triage run artifacts for alternate instructions unless you hit a
+  concrete mismatch you need to explain.
+
+Use the desloppify CLI to record your work. Every command you run mutates plan.json directly.
+The orchestrator will review your work and confirm the stage after you record it.
+Use the exact CLI command prefix shown in the CLI Command Reference: `desloppify`.
+Do NOT debug, repair, reinstall, or inspect the CLI/environment. If the command fails, stop
+and explain the failure in your stdout summary.
+
+After you finish recording the stage, write a short plain-text summary to stdout describing
+what you changed, which commands you ran, and any blockers you hit. The runner requires
+non-empty stdout output.
+
+**CRITICAL: Only run commands for YOUR stage (ORGANIZE).** Do NOT re-run earlier stages
+(e.g., do not run `--stage observe` if you are the organize subagent). Earlier stages
+are already confirmed. Re-running them will corrupt the plan state.
+
+
+## Prior Stage Reports
+
+
+### STRATEGIZE Report
+{"executive_summary": "The codebase is in a declining strict-score trend (77.4 -> 74.8) after a sharp -5.6 scan delta, with 101 permanent wontfix skips and a 52.3% skip rate indicating heavy selective execution. Prior cycles resolved ~89 issues but reopened/new-open counts show rework loops, especially in incomplete_migration (8 new after 11 resolved) and test_strategy (2 reopens). High-headroom, declining dimensions such as Stale migration (52.0, headroom 48.0), Cross-module arch (62.0, headroom 38.0), and High elegance (62.0, headroom 38.0) remain neglected while effort churns on already-improved areas. Security coverage is reduced (bandit missing) and Test health is stagnant at 70.7 strict, leaving a 8.4-point gap on the worst dimension. Momentum exists in AI generated debt, Contracts, Design coherence, Logic clarity, and Naming quality; these should be protected rather than reworked.", "observe_guidance": "Verification effort is likely wasted re-checking churn-prone files such as src/history/watchlist.py, src/storage/manager.py, and scripts/map_site.py, which accumulate open issues across multiple detectors. Missed verification is most likely in stagnant dimensions (Code quality, Duplication, File health, Security, Test health) where scores do not move despite scans, and in reduced-coverage Security checks (bandit not installed). Confirm bandit availability and coverage confidence before trusting security findings.", "reflect_guidance": "Focus dimensions are Stale migration, Cross-module arch, High elegance, Error consistency, Mid elegance, and Type safety due to high headroom and declining or flat trends. Avoid re-churning incomplete_migration, test_strategy, abstraction_fitness, dependency_health, authorization_consistency, and high_level_elegance, which show rework loops. Do not spend effort on stagnant, low-headroom dimensions (Duplication 2.1, File health 5.8, Security 6.1). Respect recurring-loop constraints: thin wrappers, raw-string enum bypasses, and notification manager duplication keep recurring.", "organize_guidance": "Prioritize high-headroom declining dimensions first (Stale migration, Cross-module arch, High elegance, Error consistency, Mid elegance), then stable high-headroom Type safety. Keep momentum dimensions (AI generated debt, Contracts, Design coherence, Logic clarity, Naming quality) out of the churn queue. Avoid re-running completed clusters in incomplete_migration and test_strategy; instead close remaining 8/7 open issues surgically. Address the 101 permanent wontfix skips by sampling for false positives before adding new debt.", "sense_check_guidance": "Rework risk is high in incomplete_migration and test_strategy where resolved counts exceed new-open but reopens persist; value traps include score-neutral churn on already-high dimensions (Duplication, File health) and over-investing in subjective dimensions with low headroom. Sense-check any proposed refactor against whether it moves a declining high-headroom dimension rather than re-touching a churn hotspot file.", "focus_dimensions": ["Stale migration", "Cross-module arch", "High elegance", "Error consistency", "Mid elegance", "Type safety"], "score_trend": "declining", "debt_trend": "stable"}
+
+
+### REFLECT Report
+## Coverage Ledger
+- adapter_base_reexports -> skip "not-worth-it: explicit imports already fine, no refactor needed"
+- enum_bypass_raw_strings -> cluster "type-safety-enums-and-literals"
+- run_search_wide_params -> cluster "cli-command-and-search-flow"
+- thin_normalize_wrappers -> skip "not-worth-it: intentional domain aliases, inlining reduces readability"
+- llm_client_mixed_sync_async_naming -> skip "not-worth-it: cosmetic rename risks breaking callers for no functional benefit"
+- mixed_sync_async_filters -> cluster "searcher-architecture"
+- notification_channel_ctor_inconsistency -> skip "not-worth-it: constructor differences minor, standardizing adds churn"
+- public_helpers_many_parameters -> skip "not-worth-it: high param counts inherent to filter construction, spec objects already used"
+- api_key_handling_inconsistent -> cluster "cli-command-and-search-flow"
+- notif_manager_duplication -> cluster "cli-command-and-search-flow"
+- system_channel_false_success -> cluster "error-contract-and-silent-failures"
+- adapter_detect_block_omitted -> cluster "adapter-conventions"
+- config_depends_on_searcher_currency -> cluster "cross-module-decoupling"
+- top_level_package_import_cycles -> cluster "cross-module-decoupling"
+- adapter-filter-engine-lazy-import-cycle -> cluster "cross-module-decoupling"
+- heavy-sqlite-utils-dependency -> cluster "http-and-dependency-health"
+- multiple-http-client-libraries -> cluster "http-and-dependency-health"
+- transitive-deps-declared-direct -> cluster "http-and-dependency-health"
+- monitor_async_channel_registration_complexity -> cluster "notification-channels"
+- coordinator_flattens_failed_agents -> cluster "error-contract-and-silent-failures"
+- playwright_search_crash_not_skipped -> cluster "error-contract-and-silent-failures"
+- watchlist_save_silent_failure -> cluster "error-contract-and-silent-failures"
+- llm_depends_on_searcher_deal -> cluster "cross-module-decoupling"
+- searcher_catchall_package -> cluster "searcher-architecture"
+- cli_split_incomplete -> cluster "cli-command-and-search-flow"
+- comparable_price_dual_api -> cluster "price-parsing-and-comparable-price"
+- legacy_llm_config_keys -> cluster "incomplete-migration-and-aliases"
+- legacy_search_command -> cluster "cli-command-and-search-flow"
+- mock_client_stale_api -> cluster "incomplete-migration-and-aliases"
+- number_parser_duplicate -> cluster "price-parsing-and-comparable-price"
+- selector_table_duplicate -> cluster "incomplete-migration-and-aliases"
+- test_only_compat_aliases -> cluster "incomplete-migration-and-aliases"
+- currency_rates_global_state -> cluster "cross-module-decoupling"
+- stale_timeout_constants -> cluster "init-coupling-and-async-helpers"
+- async-agent-helpers-no-await -> cluster "init-coupling-and-async-helpers"
+- canonical_price_number_parser_reimplemented -> cluster "price-parsing-and-comparable-price"
+- change_detector_duplicate_report_builders -> cluster "code-duplication-and-report-builders"
+- deal_scorer_repeated_metadata_parsing -> cluster "code-duplication-and-report-builders"
+- trust_for_noop_branches -> cluster "price-parsing-and-comparable-price"
+- comparable_price_translation_duplicated_at_deal_boundary -> cluster "price-parsing-and-comparable-price"
+- diamond_search_output_drops_llm_and_site_plan -> cluster "cli-command-and-search-flow"
+- find_replacement_missing_storage_and_browser_lifecycle -> cluster "cli-command-and-search-flow"
+- legacy_search_command_inconsistent_seams -> cluster "cli-command-and-search-flow"
+- search_with_diamond_double_pipeline -> cluster "searcher-architecture"
+- dual_research_packages -> cluster "package-and-research-ownership"
+- root_desloppify_straggler_scripts -> cluster "package-and-research-ownership"
+- tests_flat_overload -> skip "not-worth-it: moving 79 test files is large churn with high regression risk"
+- missing_integration_coverage -> cluster "tests-and-coverage"
+- test_alias_coupling -> cluster "tests-and-coverage"
+- timing_dependent_tests -> cluster "tests-and-coverage"
+- untested_fingerprint_module -> cluster "tests-and-coverage"
+- untested_notification_channels -> cluster "tests-and-coverage"
+- untested_output_domains -> cluster "tests-and-coverage"
+- untested_selectors_module -> cluster "tests-and-coverage"
+- alert-severity-untyped-str -> cluster "type-safety-enums-and-literals"
+- as-dict-returns-untyped-dict -> skip "not-worth-it: TypedDicts add overhead for marginal type safety on internal dict outputs"
+- cli-output-format-str-to-literal -> cluster "cli-command-and-search-flow"
+- enum-bypass-raw-condition-strings -> cluster "type-safety-enums-and-literals"
+- extract-condition-literal-duplicates-enum -> cluster "type-safety-enums-and-literals"
+- filter-extractor-price-keywords-type-ignore -> cluster "type-safety-enums-and-literals"
+- playwright-searcher-untyped-browser-manager -> cluster "searcher-architecture"
+
+## Cluster Blueprint
+Cluster "price-parsing-and-comparable-price" (currency.py, pricing.py, adapters/base.py, filters.py, watch.py, extract.py): unify price number parsing and comparable-price translation behind currency.parse_number/pricing.comparable_price; collapse trust_for noop branches.
+Cluster "cli-command-and-search-flow" (cli/app.py, cli/commands/*): finish CLI split, remove legacy search, align _search_async/run_search seams, persist deals in find_replacement, add llm/site_plan/price_alerts to diamond search, type CLI format, standardize API key + notification manager construction.
+Cluster "cross-module-decoupling" (config, currency, llm/client.py, adapters/base.py, filter_engine.py): break config->searcher and llm->searcher coupling, encapsulate currency rates, extract shared contracts to remove import cycles.
+Cluster "searcher-architecture" (searcher/playwright_searcher.py, filters.py, browser/manager.py): split catch-all searcher package, run diamond research once, annotate browser_manager, separate mixed sync/async filter boundary.
+Cluster "error-contract-and-silent-failures" (history/watchlist.py, notifications/channels/system.py, agents/coordinator.py, playwright_searcher.py): propagate save failures, fix false success, typed failure outcomes, record skipped sites.
+Cluster "type-safety-enums-and-literals" (adapters/base.py, filter_engine.py, price_tracker.py, extract.py, filter_extractor.py, notifications/base.py, discord.py, recommendation.py, config/models.py): replace raw string enum bypasses with Condition/Category members and typed literals.
+Cluster "incomplete-migration-and-aliases" (config.example.yaml, selectors.py, site_profiles, llm/mock_client.py, filters.py, storage/manager.py, adapters/base.py): remove legacy config keys, retire selector table, collapse mock client, migrate tests off compat aliases.
+Cluster "code-duplication-and-report-builders" (intelligence/change_detector.py, intelligence/deal_scorer.py): extract shared report builder and metadata helper.
+Cluster "adapter-conventions" (adapters/bazos.py, adapters/facebook.py, adapters/alza.py): add detect_block calls after navigation.
+Cluster "package-and-research-ownership" (src/research, src/agents/research, searcher/site_selection.py, root scripts): clarify research ownership and move straggler scripts into scripts/.
+Cluster "notification-channels" (cli/commands/monitor.py): extract _register_optional_channels helper.
+Cluster "http-and-dependency-health" (pyproject.toml, requirements.txt, storage/schema.py, llm/client.py, notification channels): replace sqlite-utils with stdlib, remove transitive direct deps, standardize HTTP client.
+Cluster "init-coupling-and-async-helpers" (llm/client.py, agents/*): replace stale timeout constants with getters, make async agent helpers sync.
+Cluster "tests-and-coverage" (tests/, browser/fingerprint.py, output/domains, selectors.py): add fingerprint/output/integration tests, fix alias coupling and timing-dependent tests.
+
+## Backlog Decisions
+- auto/test_coverage-untested_module -> defer "low-value per observe sampling; code quality dimensions below 80%"
+- auto/unused -> promote "actionable, 0% false positive rate; overlaps files in multiple clusters"
+- auto/security-B110 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-B112 -> skip "50% false positive rate per observe sampling; mixed verdict"
+- auto/security-B310 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-B324 -> skip "100% false positive rate per observe sampling (MD5 used for non-security)"
+- auto/security-B404 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-B603 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-B607 -> skip "security cluster; defer to security dimension review, not sampled in observe"
+- auto/security-log_sensitive -> promote "actionable, 0% false positive rate"
+- auto/stale-review -> skip "stale subjective dimensions; low value, revisit after core clusters"
+- auto/stale_exclude -> skip "stale exclude entries; low value"
+- auto/test_coverage-untested_critical -> defer "low-value per observe sampling"
+- unclustered 287 dict_keys items -> defer "bulk deferred; revisit after core cluster execution; promote individually if a cluster touches the same file"
+
+## Skip Decisions
+Skip "not-worth-it-low-value" (7 review issues: adapter_base_reexports, thin_normalize_wrappers, llm_client_mixed_sync_async_naming, notification_channel_ctor_inconsistency, public_helpers_many_parameters, as-dict-returns-untyped-dict, tests_flat_overload) — observe verdict not-worth-it; fixes add churn/abstraction for marginal clarity gain.
+
+## Recurring Patterns
+Cross-module architecture, incomplete_migration, and type_safety recur across rounds with open peers; root causes are shared contracts (Deal, currency rates, FilterEngine) needing neutral lower-level modules rather than repeated per-issue fixes. Error consistency and low-level elegance recur via duplicated parsing/report builders. Test strategy recurring but deferred until code-quality dimensions exceed 80% per strategy.
+
+
+
+## Strategic Priorities
+Prioritize high-headroom declining dimensions first (Stale migration, Cross-module arch, High elegance, Error consistency, Mid elegance), then stable high-headroom Type safety. Keep momentum dimensions (AI generated debt, Contracts, Design coherence, Logic clarity, Naming quality) out of the churn queue. Avoid re-running completed clusters in incomplete_migration and test_strategy; instead close remaining 8/7 open issues surgically. Address the 101 permanent wontfix skips by sampling for false positives before adding new debt.
+
+## Issue Summary
+Open review issues: 61
+Open dimensions: abstraction_fitness (4), api_surface_coherence (4), authorization_consistency (2), contract_coherence (1), convention_outlier (1), cross_module_architecture (2), dependency_health (4), design_coherence (1), error_consistency (3), high_level_elegance (2), incomplete_migration (8), initialization_coupling (2), logic_clarity (1), low_level_elegance (4), mid_level_elegance (5), package_organization (3), test_strategy (7), type_safety (7)
+Resolved since last triage: 68
+## Available Investigation Commands
+
+To see full detail for a specific issue:
+  desloppify show <issue-id-or-hash-pattern> --no-budget
+To see all open review issues with suggestions:
+  desloppify show review --status open --no-budget
+To see a cluster's steps, members, and suggestions:
+  desloppify plan cluster show <name>
+To list all clusters:
+  desloppify plan cluster list --verbose
+
+## ORGANIZE Stage Instructions
+
+Your task: execute the cluster blueprint from the reflect stage.
+
+The reflect report contains a specific plan: which clusters to create, which issues go
+where, what to skip. The reflect report included above is authoritative. Do not go
+search old triage runs for a different blueprint unless you find a concrete mismatch.
+Build it using the CLI. If something doesn't work as planned
+(issue hash doesn't match, file proximity doesn't hold), adjust and document why.
+
+This stage should be largely mechanical. If you find yourself making major strategic
+decisions, something went wrong in reflect — the strategy should already be decided.
+
+### Process
+
+1. Review the reflect report's cluster blueprint AND the observe assessments table (both provided below)
+2. **False-positive and exaggerated issues have already been auto-skipped** by observe confirmation.
+   You do NOT need to skip them manually. If reflect skipped additional issues (over-engineering/not-worth-it),
+   skip those now:
+   ```
+   desloppify plan skip --permanent <pattern> --note "<reason from reflect>" --attest "I have reviewed this triage skip against the code and I am not gaming the score by suppressing a real defect."
+   ```
+3. Create clusters as specified in the blueprint:
+   `desloppify plan cluster create <name> --description "..."`
+4. Add issues: `desloppify plan cluster add <name> <patterns...>`
+5. Execute ALL backlog decisions from the reflect stage's `## Backlog Decisions` section:
+   - **promote**: `desloppify plan promote auto/<cluster-name>`
+   - **skip**: no CLI action needed — the cluster stays in backlog, skip is documented
+   - **supersede**: absorb into the named review cluster (already handled by clustering above)
+   - With placement: `desloppify plan promote <pattern> before -t <target>`
+6. Add steps that consolidate: one step per file or logical change, NOT one step per issue
+7. Set `--effort` on each step individually (trivial/small/medium/large)
+8. Set `--depends-on` when clusters touch overlapping files
+
+
+### Quality gates (the confirmation will check these)
+
+Before recording, verify:
+- [ ] Every issue that reflect marked as skip has been skipped (false-positive/exaggerated are already auto-skipped)
+- [ ] No cluster where the total fix effort exceeds the problem severity (KISS: prefer
+      simple code with a known smell over complex code with a hidden abstraction)
+- [ ] Every cluster name describes an area or specific change, not a problem type
+- [ ] No cluster has issues from 5+ unrelated directories (theme-group smell)
+- [ ] Step count < issue count (consolidation happened)
+- [ ] Every skip has a specific per-issue reason (not "low priority")
+- [ ] Overlapping clusters have --depends-on set
+- [ ] Cluster descriptions describe the WORK, not the PROBLEMS
+
+Every review issue must end up in a cluster OR be skipped.
+
+When done, run:
+```
+desloppify plan triage --stage organize --report "<summary of priorities and organization>" --attestation "<80+ chars mentioning cluster names or the organized work>"
+```
+
+
+
+## CLI Command Reference
+
+### Stage recording
+```
+desloppify plan triage --stage strategize --report "<json briefing>"
+desloppify plan triage --stage observe --report "<analysis>"
+desloppify plan triage --stage reflect --report "<strategy>" --attestation "<80+ chars>"
+desloppify plan triage --stage organize --report "<summary>" --attestation "<80+ chars>"
+desloppify plan triage --stage enrich --report "<enrichment summary>" --attestation "<80+ chars>"
+desloppify plan triage --stage sense-check --report "<verification summary>" --attestation "<80+ chars>"
+```
+
+### Cluster management
+```
+desloppify plan cluster create <name> --description "<what this cluster addresses>"
+desloppify plan cluster add <name> <issue-patterns...>
+desloppify plan cluster remove <name> <issue-patterns...>
+desloppify plan cluster update <name> --description "<desc>" --steps "step 1" "step 2"
+desloppify plan cluster update <name> --add-step "<title>" --detail "<sub-points>" --effort small --issue-refs <id1> <id2>
+desloppify plan cluster update <name> --update-step N --detail "<sub-points>" --effort medium --issue-refs <id1>
+desloppify plan cluster update <name> --depends-on <other-cluster-name>
+desloppify plan cluster delete <name>
+desloppify plan cluster show <name>
+desloppify plan cluster list --verbose
+desloppify plan promote <pattern>
+desloppify plan promote <pattern> top
+desloppify plan promote <pattern> before -t <target>
+```
+
+### Skip/dismiss
+```
+desloppify plan skip --permanent <pattern> --note "<reason>" --attest "I have reviewed this triage skip against the code and I am not gaming the score by suppressing a real defect."
+```
+**Important:** The --attest value MUST contain the words "reviewed" and "not gaming" (exact phrases required by validation).
+Every review issue in the active triage run must end up either in a manual cluster or permanently skipped. Leaving issues unassigned is an invalid triage result.
+
+### Issue investigation
+```
+desloppify show <issue-id-or-pattern> --no-budget    # full issue detail with suggestion
+desloppify show review --status open --no-budget     # all open review issues
+desloppify backlog --count 20                        # inspect backlog-only detector work
+```
+
+### Effort tags
+Valid values: trivial, small, medium, large. Set on steps via --effort flag.
+
+
+## Validation Requirements
+- At least one manual cluster with issues must exist
+- All manual clusters must have description and action steps
+- All review issues must be in a cluster or skipped
+- Overlapping clusters must have --depends-on relationships
+- Cluster descriptions must reflect current issues (not stale/skipped ones)
+- Clusters must group by file/area proximity, not by dimension or theme
+- A cluster whose issues span 5+ unrelated directories will be flagged
+- Step count should be less than issue count (consolidate shared-file changes)
+- Stage must be recorded and confirmed
+

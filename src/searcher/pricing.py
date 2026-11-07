@@ -113,11 +113,7 @@ def _trust_for(
     trust = 1.0
     warnings: list[str] = []
 
-    if shipping.is_free is True:
-        pass
-    elif shipping.cost_eur is not None:
-        pass
-    else:
+    if shipping.is_free is not True and shipping.cost_eur is None:
         trust *= 0.90
         warnings.append("shipping unknown")
 

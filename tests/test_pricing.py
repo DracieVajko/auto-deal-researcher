@@ -77,7 +77,6 @@ def test_flags_multiply_and_trust_stays_above_the_floor():
 
 def test_comparable_price_falls_back_to_price_eur_without_quote():
     deal = Deal(url="https://x/1", title="X", price_eur=42.0)
-    assert deal.comparable_price_eur == 42.0
     assert comparable_price(deal) == 42.0
 
 
@@ -88,7 +87,7 @@ def test_comparable_price_uses_effective_price():
         price_eur=100.0,
         price_quote=build_price_quote(100.0, shipping=ShippingQuote(cost_eur=5.0)),
     )
-    assert deal.comparable_price_eur == 105.0
+    assert comparable_price(deal) == 105.0
 
 
 @pytest.mark.parametrize(

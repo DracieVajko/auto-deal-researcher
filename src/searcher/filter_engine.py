@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.config.models import Category, Condition
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
 
 from src.searcher.filters import SearchFilters
@@ -97,7 +100,7 @@ class FilterEngine:
         cls,
         profile: SiteProfile,
         query: str,
-        category: str = "any",
+        category: "Category | str" = "any",
         filters: SearchFilters | None = None,
     ) -> str | None:
         """Build the best URL the profile exposes for this query/category.
@@ -107,8 +110,9 @@ class FilterEngine:
         """
         filters = filters or SearchFilters()
         base: str | None = None
-        if category and category != "any":
-            base = profile.search.category_urls.get(category)
+        _category = category.value if hasattr(category, "value") else str(category) if category is not None else None
+        if _category and _category != "any":
+            base = profile.search.category_urls.get(_category)
         if not base:
             base = profile.search.url_template
         if not base:
@@ -204,7 +208,8 @@ class FilterEngine:
 
         if filters.condition:
             condition = (getattr(deal, "condition", "") or "").lower()
-            if condition and condition != "unknown" and condition != filters.condition:
+            _filter_condition = filters.condition.value if hasattr(filters.condition, "value") else str(filters.condition)
+            if condition and condition != "unknown" and condition != _filter_condition.lower():
                 return False
 
         metadata = getattr(deal, "metadata", None) or {}

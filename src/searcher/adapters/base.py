@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 from playwright.async_api import ElementHandle, Page
 
 if TYPE_CHECKING:
+    from src.config.models import Category, Condition
     from src.searcher.pricing import PriceQuote
 
 from src.searcher.currency import parse_number, parse_price_detail
@@ -37,7 +38,7 @@ class Deal:
     """Represents a deal found on a marketplace."""
     url: str
     title: str
-    price_eur: float
+    price_eur: float = 0.0
     currency: str = "EUR"
     condition: str = "unknown"          # new | used | refurbished | open_box
     category: str = "general"           # electronics | appliances | auto | etc.
@@ -48,6 +49,18 @@ class Deal:
     price_quote: "PriceQuote | None" = None
     expert_score: float | None = None
     expert_analysis: str = ""
+
+    def matches_condition(self, condition: "Condition | str") -> bool:
+        incoming = condition.value if hasattr(condition, "value") else str(condition)
+        if incoming == "any" or self.condition == incoming:
+            return True
+        return False
+
+    def matches_category(self, category: "Category | str") -> bool:
+        incoming = category.value if hasattr(category, "value") else str(category)
+        if incoming == "any" or self.category == incoming:
+            return True
+        return False
 
 class BaseAdapter(ABC):
     """Abstract adapter for a single marketplace/site."""
@@ -147,15 +160,17 @@ class BaseAdapter(ABC):
         """Extract Deal from a single result element on search results page."""
         ...
 
-    def matches_condition(self, condition: str) -> bool:
-        if condition == "any":
+    def matches_condition(self, condition: "Condition | str") -> bool:
+        incoming = condition.value if hasattr(condition, "value") else str(condition)
+        if incoming == "any":
             return True
-        return condition in self.supported_conditions
+        return incoming in self.supported_conditions
 
-    def matches_category(self, category: str) -> bool:
-        if category == "any":
+    def matches_category(self, category: "Category | str") -> bool:
+        incoming = category.value if hasattr(category, "value") else str(category)
+        if incoming == "any":
             return True
-        return category in self.supported_categories
+        return incoming in self.supported_categories
 
     async def detect_block(self, page: Page) -> str | None:
         """Return a human-readable reason if the page is an anti-bot interstitial.

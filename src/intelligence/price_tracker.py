@@ -9,6 +9,9 @@ from datetime import UTC, datetime
 from src.notifications.base import Alert
 from src.notifications.manager import NotificationManager
 from src.searcher.adapters.base import Deal
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.config.models import Condition
 from src.storage.manager import StorageManager
 
 
@@ -102,13 +105,15 @@ class PriceTracker:
                 })
         return sorted(results, key=lambda x: x["effective_price_eur"])
 
-    def get_deals_below_price(self, max_price_eur: float, condition: str = "any") -> list[dict]:
+    def get_deals_below_price(self, max_price_eur: float, condition: "Condition | str" = "any") -> list[dict]:
         """Get all deals below a certain effective price."""
         deals = self.storage.get_all_deals()
         results = []
         for deal in deals:
             price = _effective_price(deal)
-            if price <= max_price_eur and (condition == "any" or deal.condition == condition):
+            _condition = condition.value if hasattr(condition, "value") else str(condition)
+            _deal_condition = deal.condition.value if hasattr(deal.condition, "value") else str(deal.condition)
+            if price <= max_price_eur and (_condition == "any" or _deal_condition == _condition):
                 results.append({
                     "url": deal.url,
                     "title": deal.title,

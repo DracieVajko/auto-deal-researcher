@@ -680,7 +680,16 @@ class PlaywrightSearcher:
             for site, deals in zip(healthy_sites, await asyncio.gather(*(run_site(s) for s in healthy_sites))):
                 result_by_site[site.name] = deals
         for site in unhealthy_sites:
-            result_by_site[site.name] = await run_site(site)
+            # Unhealthy sites run outside the shared pool so they cannot starve
+            # healthy ones; they are already serialized by the loop above.
+            try:
+                result_by_site[site.name] = await self._search_one_site(site, query, category, filters)
+            except Exception as exc:
+                logger.exception(f"[{site.name}] Search error")
+                self._skipped_sites.append(
+                    {"name": site.name, "reason": f"search failed: {type(exc).__name__}: {exc}"}
+                )
+                result_by_site[site.name] = []
         results = [result_by_site[s.name] for s in sites]
         all_deals: list[Deal] = []
         seen: set[str] = set(seen_urls)

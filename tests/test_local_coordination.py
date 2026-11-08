@@ -18,7 +18,6 @@ from src.llm.local_coordinator import (
     LoadedModel,
     LocalBackend,
     LocalModelCoordinator,
-    LocalStatus,
 )
 
 LMSTUDIO_V1_PAYLOAD = {

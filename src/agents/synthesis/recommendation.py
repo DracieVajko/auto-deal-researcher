@@ -28,9 +28,7 @@ class RecommendationAgent:
         """Synthesize final recommendation from all agent outputs."""
         prompt = input_data.get("prompt", "")
         all_results = input_data.get("all_results", {})
-        price = all_results.get("price", {})
-        price_deals = price.get("enriched_deals", [])
-        ranked = await self._rank_final_deals(all_results)
+        await self._rank_final_deals(all_results)
         result = await self._generate_final_output(prompt, all_results)
         return {
             "final_recommendation": result,

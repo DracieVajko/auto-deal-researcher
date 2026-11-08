@@ -1,12 +1,9 @@
 """Tests for ItemSpecsResearcher (sub-project 1: specs research & review reading)."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-
-from src.intelligence.specs_researcher import ItemSpecs, ItemSpecsResearcher, ReviewSummary
-from src.storage.manager import StorageManager
+from src.intelligence.specs_researcher import ItemSpecs, ItemSpecsResearcher
 
 
 class FakeLLM:

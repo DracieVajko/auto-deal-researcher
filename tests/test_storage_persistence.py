@@ -149,7 +149,6 @@ def test_price_tracker_trend_uses_effective_price(storage):
     storage.save_deal(deal, "run1")
     storage.save_deal(make_deal(price=90.0), "run1")  # effective = 90.0
 
-    tracker = PriceTracker(storage)
     trend = storage.get_price_trend(URL)
 
     # Effective price went 120 -> 90, a drop. Raw price went 100 -> 90.

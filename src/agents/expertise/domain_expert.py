@@ -34,7 +34,6 @@ class DomainExpertAgent:
         self.role = AgentRole.DOMAIN_EXPERT
 
     async def run(self, input_data: dict) -> dict:
-        prompt = input_data.get("prompt", "")
         deals = input_data.get("deals", [])
         research = input_data.get("research", {})
 

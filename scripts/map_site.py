@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -115,7 +114,7 @@ def record(url: str, out: Path, headed: bool = True, user_dir: str = "./browser_
                 events.append({"type": "click",
                                "selector": _selector(el) if el else "unknown",
                                "ts": datetime.now().isoformat()})
-            except Exception as e:
+            except Exception:
                 events.append({"type": "click", "raw": str(msg)[:200],
                                "ts": datetime.now().isoformat()})
 
@@ -126,7 +125,7 @@ def record(url: str, out: Path, headed: bool = True, user_dir: str = "./browser_
                                "selector": _selector(el) if el else "unknown",
                                "value": (msg.get("value") or "")[:200] if isinstance(msg, dict) else "",
                                "ts": datetime.now().isoformat()})
-            except Exception as e:
+            except Exception:
                 events.append({"type": "fill", "raw": str(msg)[:200],
                                "ts": datetime.now().isoformat()})
 
@@ -136,7 +135,7 @@ def record(url: str, out: Path, headed: bool = True, user_dir: str = "./browser_
                 events.append({"type": "submit",
                                "selector": _selector(el) if el else "unknown",
                                "ts": datetime.now().isoformat()})
-            except Exception as e:
+            except Exception:
                 events.append({"type": "submit", "raw": str(msg)[:200],
                                "ts": datetime.now().isoformat()})
 

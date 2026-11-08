@@ -156,15 +156,14 @@ async def _watch_async(urls: list[str], output_dir: str, find_alternatives: bool
 
     # Alternatives search
     if find_alternatives:
-        from src.searcher.playwright_searcher import PlaywrightSearcher
-        from src.llm.client import LLMClient
         from src.browser.manager import BrowserManager
+        from src.llm.client import LLMClient
+        from src.searcher.playwright_searcher import PlaywrightSearcher
         llm = LLMClient(config)
         browser_mgr = BrowserManager(config)
         for r in results:
             if not r["title"]:
                 continue
-            prompt = f"{r['title']} (alternative/counter product)"
             typer.echo(f"  searching alternatives for: {r['title'][:60]}")
             # Shorten the prompt to the first few words for the alternative search.
             alt_prompt = " ".join(r["title"].split()[:6])

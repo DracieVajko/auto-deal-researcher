@@ -1,7 +1,7 @@
 """Tests for llm_cache.py (LLM response caching)."""
 
-import json
 import time
+
 from src.intelligence.llm_cache import LLMCache
 
 

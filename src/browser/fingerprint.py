@@ -365,7 +365,7 @@ async def apply_fingerprint(page, fingerprint: Fingerprint) -> None:
         
         await client.detach()
         
-    except Exception as e:
+    except Exception:
         # CDP might not be available in all contexts
         pass
 

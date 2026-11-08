@@ -1,6 +1,6 @@
 """Tests for deal_scorer.py (spec-based deal scoring)."""
 
-from src.intelligence.deal_scorer import DealScorer, DealScore, ScoringCriteria
+from src.intelligence.deal_scorer import DealScorer, ScoringCriteria
 
 
 class FakeQuote:

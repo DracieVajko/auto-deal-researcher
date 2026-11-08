@@ -1,7 +1,6 @@
 """Tests for comparison_engine.py (multi-candidate comparison)."""
 
-from src.intelligence.comparison_engine import ComparisonEngine, ComparisonResult
-from src.intelligence.deal_scorer import DealScorer
+from src.intelligence.comparison_engine import ComparisonEngine
 
 
 class FakeQuote:

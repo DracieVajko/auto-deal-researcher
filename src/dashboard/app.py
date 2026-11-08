@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import html
 import logging
-import mimetypes
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 
 from src.dashboard.data import ResultsStore, SearchRun
 

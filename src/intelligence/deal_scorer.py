@@ -320,7 +320,6 @@ class DealScorer:
                 extras = json.loads(extras)
             except (json.JSONDecodeError, TypeError):
                 extras = {}
-        price_quote = extras.get("price_quote", {}) if isinstance(extras, dict) else {}
         # Power may be in extras as power_kw
         if isinstance(extras, dict) and extras.get("power_kw"):
             try:

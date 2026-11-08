@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
-from typing import ClassVar
-
-from src.searcher.adapters.base import BaseAdapter, Deal
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +82,7 @@ class SelectorHealthTracker:
         if not path.exists():
             return
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             for site_name, site_data in data.items():
                 metrics = {}

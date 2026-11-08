@@ -20,19 +20,19 @@ class WatchlistItem:
     url: str
     title: str
     target_price_eur: float
-    current_price_eur: Optional[float] = None
+    current_price_eur: float | None = None
     condition: str = "any"
     category: str = "any"
     site_name: str = ""
     url_hash: str = ""
     added_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    last_checked: Optional[str] = None
-    last_price_eur: Optional[float] = None
+    last_checked: str | None = None
+    last_price_eur: float | None = None
     price_history: list[dict] = field(default_factory=list)  # [{timestamp, price_eur, condition, site}]
     alert_enabled: bool = True
     alert_threshold_pct: float = 5.0  # alert when price drops >= this %
     target_price_reached: bool = False
-    last_notified_price: Optional[float] = None
+    last_notified_price: float | None = None
     
     def __post_init__(self):
         if not self.url_hash:
@@ -52,7 +52,7 @@ class WatchlistManager:
     def __init__(self, storage: "StorageManager | None" = None, notifications: "NotificationManager | None" = None, path=None):
         self.storage = storage
         self.notifications = notifications
-        self.items: dict[str, "WatchlistItem"] = {}
+        self.items: dict[str, WatchlistItem] = {}
         self._path = Path(path) if path is not None else Path(self.STORAGE_FILE)
         self._load()
     
@@ -63,7 +63,7 @@ class WatchlistManager:
             return
         
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             
             for item_data in data.get("items", []):
@@ -187,9 +187,6 @@ class WatchlistManager:
                     continue
                 
                 # Update price history
-                price_eur = best_match.price_eur
-                now = datetime.now().isoformat()
-                
                 item.price_history.append({
                     "timestamp": datetime.now().isoformat(),
                     "price_eur": best_match.price_eur,
@@ -247,7 +244,6 @@ class WatchlistManager:
             title_words = set(item.title.lower().split())
             deal_words = set(deal.title.lower().split())
             common = len(title_words & deal_words)
-            total = len(title_words | deal_words)
             score = common / len(title_words | deal_words) if title_words else 0
             
             if score > 0.5 and score > best_score:
@@ -260,23 +256,6 @@ class WatchlistManager:
         """Send price drop alert."""
         if not self.notifications:
             return
-        
-        alert = {
-            "title": f"💰 Price Drop: {deal.title}",
-            "message": f"Price dropped {((self.items[deal.url_hash].last_price_eur - deal.price_eur) / deal.price_eur) * 100:.1f}%!\n"
-                       f"Now: {deal.price_eur}€ (was {self.items[deal.url_hash].last_price_eur}€)\n"
-                       f"Target: {self.items[deal.url_hash].target_price_eur}€\n"
-                       f"Condition: {deal.condition}\n"
-                       f"Link: {deal.url}",
-            "severity": "info",
-            "metadata": {
-                "url": deal.url,
-                "old_price": self.items[deal.url_hash].last_price_eur,
-                "new_price": deal.price_eur,
-                "drop_pct": ((self.items[deal.url_hash].last_price_eur - deal.price_eur) / deal.price_eur) * 100,
-                "target_price": self.items[deal.url_hash].target_price_eur,
-            },
-        }
         
         # Would send via notification manager
         logger.info(f"Price alert: {deal.title} dropped {drop_pct:.1f}%")
@@ -304,7 +283,6 @@ class WatchlistManager:
         if not item or not item.price_history:
             return {"trend": "insufficient_data"}
         
-        cutoff = datetime.now() - timedelta(days=days)
         recent = [p for p in item.price_history if p["timestamp"] >= (datetime.now() - timedelta(days=days)).isoformat()]
         
         if len(recent) < 2:
@@ -313,13 +291,6 @@ class WatchlistManager:
         prices = [p["price_eur"] for p in recent]
         first, last = prices[0], prices[-1]
         change = ((last - first) / first) * 100
-        
-        if change <= -5:
-            trend = "dropping"
-        elif change >= 5:
-            trend = "rising"
-        else:
-            trend = "stable"
         
         return {
             "trend": "dropping" if change <= -5 else "rising" if change >= 5 else "stable",

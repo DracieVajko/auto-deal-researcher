@@ -2,7 +2,6 @@
 
 import asyncio
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -55,7 +54,7 @@ def history(
 
 @history_app.command()
 def trends(
-    category: Optional[str] = typer.Option(None, "--category", "-c", help="Category to analyze (electronics, appliances, auto, etc.)"),
+    category: str | None = typer.Option(None, "--category", "-c", help="Category to analyze (electronics, appliances, auto, etc.)"),
     days: int = typer.Option(30, "--days", "-d", help="Number of days to analyze"),
     format: str = typer.Option("table", "--format", "-f", help="Output format: table, json"),
 ):
@@ -73,8 +72,6 @@ def trends(
         if result.get("trend") == "insufficient_data":
             typer.echo(f"Insufficient data for {category} (need more price history)")
             return
-        
-        trend_emoji = {"dropping": "📉", "rising": "📈", "stable": "➡️", "volatile": "📊", "insufficient_data": "❓"}
         
         if result.get("details"):
             typer.echo(f"\nTop movers in {category}:")
@@ -176,16 +173,13 @@ def watchlist_cmd(
         async def run_check():
             config = load_config()
             db_path = config.storage.db_path
-            from src.storage.manager import StorageManager as SM
             from src.browser.manager import BrowserManager
             from src.llm.mock_client import MockLLMClient
+            from src.storage.manager import StorageManager as SM
             
             db_storage = SM(db_path)
             notifications = NotificationManager()
             wl_manager_async = WatchlistManager(db_storage, notifications)
-            
-            browser = BrowserManager(load_config())
-            llm = MockLLMClient(load_config())
             
             async def run():
                 from src.searcher.playwright_searcher import PlaywrightSearcher
@@ -218,7 +212,6 @@ def watchlist_cmd(
         if result.get("details"):
             typer.echo("\nTop movers:")
             for item in result["details"][:10]:
-                emoji = "📉" if item["change_pct"] < 0 else "📈"
                 typer.echo(f"  {item['change_pct']:+.1f}% - {item['url'][:60]}")
     
     else:
@@ -278,7 +271,7 @@ def health(
     
     # Summary for all sites
     summary = tracker.get_summary()
-    typer.echo(f"\n📊 Selector Health Summary")
+    typer.echo("\n📊 Selector Health Summary")
     typer.echo(f"  Total Sites: {summary['total_sites']}")
     typer.echo(f"  Healthy: {summary['healthy_sites']} | Unhealthy: {summary['unhealthy_sites']}")
     typer.echo()

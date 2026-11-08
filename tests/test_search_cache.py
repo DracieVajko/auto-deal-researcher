@@ -1,7 +1,7 @@
 """Tests for search_cache.py (search response caching)."""
 
-import json
 import time
+
 from src.searcher.search_cache import SearchCache
 
 

@@ -210,6 +210,28 @@ class StorageManager:
             self.save_deal(deal)
             row = self.db.execute("SELECT id FROM deals WHERE url = ?", (deal.url,)).fetchone()
 
+        effective_run_id = f"manual_{utcnow_stamp()}" if not run_id else run_id
+        # Keep the foreign key (price_history.run_id -> runs.id) satisfied even
+        # when a sighting is recorded for a run that was never explicitly created.
+        existing_run = self.db.execute(
+            "SELECT 1 FROM runs WHERE id = ?", (effective_run_id,)
+        ).fetchone()
+        if existing_run is None:
+            self.db["runs"].insert(  # type: ignore[union-attr]
+                {
+                    "id": effective_run_id,
+                    "prompt": "manual",
+                    "condition": "any",
+                    "category": "any",
+                    "started_at": utcnow_iso(),
+                    "completed_at": utcnow_iso(),
+                    "total_deals": 0,
+                    "new_deals": 0,
+                    "status": "completed",
+                },
+                pk="id",
+                replace=True,
+            )
         sighting = {
             "deal_id": row["id"],
             "url": deal.url,
@@ -221,7 +243,7 @@ class StorageManager:
             "seller_name": getattr(deal, "seller_name", ""),
             "seller_rating": getattr(deal, "seller_rating", 0.0),
             "shipping_cost_eur": getattr(deal, "shipping_cost_eur", 0.0),
-            "run_id": f"manual_{utcnow_stamp()}" if not run_id else run_id,
+            "run_id": effective_run_id,
             "timestamp": utcnow_iso(),
             "effective_price_eur": comparable_price(deal),
             "price_kind": (
@@ -547,7 +569,7 @@ class StorageManager:
         return int(result.last_pk)
 
     def get_unsent_alerts(self) -> list[dict]:
-        return list(self.db["alerts"].rows_where("sent = 0", order_by="created_at"))
+        return [dict(r) for r in self.db["alerts"].rows_where("sent = 0", order_by="created_at")]
 
     def mark_alert_sent(self, alert_id: int) -> None:
         self.db["alerts"].update(alert_id, {"sent": 1, "sent_at": utcnow_iso()})  # type: ignore[union-attr]

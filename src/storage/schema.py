@@ -1,9 +1,15 @@
-"""Database schema and migrations using sqlite-utils."""
+# ruff: noqa: S608
+"""Database schema and migrations using stdlib sqlite3.
+
+A thin ``Database``/``Table`` shim preserves the sqlite-utils-shaped access
+(``db.table(name)``, ``db[name]``, ``db.execute()``, ``db.table_names()``)
+that ``manager.py`` relies on, while the underlying connection is a plain
+``sqlite3.Connection`` with ``row_factory = sqlite3.Row``.
+"""
 
 import sqlite3
 from pathlib import Path
-
-from sqlite_utils import Database
+from typing import Any
 
 SCHEMA_VERSION = 6
 
@@ -48,6 +54,163 @@ ALERT_RULES_COLUMNS: dict[str, str] = {
 }
 
 
+class _InsertResult:
+    """Mimics sqlite-utils' insert result (only ``last_pk`` is used)."""
+
+    def __init__(self, last_pk: int | None) -> None:
+        self.last_pk = last_pk
+
+
+class Table:
+    """Thin Table-like wrapper over a sqlite3 table."""
+
+    def __init__(self, conn: sqlite3.Connection, name: str) -> None:
+        self.conn = conn
+        self.name = name
+
+    @property
+    def pk(self) -> list[str]:
+        cols = self.conn.execute(f"PRAGMA table_info({self.name})").fetchall()
+        pks = [r for r in cols if r["pk"]]
+        pks.sort(key=lambda r: r["pk"])
+        return [r["name"] for r in pks]
+
+    def _pk_col(self) -> str:
+        pks = self.pk
+        return pks[0] if pks else "rowid"
+
+    def insert(
+        self,
+        record: dict[str, Any],
+        pk: str | list[str] | None = None,
+        replace: bool = False,
+        **_kwargs: Any,
+    ) -> _InsertResult:
+        columns = list(record.keys())
+        placeholders = ",".join("?" for _ in columns)
+        col_sql = ",".join(columns)
+        values = [record[c] for c in columns]
+
+        conflict_cols: list[str]
+        if pk is None:
+            conflict_cols = self.pk
+        elif isinstance(pk, (list, tuple)):
+            conflict_cols = list(pk)
+        else:
+            conflict_cols = [pk]
+
+        if replace and conflict_cols:
+            conflict_sql = ",".join(conflict_cols)
+            update_cols = [c for c in columns if c not in conflict_cols]
+            if update_cols:
+                set_clause = ",".join(f"{c}=excluded.{c}" for c in update_cols)
+                sql = (
+                    f"INSERT INTO {self.name} ({col_sql}) VALUES ({placeholders}) "
+                    f"ON CONFLICT({conflict_sql}) DO UPDATE SET {set_clause}"
+                )
+            else:
+                sql = (
+                    f"INSERT INTO {self.name} ({col_sql}) VALUES ({placeholders}) "
+                    f"ON CONFLICT({conflict_sql}) DO NOTHING"
+                )
+        else:
+            sql = f"INSERT INTO {self.name} ({col_sql}) VALUES ({placeholders})"
+
+        cur = self.conn.execute(sql, values)
+        self.conn.commit()
+        last_pk = cur.lastrowid
+        if last_pk == 0:
+            last_pk = None
+        return _InsertResult(last_pk)
+
+    def update(self, pk_value: Any, record: dict[str, Any], **_kwargs: Any) -> None:
+        pk_cols = self.pk
+        if not pk_cols:
+            pk_cols = [self._pk_col()]
+        set_clause = ",".join(f"{c}=?" for c in record.keys())
+        if len(pk_cols) == 1:
+            sql = f"UPDATE {self.name} SET {set_clause} WHERE {pk_cols[0]}=?"
+            params = [*list(record.values()), pk_value]
+        else:
+            # Composite pk not used by this codebase; fall back to first col.
+            sql = f"UPDATE {self.name} SET {set_clause} WHERE {pk_cols[0]}=?"
+            params = [*list(record.values()), pk_value]
+        self.conn.execute(sql, params)
+        self.conn.commit()
+
+    def delete(self, pk_value: Any, **_kwargs: Any) -> None:
+        pk_cols = self.pk
+        if not pk_cols:
+            pk_cols = [self._pk_col()]
+        sql = f"DELETE FROM {self.name} WHERE {pk_cols[0]}=?"
+        self.conn.execute(sql, (pk_value,))
+        self.conn.commit()
+
+    def get(self, pk_value: Any) -> sqlite3.Row | None:
+        pk_cols = self.pk
+        if not pk_cols:
+            pk_cols = [self._pk_col()]
+        sql = f"SELECT * FROM {self.name} WHERE {pk_cols[0]}=?"
+        return self.conn.execute(sql, (pk_value,)).fetchone()
+
+    def rows_where(
+        self,
+        where: str | None = None,
+        where_args: Any = None,
+        order_by: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        select: str = "*",
+        **_kwargs: Any,
+    ) -> list[sqlite3.Row]:
+        sql = f"SELECT {select} FROM {self.name}"
+        params: list[Any] = []
+        if where:
+            sql += f" WHERE {where}"
+            if where_args:
+                if isinstance(where_args, (list, tuple)):
+                    params.extend(where_args)
+                else:
+                    params.append(where_args)
+        if order_by:
+            sql += f" ORDER BY {order_by}"
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        if offset is not None:
+            sql += f" OFFSET {int(offset)}"
+        return self.conn.execute(sql, params).fetchall()
+
+
+class Database:
+    """Stdlib-backed shim with sqlite-utils-shaped access."""
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.conn = sqlite3.connect(str(db_path))
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        self.conn.commit()
+
+    def execute(self, sql: str, params: Any = ()) -> sqlite3.Cursor:
+        cur = self.conn.execute(sql, params)
+        self.conn.commit()
+        return cur
+
+    def table(self, name: str) -> Table:
+        return Table(self.conn, name)
+
+    def __getitem__(self, name: str) -> Table:
+        return Table(self.conn, name)
+
+    def table_names(self) -> list[str]:
+        rows = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def close(self) -> None:
+        self.conn.close()
+
+
 def init_db(db_path: str | Path) -> Database:
     """Initialize database, run migrations if needed."""
     db = Database(db_path)
@@ -65,7 +228,7 @@ def _run_migrations(db: Database) -> None:
                 applied_at TEXT DEFAULT (datetime('now'))
             )
         """)
-        db["migrations"].insert({"version": 0})  # type: ignore[union-attr]
+        db["migrations"].insert({"version": 0})
 
     current_version = db.execute("SELECT MAX(version) FROM migrations").fetchone()[0] or 0
 
@@ -94,7 +257,7 @@ def _run_migrations(db: Database) -> None:
         current_version = 6
 
     # Update version
-    db["migrations"].insert({"version": current_version}, pk="version", replace=True)  # type: ignore[union-attr]
+    db["migrations"].insert({"version": current_version}, pk="version", replace=True)
 
 
 def _migration_001_initial(db: Database) -> None:
@@ -275,13 +438,9 @@ def _ensure_deals_columns(db: Database) -> list[str]:
 
 
 def get_db(db_path: str | Path = "data/deals.db") -> Database:
-    """Get initialized database instance.
-
-    sqlite-utils' ``execute()`` returns plain tuples by default, which makes
-    ``row["column"]`` access fail. Row factory is set to sqlite3.Row so rows
-    support both key and index access, as the rest of the codebase expects.
-    """
+    """Get initialized database instance."""
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     db = init_db(db_path)
     db.conn.row_factory = sqlite3.Row
+    db.conn.execute("PRAGMA foreign_keys = ON")
     return db

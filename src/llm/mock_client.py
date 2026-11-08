@@ -1,6 +1,7 @@
 """Mock LLM Client for testing without API keys."""
 
 import logging
+from collections.abc import Sequence
 
 from src.llm import protocols
 from src.searcher.adapters.base import Deal
@@ -51,7 +52,7 @@ class MockLLMClient:
         models_found = [d.title for d in current_deals]
         return f"DJI drone under 350 NOT {' '.join(models_found[:3])}"
 
-    async def judge_results(self, prompt: str, deals: list[DealLike]) -> dict:
+    async def judge_results(self, prompt: str, deals: Sequence[DealLike]) -> dict:
         self.call_count += 1
         keep_urls = []
         for deal in deals:

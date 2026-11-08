@@ -98,9 +98,7 @@ class BrowserManager:
                 "args": [
                     '--disable-blink-features=AutomationControlled',
                     '--disable-dev-shm-usage',
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                ],
+                ] + (['--no-sandbox', '--disable-setuid-sandbox'] if browser_config.no_sandbox else []),
             }
             # Point at the chosen real browser instead of bundled Chromium.
             if exe_path:
@@ -116,14 +114,13 @@ class BrowserManager:
         
         # Last resort: regular launch (headless)
         logger.info("Launching regular browser (headless)")
+        _sandbox_args = ['--no-sandbox', '--disable-setuid-sandbox'] if browser_config.no_sandbox else []
         browser = await self._playwright.chromium.launch(
             headless=True,
             args=[
                 '--disable-blink-features=AutomationControlled',
                 '--disable-dev-shm-usage',
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-            ]
+            ] + _sandbox_args,
         )
         self._context = await browser.new_context(
             viewport={'width': 1920, 'height': 1080},

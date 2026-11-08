@@ -116,6 +116,9 @@ class BrowserConfig(BaseModel):
     separate_profiles: bool = True
     headless: bool = True  # Run headless by default (no admin prompts)
     slow_mo: int = 0  # Slow down operations by N ms (useful for debugging)
+    # Disable the Chrome sandbox. Required in many container/CI environments;
+    # opt-in only because it weakens process isolation.
+    no_sandbox: bool = True
     # Reuse cookies/credentials between runs instead of a fresh profile.
     storage_state: str | None = None
     # Accept self-signed certificates. Off by default; a MITM proxy that

@@ -674,11 +674,14 @@ class PlaywrightSearcher:
         healthy_sites = [s for s in sites if self.health.concurrency_for(s.name, base) > 1]
         unhealthy_sites = [s for s in sites if self.health.concurrency_for(s.name, base) <= 1]
 
-        results: list[list[Deal]] = []
+        # Preserve input-site ordering of results for callers that rely on it.
+        result_by_site: dict[str, list[Deal]] = {}
         if healthy_sites:
-            results.extend(await asyncio.gather(*(run_site(s) for s in healthy_sites)))
+            for site, deals in zip(healthy_sites, await asyncio.gather(*(run_site(s) for s in healthy_sites))):
+                result_by_site[site.name] = deals
         for site in unhealthy_sites:
-            results.append(await run_site(site))
+            result_by_site[site.name] = await run_site(site)
+        results = [result_by_site[s.name] for s in sites]
         all_deals: list[Deal] = []
         seen: set[str] = set(seen_urls)
         for deals in results:

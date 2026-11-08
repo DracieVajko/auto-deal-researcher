@@ -104,6 +104,8 @@ async def test_two_sites_can_search_at_the_same_time(monkeypatch):
         config, llm=object(), storage=object(), browser_manager=FakeBrowserManager()
     )
     searcher.profiles = {}
+    # Isolate from persisted health state so adaptive throttling starts clean.
+    searcher.health.sites.clear()
 
     deals = await searcher._execute_round("pc", "new", "electronics", set())
 

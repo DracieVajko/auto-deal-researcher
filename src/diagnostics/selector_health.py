@@ -238,6 +238,16 @@ class SelectorHealthTracker:
     def get_site_health(self, site_name: str) -> SiteHealth | None:
         """Get health for a specific site."""
         return self.sites.get(site_name)
+
+    def concurrency_for(self, site_name: str, base: int = 3) -> int:
+        site = self.sites.get(site_name)
+        if site is None:
+            return max(1, base)
+        if not site.is_healthy or site.consecutive_failures >= 5:
+            return 1
+        if site.consecutive_failures >= 2:
+            return max(1, base // 2)
+        return max(1, base)
     
     def get_all_health(self) -> dict[str, SiteHealth]:
         """Get health for all sites."""

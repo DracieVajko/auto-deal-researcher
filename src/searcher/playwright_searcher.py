@@ -654,11 +654,13 @@ class PlaywrightSearcher:
         if not sites:
             return []
 
-        concurrency = max(1, int(getattr(self.config.search, "concurrency", 3)))
-        semaphore = asyncio.Semaphore(concurrency)
+        base = max(1, int(getattr(self.config.search, "concurrency", 3)))
+        global_semaphore = asyncio.Semaphore(base)
 
         async def run_site(site: WebsiteConfig) -> list[Deal]:
-            async with semaphore:
+            per_site_concurrency = self.health.concurrency_for(site.name, base)
+            site_semaphore = asyncio.Semaphore(max(1, per_site_concurrency))
+            async with global_semaphore, site_semaphore:
                 try:
                     return await self._search_one_site(site, query, category, filters)
                 except Exception as exc:

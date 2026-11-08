@@ -29,6 +29,10 @@ dev = [
     "ruff",
 ]
 
+[project.entry-points."ads.adapters"]
+# Third-party adapters register here, e.g.:
+# acme = "mypackage.adapters:AcmeAdapter"
+
 [tool.ruff.lint]
 select = [
     "E",      # pycodestyle errors

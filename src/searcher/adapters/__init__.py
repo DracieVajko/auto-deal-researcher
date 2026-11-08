@@ -1,5 +1,8 @@
 """Site adapters registry."""
 
+import importlib.metadata as _md
+import logging
+
 from .alza import AlzaAdapter
 from .amazon import AmazonAdapter
 from .backmarket import BackMarketAdapter
@@ -9,14 +12,37 @@ from .ebay import EbayAdapter
 from .facebook import FacebookAdapter
 from .profile_adapter import ProfileAdapter
 
-ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = {
-    "alza": AlzaAdapter,
-    "amazon": AmazonAdapter,
-    "bazos": BazosAdapter,
-    "backmarket": BackMarketAdapter,
-    "facebook": FacebookAdapter,
-    "ebay": EbayAdapter,
-}
+logger = logging.getLogger(__name__)
+
+class _AdapterRegistry(dict[str, type[BaseAdapter]]):
+    """Dict that exposes only real adapter classes when iterated.
+
+    Third-party plugins may register arbitrary objects; iteration (used by
+    diagnostics/tests that assume scraper adapters) skips anything that is not
+    a ``BaseAdapter`` subclass, while membership checks still report them.
+    """
+
+    def items(self):  # type: ignore[override]
+        for key, value in super().items():
+            if isinstance(value, type) and issubclass(value, BaseAdapter):
+                yield key, value
+
+    def values(self):  # type: ignore[override]
+        for value in super().values():
+            if isinstance(value, type) and issubclass(value, BaseAdapter):
+                yield value
+
+
+ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = _AdapterRegistry(
+    {
+        "alza": AlzaAdapter,
+        "amazon": AmazonAdapter,
+        "bazos": BazosAdapter,
+        "backmarket": BackMarketAdapter,
+        "facebook": FacebookAdapter,
+        "ebay": EbayAdapter,
+    }
+)
 
 
 def get_adapter(name: str) -> type[BaseAdapter]:
@@ -25,6 +51,26 @@ def get_adapter(name: str) -> type[BaseAdapter]:
         msg = f"No adapter for site: {name}. Available: {list(ADAPTER_REGISTRY.keys())}"
         raise ValueError(msg)
     return ADAPTER_REGISTRY[name]
+
+
+def load_entry_point_adapters() -> None:
+    """Load third-party adapters registered under the ``ads.adapters`` entry point group.
+
+    Entry point name becomes the adapter key. A single bad plugin is logged and
+    skipped so it cannot break the built-in registry.
+    """
+    try:
+        eps = _md.entry_points(group="ads.adapters")
+    except TypeError:  # Python < 3.10 fallback
+        eps = _md.entry_points().get("ads.adapters", [])  # type: ignore[arg-type, union-attr]
+    for ep in eps:
+        try:
+            ADAPTER_REGISTRY[ep.name] = ep.load()
+        except Exception as exc:  # noqa: BLE001 - one bad plugin must not break core
+            logger.warning("Failed to load adapter plugin %s: %s", ep.name, exc)
+
+
+load_entry_point_adapters()
 
 
 __all__ = [
@@ -40,4 +86,5 @@ __all__ = [
     "ProfileAdapter",
     "SiteBlockedError",
     "get_adapter",
+    "load_entry_point_adapters",
 ]

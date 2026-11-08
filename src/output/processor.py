@@ -452,7 +452,8 @@ class ResultProcessor:
                 from src.llm.client import LLMClient
 
                 raw = LLMClient.keyword_query(prompt, max_words=4)
-            except Exception:  # noqa: BLE001 - slug fallback is best-effort
+            except Exception as exc:  # noqa: BLE001 - slug fallback is best-effort
+                logger.debug("Slug keyword extraction failed: %s", exc)
                 raw = prompt
 
         return self._slugify(raw)

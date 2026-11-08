@@ -1,11 +1,17 @@
 """Generic site page objects reusing POM components."""
 
+import logging
+
 from src.browser.pom.base import BasePage
 from src.browser.pom.components.filters import Filters
 from src.browser.pom.components.pagination import Pagination
 from src.browser.pom.components.product_card import ProductCard
 from src.browser.pom.components.search_bar import SearchBar
 from src.browser.pom.components.sort import Sort
+
+logger = logging.getLogger(__name__)
+
+
 
 
 class SiteHome(BasePage):
@@ -36,7 +42,8 @@ class SiteSearchResults(BasePage):
     async def extract_cards(self) -> list[dict]:
         try:
             els = await self.page.query_selector_all(self.CARD_SELECTOR)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 - best-effort
+            logger.debug("Card selector query failed: %s", exc)
             return []
         out = []
         for el in els[:20]:
@@ -45,7 +52,8 @@ class SiteSearchResults(BasePage):
                 parsed = ProductCard.extract_from_html(html)
                 if parsed:
                     out.append(parsed)
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 - card parsing is best-effort
+                logger.debug("Product card parse failed: %s", exc)
                 continue
         return out
 
@@ -56,6 +64,7 @@ class SiteProductDetail(BasePage):
     async def parse(self) -> dict:
         try:
             title = await self.page.text_content("h1")
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 - best-effort
+            logger.debug("Title extraction failed: %s", exc)
             title = "Unknown"
         return {"title": (title or "Unknown").strip()}

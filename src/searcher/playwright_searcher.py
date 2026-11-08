@@ -656,9 +656,12 @@ class PlaywrightSearcher:
 
         base = max(1, int(getattr(self.config.search, "concurrency", 3)))
         global_semaphore = asyncio.Semaphore(base)
+        # Degraded sites (2-4 consecutive failures) may run in parallel, but
+        # only half as many at a time as healthy ones.
+        degraded_semaphore = asyncio.Semaphore(max(1, base // 2))
 
-        async def run_site(site: WebsiteConfig) -> list[Deal]:
-            async with global_semaphore:
+        async def run_site(site: WebsiteConfig, semaphore: asyncio.Semaphore) -> list[Deal]:
+            async with semaphore:
                 try:
                     return await self._search_one_site(site, query, category, filters)
                 except Exception as exc:
@@ -668,16 +671,25 @@ class PlaywrightSearcher:
                     )
                     return []
 
-        # Adaptive concurrency: sites recorded as unhealthy run serially (one at
-        # a time) instead of competing for the shared pool, so a flaky site
-        # cannot starve healthy ones. Unknown sites keep the base parallelism.
-        healthy_sites = [s for s in sites if self.health.concurrency_for(s.name, base) > 1]
-        unhealthy_sites = [s for s in sites if self.health.concurrency_for(s.name, base) <= 1]
+        # Adaptive concurrency: unhealthy sites run serially outside the pool so
+        # a flaky site cannot starve healthy ones. Degraded sites share a
+        # smaller pool; unknown and healthy sites keep the base parallelism.
+        pool: list[tuple[WebsiteConfig, asyncio.Semaphore]] = []
+        unhealthy_sites: list[WebsiteConfig] = []
+        for site in sites:
+            tier = self.health.concurrency_for(site.name, base)
+            if tier <= 1:
+                unhealthy_sites.append(site)
+            elif tier < base:
+                pool.append((site, degraded_semaphore))
+            else:
+                pool.append((site, global_semaphore))
 
         # Preserve input-site ordering of results for callers that rely on it.
         result_by_site: dict[str, list[Deal]] = {}
-        if healthy_sites:
-            for site, deals in zip(healthy_sites, await asyncio.gather(*(run_site(s) for s in healthy_sites))):
+        if pool:
+            pool_results = await asyncio.gather(*(run_site(s, sem) for s, sem in pool))
+            for (site, _), deals in zip(pool, pool_results, strict=True):
                 result_by_site[site.name] = deals
         for site in unhealthy_sites:
             # Unhealthy sites run outside the shared pool so they cannot starve
@@ -729,8 +741,8 @@ class PlaywrightSearcher:
                     "Accept-Language": "sk-SK,sk;q=0.9,en;q=0.8",
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
                 })
-            except Exception:
-                pass  # Stealth is best-effort
+            except Exception as exc:  # noqa: BLE001 - stealth is best-effort
+                logger.debug("[%s] Stealth setup skipped: %s", site.name, exc)
 
             profile = self._profile_for(site)
             adapter_profile = (
@@ -767,7 +779,8 @@ class PlaywrightSearcher:
             if filters is not None:
                 try:
                     filters_dict = filters.as_dict()
-                except Exception:
+                except Exception as exc:  # noqa: BLE001 - cache key is optional
+                    logger.debug("[%s] filters.as_dict failed: %s", site.name, exc)
                     filters_dict = {}
             cached = self._search_cache.get(site.name, site_query, filters_dict)
             deals: list[Deal] = []
@@ -855,7 +868,6 @@ class PlaywrightSearcher:
             for deal in deals:
                 deal.site_name = site.name
             await asyncio.sleep(1)
-            return deals
         except SiteBlockedError as e:
             # Anti-bot interstitial: expected for some sites, not a bug.
             logger.warning(f"[{site.name}] Blocked: {e}")
@@ -877,6 +889,8 @@ class PlaywrightSearcher:
                 site.name, False, 0, (time.perf_counter() - started) * 1000
             )
             return []
+        else:
+            return deals
         finally:
             if page:
                 await page.close()

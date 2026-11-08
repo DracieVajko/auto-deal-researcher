@@ -658,9 +658,7 @@ class PlaywrightSearcher:
         global_semaphore = asyncio.Semaphore(base)
 
         async def run_site(site: WebsiteConfig) -> list[Deal]:
-            per_site_concurrency = self.health.concurrency_for(site.name, base)
-            site_semaphore = asyncio.Semaphore(max(1, per_site_concurrency))
-            async with global_semaphore, site_semaphore:
+            async with global_semaphore:
                 try:
                     return await self._search_one_site(site, query, category, filters)
                 except Exception as exc:
@@ -670,7 +668,17 @@ class PlaywrightSearcher:
                     )
                     return []
 
-        results = await asyncio.gather(*(run_site(site) for site in sites))
+        # Adaptive concurrency: sites recorded as unhealthy run serially (one at
+        # a time) instead of competing for the shared pool, so a flaky site
+        # cannot starve healthy ones. Unknown sites keep the base parallelism.
+        healthy_sites = [s for s in sites if self.health.concurrency_for(s.name, base) > 1]
+        unhealthy_sites = [s for s in sites if self.health.concurrency_for(s.name, base) <= 1]
+
+        results: list[list[Deal]] = []
+        if healthy_sites:
+            results.extend(await asyncio.gather(*(run_site(s) for s in healthy_sites)))
+        for site in unhealthy_sites:
+            results.append(await run_site(site))
         all_deals: list[Deal] = []
         seen: set[str] = set(seen_urls)
         for deals in results:

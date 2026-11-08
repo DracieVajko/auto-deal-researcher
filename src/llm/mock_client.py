@@ -80,6 +80,21 @@ class MockLLMClient:
         ranked = sorted(deals, key=score, reverse=True)
         return ranked[:top_n]
 
+    async def extract_search_filters(self, prompt: str) -> dict:
+        """Mock: return empty filter dict."""
+        return {}
+
+    async def describe_local_state(self) -> str:
+        """Mock: return empty state description."""
+        return ""
+
+    async def chat_json(self, system: str, user: str, max_tokens: int = 400) -> dict:
+        """Mock: return empty JSON object."""
+        return {}
+
+    async def classify_price_quotes(self, items: list[dict]) -> dict[str, dict]:
+        """Mock: return empty classification."""
+        return {}
 
     async def _judge_results_async(self, results, query):
         """Legacy format compatibility."""

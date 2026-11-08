@@ -40,20 +40,25 @@ class WatchlistItem:
             self.url_hash = hashlib.md5(self.url.encode()).hexdigest()[:12]
 
 
+class WatchlistStorageError(Exception):
+    """Raised when persisting the watchlist fails."""
+
+
 class WatchlistManager:
     """Manages user's watchlist with price tracking and alerts."""
     
     STORAGE_FILE = "data/watchlist.json"
     
-    def __init__(self, storage: "StorageManager | None" = None, notifications: "NotificationManager | None" = None):
+    def __init__(self, storage: "StorageManager | None" = None, notifications: "NotificationManager | None" = None, path=None):
         self.storage = storage
         self.notifications = notifications
         self.items: dict[str, "WatchlistItem"] = {}
+        self._path = Path(path) if path is not None else Path(self.STORAGE_FILE)
         self._load()
     
     def _load(self):
         """Load watchlist from file."""
-        path = Path(self.STORAGE_FILE)
+        path = self._path
         if not path.exists():
             return
         
@@ -67,11 +72,11 @@ class WatchlistManager:
         except Exception as e:
             logger.warning(f"Failed to load watchlist: {e}")
     
-    def _save(self):
+    def _save(self) -> bool:
         """Save watchlist to file."""
-        path = Path(self.STORAGE_FILE)
+        path = self._path
         path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         data = {
             "items": [
                 {
@@ -95,18 +100,19 @@ class WatchlistManager:
                 for item in self.items.values()
             ]
         }
-        
+
         try:
-            with open(self.STORAGE_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            return True
         except Exception as e:
             logger.error(f"Failed to save watchlist: {e}")
+            raise WatchlistStorageError(str(e)) from e
     
     def add_item(
         self,
         url: str,
         title: str,
-        target_price_eur: float,
+        target_price_eur: float = 0.0,
         condition: str = "any",
         category: str = "any",
         site_name: str = "",
@@ -323,3 +329,7 @@ class WatchlistManager:
             "avg_price": sum(p["price_eur"] for p in recent) / len(recent),
             "data_points": len(recent),
         }
+
+
+# Backwards-compatible alias used by tests/CLI.
+Watchlist = WatchlistManager

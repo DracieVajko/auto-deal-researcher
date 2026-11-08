@@ -655,7 +655,14 @@ class PlaywrightSearcher:
 
         async def run_site(site: WebsiteConfig) -> list[Deal]:
             async with semaphore:
-                return await self._search_one_site(site, query, category, filters)
+                try:
+                    return await self._search_one_site(site, query, category, filters)
+                except Exception as exc:
+                    logger.exception(f"[{site.name}] Search error")
+                    self._skipped_sites.append(
+                        {"name": site.name, "reason": f"search failed: {type(exc).__name__}: {exc}"}
+                    )
+                    return []
 
         results = await asyncio.gather(*(run_site(site) for site in sites))
         all_deals: list[Deal] = []
@@ -837,8 +844,9 @@ class PlaywrightSearcher:
                 site.name, False, 0, (time.perf_counter() - started) * 1000, blocked=True
             )
             return []
-        except Exception:
+        except Exception as exc:
             logger.exception(f"[{site.name}] Search error")
+            self._skipped_sites.append({"name": site.name, "reason": f"search failed: {type(exc).__name__}: {exc}"})
             self.health.record_search_result(
                 site.name, False, 0, (time.perf_counter() - started) * 1000
             )

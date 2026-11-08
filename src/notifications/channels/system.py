@@ -43,24 +43,27 @@ class SystemChannel(NotificationChannel):
                     "[System.Windows.Forms.ToolTipIcon]::Info); "
                     "Start-Sleep -Seconds 6"
                 )
-                subprocess.run(
+                result = subprocess.run(
                     ["powershell", "-NoProfile", "-Command", ps],
                     capture_output=True, timeout=15,
                 )
-                return True
             elif system == "Darwin":
-                subprocess.run(
+                result = subprocess.run(
                     ["osascript", "-e", f'display notification "{_sh_escape(message)}" with title "{_sh_escape(title)}"'],
                     capture_output=True, timeout=10,
                 )
-                return True
             else:
-                subprocess.run(
+                result = subprocess.run(
                     ["notify-send", title, message],
                     capture_output=True, timeout=10,
                 )
-                return True
+            if result.returncode != 0:
+                logger.warning("System notification failed: %s", result.stderr)
+                print(f"[{alert.severity.upper()}] {title}: {message}")
+                return False
         except Exception as exc:
             logger.debug("System notification failed: %s", exc)
             print(f"[{alert.severity.upper()}] {title}: {message}")
+            return False
+        else:
             return True

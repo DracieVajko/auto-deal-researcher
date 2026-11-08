@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 def _extract_result(result):
     """Unwrap an AgentResult/Exception/dict into a payload."""
     if isinstance(result, AgentResult):
-        return result.payload if result.success else str(result.error)
+        return result.payload if result.success else {"error": str(result.error)}
     if isinstance(result, Exception):
-        return str(result)
+        return {"error": str(result)}
     if isinstance(result, dict):
         return result
     return str(result)
@@ -133,7 +133,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         """Run domain expert and latest tech agents."""
         if not self._check_budget(estimated_calls=2, estimated_tokens=4000):
             logger.warning(f"[run_id={run_id}] Budget exceeded, skipping expertise layer")
-            return {"domain_expert": "Budget exceeded, skipped", "latest_tech": "Budget exceeded, skipped"}
+            return {"domain_expert": {"error": "Budget exceeded, skipped"}, "latest_tech": {"error": "Budget exceeded, skipped"}}
 
         deals = deals or []
         tasks = [
@@ -156,7 +156,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         """Run price hunter agent."""
         if not self._check_budget(estimated_calls=2, estimated_tokens=5000):
             logger.warning(f"[run_id={run_id}] Budget exceeded, skipping price layer")
-            return {"price_hunter": "Budget exceeded, skipped"}
+            return {"price_hunter": {"error": "Budget exceeded, skipped"}}
 
         result = await self.agents["price_hunter"].run({
             "prompt": prompt,

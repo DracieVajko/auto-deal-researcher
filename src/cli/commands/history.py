@@ -9,7 +9,7 @@ import typer
 from src.config import load_config
 from src.diagnostics.selector_health import SelectorHealthTracker, run_health_check
 from src.history.trends import TrendsAnalyzer
-from src.history.watchlist import WatchlistManager
+from src.history.watchlist import WatchlistManager, WatchlistStorageError
 from src.intelligence.price_tracker import PriceTracker
 from src.notifications import NotificationManager
 from src.storage.manager import StorageManager
@@ -123,14 +123,18 @@ def watchlist_cmd(
             typer.echo("Error: --url, --title, and --target-price required for add", err=True)
             raise typer.Exit(1)
         
-        item = wl_manager.add_item(
-            url,
-            title,
-            target_price,
-            condition,
-            category,
-            alert_threshold_pct=threshold,
-        )
+        try:
+            item = wl_manager.add_item(
+                url,
+                title,
+                target_price,
+                condition,
+                category,
+                alert_threshold_pct=threshold,
+            )
+        except WatchlistStorageError:
+            typer.echo("Error: could not save watchlist", err=True)
+            raise SystemExit(1) from None
         typer.echo(f"✅ Added to watchlist: {title}")
         typer.echo(f"  Target: {target_price}€ | Threshold: {threshold}% | Condition: {condition}")
     
@@ -139,7 +143,12 @@ def watchlist_cmd(
             typer.echo("Error: --url required for remove", err=True)
             raise typer.Exit(1)
         
-        if wl_manager.remove_item(url):
+        try:
+            removed = wl_manager.remove_item(url)
+        except WatchlistStorageError:
+            typer.echo("Error: could not save watchlist", err=True)
+            raise SystemExit(1) from None
+        if removed:
             typer.echo("✅ Removed from watchlist")
         else:
             typer.echo("Not found in watchlist")

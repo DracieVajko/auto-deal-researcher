@@ -27,21 +27,39 @@ DEFAULT_RATES: dict[str, float] = {
 }
 
 # Active rate table. ``set_rates`` replaces it from the config at startup.
-_RATES: dict[str, float] = dict(DEFAULT_RATES)
+# ``None`` means "never configured": the built-in defaults are applied lazily
+# on first use so currency keeps working when ``load_config`` is never called.
+_RATES: dict[str, float] | None = None
+
+# Backwards-compatible alias for callers that read the module global directly.
+_rates = _RATES
+
+
+def _current_rates() -> dict[str, float]:
+    """Return the active rate table, materialising the defaults on first use."""
+    global _RATES, _rates  # noqa: PLW0603 - a single process-wide rate table is intended
+    if _RATES is None:
+        _RATES = dict(DEFAULT_RATES)
+    _rates = _RATES
+    return _RATES
 
 
 def set_rates(rates: dict[str, float] | None) -> None:
     """Override the active rate table (called once with the config values)."""
-    global _RATES  # noqa: PLW0603 - a single process-wide rate table is intended
-    if rates:
-        merged = dict(DEFAULT_RATES)
-        merged.update({str(k).upper(): float(v) for k, v in rates.items()})
-        _RATES = merged
+    global _RATES, _rates  # noqa: PLW0603 - a single process-wide rate table is intended
+    if not rates:
+        _RATES = dict(DEFAULT_RATES)
+        _rates = _RATES
+        return
+    merged = dict(DEFAULT_RATES)
+    merged.update({str(k).upper(): float(v) for k, v in rates.items()})
+    _RATES = merged
+    _rates = _RATES
 
 
 def get_rates() -> dict[str, float]:
-    """Return the active rate table."""
-    return dict(_RATES)
+    """Return the active rate table, defaulting to the built-in rates."""
+    return dict(_current_rates())
 
 # Currency symbols and codes, longest first so "Kč" wins over a bare "K".
 _CURRENCY_TOKENS: tuple[tuple[str, str], ...] = (
@@ -132,7 +150,7 @@ def to_eur(
         return 0.0
     if not currency:
         return float(amount)
-    table = rates or _RATES
+    table = rates if rates is not None else _current_rates()
     rate = table.get(currency.upper())
     if rate is None:
         logger.debug("Unknown currency %s; treating the amount as EUR", currency)

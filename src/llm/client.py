@@ -11,7 +11,10 @@ import time
 import requests
 
 from src.llm.local_coordinator import LocalModelCoordinator, ensure_lmstudio_model
-from src.searcher.adapters.base import Deal
+from src.llm import protocols
+from typing import Sequence
+
+DealLike = protocols.DealLike
 
 logger = logging.getLogger(__name__)
 
@@ -556,7 +559,7 @@ class LLMClient:
         raw = await self._chat(system, user, max_tokens=40)
         return self._clean_query(raw, fallback=self.keyword_query(prompt))
 
-    async def refine_query(self, prompt: str, current_deals: list[Deal], round_num: int) -> str:
+    async def refine_query(self, prompt: str, current_deals: Sequence[DealLike], round_num: int) -> str:
         """Generate query to find DIFFERENT items than already found."""
         titles = [d.title for d in current_deals[:10]]
         system = (
@@ -567,7 +570,7 @@ class LLMClient:
         raw = await self._chat(system, user, max_tokens=40)
         return self._clean_query(raw, fallback=self.keyword_query(prompt))
 
-    async def judge_results(self, prompt: str, deals: list[Deal]) -> dict:
+    async def judge_results(self, prompt: str, deals: Sequence[DealLike]) -> dict:
         """Classify each deal as keep/discard. Return {'keep': [urls]}.
 
         Small models often answer with prose or fewer lines than the batch,
@@ -625,14 +628,14 @@ class LLMClient:
 
         return {"keep": keep_urls}
 
-    async def rank_results(self, prompt: str, deals: list[Deal], top_n: int) -> list[Deal]:
+    async def rank_results(self, prompt: str, deals: Sequence[DealLike], top_n: int) -> list[DealLike]:
         """Rank deals by relevance to prompt, return top N.
 
         When ``top_n`` covers the whole input, any deal the model forgot to
         mention is appended in its original order instead of being dropped.
         """
         if len(deals) <= 1:
-            return deals
+            return list(deals)
 
         items = "\n".join([f"{i}. {d.title} | {d.price_eur}€ | {d.condition} | {d.site_name}" for i, d in enumerate(deals)])
         system = f"Rank these deals 1-{len(deals)} by relevance to user request. Output ONLY the ranked indices (e.g., '3,1,5,2,4')."
@@ -646,14 +649,14 @@ class LLMClient:
 
         if not indices:
             logger.debug("Failed to parse LLM ranking, using input order")
-            return deals[:top_n]
+            return list(deals[:top_n])
 
         ranked = [deals[index] for index in indices]
         if top_n >= len(deals):
             ranked.extend(
                 deal for index, deal in enumerate(deals) if index not in indices
             )
-        return ranked[:top_n]
+        return list(ranked[:top_n])
 
     # === Local LLM calls ===
     async def _call_local_llm_async(self, local_cfg, system: str, user: str,

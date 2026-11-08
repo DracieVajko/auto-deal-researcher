@@ -4,7 +4,6 @@ import asyncio
 import logging
 import os
 import re
-import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -16,6 +15,13 @@ from src.cli.commands.monitor import monitor as monitor_fn
 from src.cli.commands.watch import watch as watch_fn
 from src.config import load_config
 from src.config.models import Category, Condition
+
+def _load_config(*args, **kwargs):
+    config = load_config(*args, **kwargs)
+    from src.searcher.currency import set_rates
+
+    set_rates(getattr(getattr(config, "search", None), "currency_rates", None))
+    return config
 from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.llm.client import LLMClient
 from src.llm.health import run_checks as run_llm_checks
@@ -134,7 +140,7 @@ async def _ask_async(
     sites: list[str] | None = None,
     debug: bool = False,
 ) -> None:
-    config = load_config()
+    config = _load_config()
     if debug:
         import logging
         logging.basicConfig(level=logging.DEBUG, format='%(name)s: %(message)s')
@@ -301,7 +307,7 @@ async def run_search(
     ``plan`` sees the chosen shop names; ``run`` and ``ask`` share this code
     and each presents the outcome in its own words.
     """
-    config = load_config()
+    config = _load_config()
 
     if debug:
         import logging
@@ -574,7 +580,7 @@ async def _diamond_search_async(
     country=None,
     max_sites=None,
 ):
-    config = load_config()
+    config = _load_config()
     if not config.search.diamond_search.enabled:
         typer.echo("Error: diamond_search.enabled is false in config.yaml", err=True)
         raise typer.Exit(1)
@@ -687,7 +693,7 @@ def local_state():
     """
     from src.llm.client import LLMClient
 
-    llm = LLMClient(load_config())
+    llm = LLMClient(_load_config())
     typer.echo(llm.describe_local_state())
 
     coord = llm._coordinator
@@ -710,7 +716,7 @@ def browsers():
     """List the browsers detected on this machine and which one is selected."""
     from src.browser.browsers import REGISTRY, detect_all, resolve
 
-    cfg = load_config()
+    cfg = _load_config()
     typer.echo("\nDetected browsers:\n")
     found = {p.id: exe for p, exe in detect_all()}
     for profile in REGISTRY:
@@ -741,7 +747,7 @@ def sites(
     from src.searcher.site_profiles import load_profiles
     from src.searcher.site_registry import SITES
 
-    config = load_config()
+    config = _load_config()
     enabled = {site.name for site in config.search.websites if site.enabled}
     profiles = load_profiles()
     rows = []
@@ -777,7 +783,7 @@ def login_sites():
     from src.searcher.adapters import ADAPTER_REGISTRY
     from src.searcher.sessions import has_session
 
-    cfg = load_config()
+    cfg = _load_config()
     configured = {s.strip().lower() for s in cfg.browser.login_sites}
     needed = configured | {name for name, cls in ADAPTER_REGISTRY.items()
                             if getattr(cls, "requires_login", False)}
@@ -793,7 +799,7 @@ def login_sites():
 @app.command()
 def schedule_install():
     """Install automated scheduled tasks (Windows Task Scheduler / cron)."""
-    config = load_config()
+    config = _load_config()
     install_schedule(config)
     typer.echo("Scheduled tasks installed.")
 
@@ -808,7 +814,7 @@ def schedule_uninstall():
 @app.command()
 def config_check():
     """Validate config.yaml against schema."""
-    config = load_config()
+    config = _load_config()
     typer.echo("✅ Config valid")
     typer.echo(f"  Sites enabled: {[s.name for s in config.search.websites if s.enabled]}")
     typer.echo(f"  LLM local: {config.llm.local[0].type if config.llm.local else 'none'}")
@@ -826,7 +832,7 @@ def llm_check(
     cloud: bool = typer.Option(True, "--cloud/--no-cloud", help="Probe cloud APIs"),
 ):
     """Probe every configured LLM provider and show which ones actually work."""
-    config = load_config()
+    config = _load_config()
     statuses = asyncio.run(
         run_llm_checks(
             config,
@@ -873,7 +879,7 @@ def doctor(
 
 
 async def doctor_async(site: str | None, offline: bool):
-    config = load_config()
+    config = _load_config()
     doctor = Doctor(config)
     
     if site:
@@ -950,7 +956,7 @@ async def _search_async(
     max_sites=None,
     sites=None,
 ):
-    config = load_config()
+    config = _load_config()
     config.search.winners_count = winners
     if country:
         config.search.user_country = country.upper()
@@ -1083,11 +1089,10 @@ def research_specs(
     import json
     from pathlib import Path
 
-    from src.config import load_config
     from src.intelligence.specs_researcher import ItemSpecsResearcher
     from src.storage.manager import StorageManager
 
-    config = load_config()
+    config = _load_config()
     storage = StorageManager(config.storage.db_path)
     researcher = ItemSpecsResearcher(storage=storage, config=config)
 
@@ -1142,7 +1147,6 @@ def find_replacement(
     from pathlib import Path
 
     from src.browser.manager import BrowserManager
-    from src.config import load_config
     from src.intelligence.comparison_engine import ComparisonEngine
     from src.intelligence.specs_researcher import ItemSpecsResearcher
     from src.llm.client import LLMClient
@@ -1150,7 +1154,7 @@ def find_replacement(
     from src.searcher.playwright_searcher import PlaywrightSearcher
     from src.storage.manager import StorageManager
 
-    config = load_config()
+    config = _load_config()
     storage = StorageManager(config.storage.db_path)
     llm = LLMClient(config)
 
@@ -1336,7 +1340,7 @@ def alert_rule_add(
     """Add a price alert rule."""
     from src.storage.manager import StorageManager
 
-    config = load_config()
+    config = _load_config()
     storage = StorageManager(config.storage.db_path)
     ch_list = [c.strip() for c in channels.split(",")] if channels else []
     storage.save_price_alert_rule(
@@ -1351,7 +1355,7 @@ def alert_rule_list():
     """List price alert rules."""
     from src.storage.manager import StorageManager
 
-    config = load_config()
+    config = _load_config()
     storage = StorageManager(config.storage.db_path)
     rules = storage.list_price_alert_rules(active_only=False)
     if not rules:
@@ -1373,7 +1377,7 @@ def alert_rule_remove(
     """Remove an alert rule by URL."""
     from src.storage.manager import StorageManager
 
-    config = load_config()
+    config = _load_config()
     storage = StorageManager(config.storage.db_path)
     ok = storage.remove_price_alert_rule(url)
     typer.echo(f"Removed rule for {url}" if ok else f"No rule for {url}")
@@ -1386,7 +1390,7 @@ def alert_rule_enable(
     """Enable an alert rule by URL."""
     from src.storage.manager import StorageManager
 
-    config = load_config()
+    config = _load_config()
     storage = StorageManager(config.storage.db_path)
     ok = storage.set_rule_active(url, True)
     typer.echo(f"Rule for {url} enabled" if ok else f"No rule for {url}")
@@ -1399,7 +1403,7 @@ def alert_rule_disable(
     """Disable an alert rule by URL."""
     from src.storage.manager import StorageManager
 
-    config = load_config()
+    config = _load_config()
     storage = StorageManager(config.storage.db_path)
     ok = storage.set_rule_active(url, False)
     typer.echo(f"Rule for {url} disabled" if ok else f"No rule for {url}")
@@ -1408,7 +1412,7 @@ def alert_rule_disable(
 @alert_rule_app.command("evaluate")
 def alert_rule_evaluate():
     """Evaluate all active alert rules and send triggered alerts now."""
-    config = load_config()
+    config = _load_config()
     storage = StorageManager(config.storage.db_path)
     notification_manager = _build_notification_manager(config)
     from src.intelligence.price_tracker import AlertRuleEngine

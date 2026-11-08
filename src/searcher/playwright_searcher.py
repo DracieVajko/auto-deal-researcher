@@ -7,7 +7,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from playwright.async_api import BrowserContext, Page
 
@@ -496,7 +496,7 @@ class PlaywrightSearcher:
         final_ranked = await self.llm.rank_results(
             prompt, all_deals, max(len(all_deals), 1)
         )
-        return final_ranked
+        return cast(list[Deal], final_ranked)
 
     async def _enrich_price_quotes(self, deals: list[Deal]) -> None:
         """Let the LLM classify cards the deterministic scanner was unsure about.

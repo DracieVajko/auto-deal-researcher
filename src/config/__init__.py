@@ -83,9 +83,4 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         config_data = yaml.safe_load(resolve_env_placeholders(raw)) or {}
         config = AppConfig(**config_data)
 
-    # The EUR rate table is process-wide: the adapters have no config access,
-    # so the configured rates are applied here, once, at load time.
-    from src.searcher.currency import set_rates
-
-    set_rates(config.search.currency_rates)
     return config

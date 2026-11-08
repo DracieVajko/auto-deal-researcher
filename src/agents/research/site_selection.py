@@ -8,6 +8,7 @@ hand the LLM the candidate list to narrow down.
 import logging
 from typing import ClassVar
 
+from src.config.models import Category, Condition
 from src.searcher.site_registry import SITES, SiteSpec
 from src.searcher.site_selection import SiteCandidate
 
@@ -61,25 +62,25 @@ class SiteSelectionAgent:
         ]
 
     async def run(self, input_data: dict) -> dict:
-        condition = input_data.get("condition", "any")
-        category = input_data.get("category", "any")
+        condition = input_data.get("condition", Condition.ANY)
+        category = input_data.get("category", Category.ANY)
         selected_sites = self._select_sites(condition, category)
         return {
             "selected_sites": selected_sites,
             "reasoning": self._explain_selection(selected_sites, condition, category),
         }
 
-    def _select_sites(self, condition: str, category: str) -> list[str]:
+    def _select_sites(self, condition: Condition | str, category: Category | str) -> list[str]:
         """Select sites matching condition and category."""
         selected = []
         for site, caps in self.capabilities().items():
-            cond_match = condition == "any" or condition in caps["conditions"]
-            cat_match = category == "any" or category in caps["categories"]
+            cond_match = condition == Condition.ANY or condition in caps["conditions"]
+            cat_match = category == Category.ANY or category in caps["categories"]
             if cond_match and cat_match:
                 selected.append(site)
         return sorted(selected, key=lambda s: self.capabilities()[s]["priority"])
 
-    def _explain_selection(self, sites: list[str], condition: str, category: str) -> str:
+    def _explain_selection(self, sites: list[str], condition: Condition | str, category: Category | str) -> str:
         if not sites:
             return "No sites match criteria"
         return f"Selected {len(sites)} sites for {condition} {category}: {', '.join(sites)}"

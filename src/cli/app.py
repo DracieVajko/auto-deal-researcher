@@ -89,7 +89,7 @@ async def _resolve_runtime_filters(
 
 def _validate_category_arg(category: str | None) -> None:
     """Reject a misspelt --category early, listing what is allowed."""
-    if category is not None and category not in (*CATEGORIES, "any"):
+    if category is not None and category not in (*CATEGORIES, Category.ANY):
         msg = (
             f"unknown category '{category}'. Allowed: any, "
             + ", ".join(CATEGORIES)
@@ -179,7 +179,7 @@ async def _ask_async(
     def _brief(b: SearchBrief) -> None:
         parts = [f"condition={b.condition}", f"category={b.category}"]
         _category = b.category.value if hasattr(b.category, "value") else str(b.category)
-        if not b.inferred and _category == "any":
+        if not b.inferred and _category == Category.ANY:
             parts[-1] = "category=any (no model guess)"
         for key in ("min_price", "max_price", "brand", "location", "shipping", "seller_type", "sort"):
             value = getattr(b.filters, key)
@@ -1213,7 +1213,7 @@ def find_replacement(
         extracted.min_price = float(min_price)
     if max_price:
         extracted.max_price = float(max_price)
-    if condition != "any":
+    if condition != Condition.ANY:
         extracted.condition = condition
     search_filters = to_search_filters(extracted)
 

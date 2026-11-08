@@ -8,11 +8,9 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from src.config.models import Category
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
 
+from src.config.models import Category
 from src.searcher.filters import SearchFilters
 from src.searcher.pricing import comparable_price
 from src.searcher.site_profiles import FilterSpec, SiteProfile
@@ -100,7 +98,7 @@ class FilterEngine:
         cls,
         profile: SiteProfile,
         query: str,
-        category: Category | str = "any",
+        category: Category | str = Category.ANY,
         filters: SearchFilters | None = None,
     ) -> str | None:
         """Build the best URL the profile exposes for this query/category.
@@ -111,7 +109,7 @@ class FilterEngine:
         filters = filters or SearchFilters()
         base: str | None = None
         _category = category.value if hasattr(category, "value") else str(category) if category is not None else None
-        if _category and _category != "any":
+        if _category and _category != Category.ANY:
             base = profile.search.category_urls.get(_category)
         if not base:
             base = profile.search.url_template

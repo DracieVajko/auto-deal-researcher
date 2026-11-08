@@ -1,15 +1,13 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import ClassVar, Literal
 
 from playwright.async_api import ElementHandle, Page
 
-if TYPE_CHECKING:
-    from src.config.models import Category, Condition
-    from src.searcher.pricing import PriceQuote
-
+from src.config.models import Category, Condition
 from src.searcher.currency import parse_number, parse_price_detail
 from src.searcher.filters import SearchFilters
+from src.searcher.pricing import PriceQuote
 from src.searcher.site_profiles import SiteProfile
 
 
@@ -50,15 +48,13 @@ class Deal:
     expert_score: float | None = None
     expert_analysis: str = ""
 
-    def matches_condition(self, condition: "Condition | str") -> bool:
-        incoming = condition.value if hasattr(condition, "value") else str(condition)
-        if incoming == "any" or self.condition == incoming:
+    def matches_condition(self, condition: Condition | str) -> bool:
+        if condition == Condition.ANY or self.condition == condition:
             return True
         return False
 
-    def matches_category(self, category: "Category | str") -> bool:
-        incoming = category.value if hasattr(category, "value") else str(category)
-        if incoming == "any" or self.category == incoming:
+    def matches_category(self, category: Category | str) -> bool:
+        if category == Category.ANY or self.category == category:
             return True
         return False
 
@@ -160,17 +156,15 @@ class BaseAdapter(ABC):
         """Extract Deal from a single result element on search results page."""
         ...
 
-    def matches_condition(self, condition: "Condition | str") -> bool:
-        incoming = condition.value if hasattr(condition, "value") else str(condition)
-        if incoming == "any":
+    def matches_condition(self, condition: Condition | str) -> bool:
+        if condition == Condition.ANY:
             return True
-        return incoming in self.supported_conditions
+        return condition in self.supported_conditions
 
-    def matches_category(self, category: "Category | str") -> bool:
-        incoming = category.value if hasattr(category, "value") else str(category)
-        if incoming == "any":
+    def matches_category(self, category: Category | str) -> bool:
+        if category == Category.ANY:
             return True
-        return incoming in self.supported_categories
+        return category in self.supported_categories
 
     async def detect_block(self, page: Page) -> str | None:
         """Return a human-readable reason if the page is an anti-bot interstitial.

@@ -1,6 +1,7 @@
 from src.config.models import Category, Condition
 from src.searcher.adapters.base import Deal
 
+
 def test_condition_any_matches_regardless_of_input_form():
     deal = Deal(url="https://x/1", title="X", condition="new")
     assert deal.matches_condition(Condition.ANY) is True

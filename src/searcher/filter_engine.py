@@ -10,7 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from src.config.models import Category, Condition
+    from src.config.models import Category
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
 
 from src.searcher.filters import SearchFilters
@@ -100,7 +100,7 @@ class FilterEngine:
         cls,
         profile: SiteProfile,
         query: str,
-        category: "Category | str" = "any",
+        category: Category | str = "any",
         filters: SearchFilters | None = None,
     ) -> str | None:
         """Build the best URL the profile exposes for this query/category.

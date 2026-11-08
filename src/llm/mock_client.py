@@ -1,9 +1,11 @@
 """Mock LLM Client for testing without API keys."""
 
-import asyncio
 import logging
 
+from src.llm import protocols
 from src.searcher.adapters.base import Deal
+
+DealLike = protocols.DealLike
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +46,12 @@ class MockLLMClient:
             terms.append("obstacle avoidance")
         return " ".join(terms) if terms else "DJI drone under 350"
 
-    async def refine_query(self, prompt: str, current_deals: list[Deal], round_num: int) -> str:
+    async def refine_query(self, prompt: str, current_deals: list[DealLike], round_num: int) -> str:
         self.call_count += 1
         models_found = [d.title for d in current_deals]
         return f"DJI drone under 350 NOT {' '.join(models_found[:3])}"
 
-    async def judge_results(self, prompt: str, deals: list[Deal]) -> dict:
+    async def judge_results(self, prompt: str, deals: list[DealLike]) -> dict:
         self.call_count += 1
         keep_urls = []
         for deal in deals:
@@ -58,7 +60,7 @@ class MockLLMClient:
                 keep_urls.append(deal.url)
         return {"keep": keep_urls}
 
-    async def rank_results(self, prompt: str, deals: list[Deal], top_n: int) -> list[Deal]:
+    async def rank_results(self, prompt: str, deals: list[DealLike], top_n: int) -> list[DealLike]:
         self.call_count += 1
         def score(deal):
             total = 0

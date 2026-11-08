@@ -5,14 +5,15 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from src.notifications.base import Alert
 from src.notifications.manager import NotificationManager
 from src.searcher.adapters.base import Deal
-from typing import TYPE_CHECKING
+from src.storage.manager import StorageManager
+
 if TYPE_CHECKING:
     from src.config.models import Condition
-from src.storage.manager import StorageManager
 
 
 def _effective_price(deal) -> float:
@@ -105,7 +106,7 @@ class PriceTracker:
                 })
         return sorted(results, key=lambda x: x["effective_price_eur"])
 
-    def get_deals_below_price(self, max_price_eur: float, condition: "Condition | str" = "any") -> list[dict]:
+    def get_deals_below_price(self, max_price_eur: float, condition: Condition | str = "any") -> list[dict]:
         """Get all deals below a certain effective price."""
         deals = self.storage.get_all_deals()
         results = []

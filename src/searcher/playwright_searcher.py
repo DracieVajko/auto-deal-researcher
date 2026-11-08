@@ -73,6 +73,10 @@ class PlaywrightSearcher:
         browser_manager
     ):
         self.config = config
+        # Apply configured currency rates so search paths that bypass the CLI
+        # _load_config wrapper (monitor/watch/history) still honour config.
+        from src.searcher.currency import set_rates
+        set_rates(getattr(getattr(config, "search", None), "currency_rates", None))
         self.llm = llm
         self.storage = storage
         self.browser_manager = browser_manager

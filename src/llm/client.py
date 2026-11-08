@@ -7,12 +7,12 @@ import logging
 import os
 import re
 import time
+from collections.abc import Sequence
 
 import requests
 
-from src.llm.local_coordinator import LocalModelCoordinator, ensure_lmstudio_model
 from src.llm import protocols
-from typing import Sequence
+from src.llm.local_coordinator import LocalModelCoordinator, ensure_lmstudio_model
 
 DealLike = protocols.DealLike
 

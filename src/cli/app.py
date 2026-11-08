@@ -15,13 +15,6 @@ from src.cli.commands.monitor import monitor as monitor_fn
 from src.cli.commands.watch import watch as watch_fn
 from src.config import load_config
 from src.config.models import Category, Condition
-
-def _load_config(*args, **kwargs):
-    config = load_config(*args, **kwargs)
-    from src.searcher.currency import set_rates
-
-    set_rates(getattr(getattr(config, "search", None), "currency_rates", None))
-    return config
 from src.diagnostics.doctor import Doctor, print_doctor_results
 from src.llm.client import LLMClient
 from src.llm.health import run_checks as run_llm_checks
@@ -39,6 +32,15 @@ from src.searcher.filters import (
 )
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
+
+
+def _load_config(*args, **kwargs):
+    config = load_config(*args, **kwargs)
+    from src.searcher.currency import set_rates
+
+    set_rates(getattr(getattr(config, "search", None), "currency_rates", None))
+    return config
+
 
 logger = logging.getLogger(__name__)
 

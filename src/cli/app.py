@@ -616,22 +616,48 @@ async def _diamond_search_async(
 
     storage = StorageManager(config.storage.db_path)
     browser_mgr = BrowserManager(config)
-    processor = ResultProcessor(config, brand_filter=filters.brand)
+    processor = ResultProcessor(config, llm, brand_filter=filters.brand)
     config.search.winners_count = winners
 
+    site_plan = None
     async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
         if not searcher.diamond_search_enabled:
             typer.echo("Error: Diamond Search agents unavailable", err=True)
             raise typer.Exit(1)
         try:
             deals = await searcher.search_with_diamond(prompt, condition, category, filters)
+            site_plan = searcher.site_plan
         finally:
             await browser_mgr.close()
 
     for deal in deals:
         storage.save_deal(deal)
 
-    await processor.save_results(deals, output_dir, prompt=prompt)
+    # Price tracking alerts (price drops, new lows, fake promos)
+    price_alerts = []
+    try:
+        from src.intelligence.price_tracker import PriceTracker
+
+        tracker = PriceTracker(storage)
+        price_alert_objects = []
+        price_alert_objects.extend(tracker.check_price_drops(threshold_pct=5.0, days=7))
+        price_alert_objects.extend(tracker.check_new_lows(days=30))
+        price_alert_objects.extend(tracker.check_fake_promos(threshold_pct=30.0, days=30))
+        price_alerts = [
+            {
+                "title": a.title,
+                "message": a.message,
+                "severity": a.severity,
+                "metadata": a.metadata,
+            }
+            for a in price_alert_objects
+        ]
+    except (AttributeError, ImportError):
+        pass
+
+    await processor.save_results(
+        deals, output_dir, prompt=prompt, site_plan=site_plan, price_alerts=price_alerts,
+    )
 
     # Price alert rules (user-configurable thresholds)
     try:

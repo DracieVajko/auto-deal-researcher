@@ -14,23 +14,38 @@ from .profile_adapter import ProfileAdapter
 
 logger = logging.getLogger(__name__)
 
-class _AdapterRegistry(dict[str, type[BaseAdapter]]):
-    """Dict that exposes only real adapter classes when iterated.
+class _AdapterRegistry(dict[str, type]):
+    """Dict whose iteration exposes only BaseAdapter subclasses.
 
     Third-party plugins may register arbitrary objects; iteration (used by
     diagnostics/tests that assume scraper adapters) skips anything that is not
-    a ``BaseAdapter`` subclass, while membership checks still report them.
+    a ``BaseAdapter`` subclass, while membership checks (``in``) and ``[]``
+    still report all registered entries.
     """
 
-    def items(self):  # type: ignore[override]
+    def _is_adapter(self, value: object) -> bool:
+        return isinstance(value, type) and issubclass(value, BaseAdapter)
+
+    def __iter__(self):
         for key, value in super().items():
-            if isinstance(value, type) and issubclass(value, BaseAdapter):
+            if self._is_adapter(value):
+                yield key
+
+    def keys(self):
+        return (k for k, v in super().items() if self._is_adapter(v))
+
+    def values(self):
+        for value in super().values():
+            if self._is_adapter(value):
+                yield value
+
+    def items(self):
+        for key, value in super().items():
+            if self._is_adapter(value):
                 yield key, value
 
-    def values(self):  # type: ignore[override]
-        for value in super().values():
-            if isinstance(value, type) and issubclass(value, BaseAdapter):
-                yield value
+    def __len__(self) -> int:
+        return sum(1 for v in super().values() if self._is_adapter(v))
 
 
 ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = _AdapterRegistry(
@@ -59,10 +74,7 @@ def load_entry_point_adapters() -> None:
     Entry point name becomes the adapter key. A single bad plugin is logged and
     skipped so it cannot break the built-in registry.
     """
-    try:
-        eps = _md.entry_points(group="ads.adapters")
-    except TypeError:  # Python < 3.10 fallback
-        eps = _md.entry_points().get("ads.adapters", [])  # type: ignore[arg-type, union-attr]
+    eps = _md.entry_points(group="ads.adapters")
     for ep in eps:
         try:
             ADAPTER_REGISTRY[ep.name] = ep.load()

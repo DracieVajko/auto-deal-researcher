@@ -217,7 +217,7 @@ class StorageManager:
             "SELECT 1 FROM runs WHERE id = ?", (effective_run_id,)
         ).fetchone()
         if existing_run is None:
-            self.db["runs"].insert(  # type: ignore[union-attr]
+            self.db["runs"].insert(
                 {
                     "id": effective_run_id,
                     "prompt": "manual",
@@ -253,7 +253,7 @@ class StorageManager:
         quote = getattr(deal, "price_quote", None)
         if quote is not None and quote.shipping.cost_eur is not None:
             sighting["shipping_cost_eur"] = quote.shipping.cost_eur
-        result = self.db["price_history"].insert(sighting)  # type: ignore[union-attr]
+        result = self.db["price_history"].insert(sighting)
         return int(result.last_pk) if result and result.last_pk is not None else None
 
     def get_price_history(self, url: str, days: int = 30) -> list[dict]:
@@ -490,6 +490,9 @@ class StorageManager:
         grace_cutoff = (utcnow().date() - timedelta(days=grace_period_days)).isoformat()
 
         with self.db.conn as conn:
+            # Preserve price history even when deals are pruned: temporarily
+            # disable FK enforcement so orphaned price_history rows survive.
+            conn.execute("PRAGMA foreign_keys = OFF")
             # Count deals to be pruned
             to_prune = conn.execute(
                 "SELECT COUNT(*) FROM deals WHERE last_seen < ?", (cutoff,)
@@ -497,6 +500,7 @@ class StorageManager:
 
             # Hard delete old deals (price_history preserved)
             conn.execute("DELETE FROM deals WHERE last_seen < ?", (cutoff,))
+            conn.execute("PRAGMA foreign_keys = ON")
 
             # Mark recently missing (could add a status column if needed)
             conn.execute(
@@ -519,7 +523,7 @@ class StorageManager:
 
     # Run tracking
     def create_run(self, run_id: str, prompt: str, condition: str, category: str) -> None:
-        self.db["runs"].insert({  # type: ignore[union-attr]
+        self.db["runs"].insert({
             "id": run_id,
             "prompt": prompt,
             "condition": condition,
@@ -532,7 +536,7 @@ class StorageManager:
         }, pk="id")
 
     def complete_run(self, run_id: str, total_deals: int, new_deals: int, status: str = "completed", error: str = "") -> None:
-        self.db["runs"].update(run_id, {  # type: ignore[union-attr]
+        self.db["runs"].update(run_id, {
             "completed_at": utcnow_iso(),
             "total_deals": total_deals,
             "new_deals": new_deals,
@@ -549,7 +553,7 @@ class StorageManager:
         return RunRecord(**row) if row else None
 
     def get_run(self, run_id: str) -> RunRecord | None:
-        row = self.db["runs"].get(run_id)  # type: ignore[union-attr]
+        row = self.db["runs"].get(run_id)
         return RunRecord(**row) if row else None
 
     def get_all_runs(self, limit: int = 50) -> list[RunRecord]:
@@ -558,7 +562,7 @@ class StorageManager:
 
     # Alerts
     def add_alert(self, run_id: str, rule_name: str, message: str, severity: str = "info") -> int:
-        result = self.db["alerts"].insert({  # type: ignore[union-attr]
+        result = self.db["alerts"].insert({
             "run_id": run_id,
             "rule_name": rule_name,
             "message": message,
@@ -572,7 +576,7 @@ class StorageManager:
         return [dict(r) for r in self.db["alerts"].rows_where("sent = 0", order_by="created_at")]
 
     def mark_alert_sent(self, alert_id: int) -> None:
-        self.db["alerts"].update(alert_id, {"sent": 1, "sent_at": utcnow_iso()})  # type: ignore[union-attr]
+        self.db["alerts"].update(alert_id, {"sent": 1, "sent_at": utcnow_iso()})
 
     # ------------------------------------------------------------------
     # Item specs research (replacement finder foundation)
@@ -608,7 +612,7 @@ class StorageManager:
 
         rows = list(
             self.db["item_specs"].rows_where("item_name = ?", [item_name])
-        )  # type: ignore[union-attr]
+        )
         if not rows:
             return None
         row = rows[0]
@@ -651,7 +655,7 @@ class StorageManager:
             },
             pk="url",
             replace=True,
-        )  # type: ignore[union-attr]
+        )
 
     def get_price_alert_rule(self, url: str) -> dict | None:
         """Return a single alert rule by URL, or None."""
@@ -659,7 +663,7 @@ class StorageManager:
 
         rows = list(
             self.db["alert_rules"].rows_where("url = ?", [url])
-        )  # type: ignore[union-attr]
+        )
         if not rows:
             return None
         row = rows[0]
@@ -682,11 +686,11 @@ class StorageManager:
         if active_only:
             rows = list(
                 self.db["alert_rules"].rows_where("is_active = 1")
-            )  # type: ignore[union-attr]
+            )
         else:
             rows = list(
                 self.db["alert_rules"].rows_where("1")
-            )  # type: ignore[union-attr]
+            )
         return [
             {
                 "url": row["url"],
@@ -706,22 +710,22 @@ class StorageManager:
         """Remove an alert rule by URL. Returns True if a row was deleted."""
         rows = list(
             self.db["alert_rules"].rows_where("url = ?", [url])
-        )  # type: ignore[union-attr]
+        )
         if not rows:
             return False
-        self.db.table("alert_rules").delete(url)  # type: ignore[union-attr]
+        self.db.table("alert_rules").delete(url)
         return True
 
     def set_rule_active(self, url: str, active: bool) -> bool:
         """Activate or deactivate an alert rule. Returns True if a row existed."""
         rows = list(
             self.db["alert_rules"].rows_where("url = ?", [url])
-        )  # type: ignore[union-attr]
+        )
         if not rows:
             return False
         self.db.table("alert_rules").update(
             url, {"is_active": 1 if active else 0}
-        )  # type: ignore[union-attr]
+        )
         return True
 
     def set_rule_last_triggered(self, url: str, timestamp: str) -> None:

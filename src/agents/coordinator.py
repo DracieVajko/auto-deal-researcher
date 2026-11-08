@@ -23,6 +23,18 @@ def _extract_result(result):
     return str(result)
 
 
+def _collect_agent_errors(results: dict) -> dict[str, str]:
+    """Map ``layer.agent`` to its error message for every failed payload."""
+    errors: dict[str, str] = {}
+    for layer_name, layer_result in results.items():
+        if not isinstance(layer_result, dict):
+            continue
+        for agent_name, payload in layer_result.items():
+            if isinstance(payload, dict) and "error" in payload:
+                errors[f"{layer_name}.{agent_name}"] = str(payload["error"])
+    return errors
+
+
 class CoordinatorAgent(AgentBase[dict, dict]):
     """Meta-agent that orchestrates the Diamond Search pipeline."""
 
@@ -61,7 +73,6 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         layers; otherwise those layers run in intelligence-only mode.
         """
         prompt = input_data.get("prompt", "")
-        max_rounds = self.config.get("max_rounds", 3)
         deals = input_data.get("deals") or []
 
         # Generate or use existing run_id for traceability
@@ -90,8 +101,14 @@ class CoordinatorAgent(AgentBase[dict, dict]):
         )
         results["price"] = price_results
 
+        # Collect per-agent errors into a separate map so downstream consumers
+        # can inspect failures without probing every agent slot.
+        errors = _collect_agent_errors(results)
+
         # Final synthesis
         final_result = await self._synthesize_results(prompt, results, run_id)
+        if isinstance(final_result, dict):
+            final_result = {**final_result, "errors": errors}
 
         return AgentResult(
             agent_name=self.name,
@@ -103,6 +120,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
                 "agents_used": list(self.agents.keys()),
                 "llm_calls": self.llm_calls_made,
                 "llm_tokens": self.llm_tokens_used,
+                "errors": errors,
             }
         )
 
@@ -124,7 +142,7 @@ class CoordinatorAgent(AgentBase[dict, dict]):
 
         return {
             agent.name: _extract_result(result)
-            for agent, result in zip([self.agents["query_expansion"], self.agents["site_selection"], self.agents["market_intel"]], results)
+            for agent, result in zip([self.agents["query_expansion"], self.agents["site_selection"], self.agents["market_intel"]], results, strict=False)
             if agent
         }
 

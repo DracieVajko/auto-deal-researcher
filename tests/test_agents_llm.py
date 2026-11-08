@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.agents.coordinator import CoordinatorAgent
+from src.agents.coordinator import CoordinatorAgent, _collect_agent_errors
 from src.agents.expertise.domain_expert import DomainExpertAgent
 from src.agents.llm_support import as_list, extract_json
 from src.agents.research.query_expansion import QueryExpansionAgent
@@ -192,3 +192,18 @@ async def test_coordinator_respects_call_budget():
     coord = CoordinatorAgent(_agents(), {"llm_call_budget": 0, "llm_token_budget": 100000})
     out = await coord._run_research_layer("x", "run_x")
     assert "error" in out
+
+
+def test_collect_agent_errors_keys_by_layer_and_agent():
+    results = {
+        "research": {
+            "query_expansion": {"expanded_queries": ["x"]},
+            "market_intel": {"error": "timeout"},
+        },
+        "price": {"price_hunter": {"error": "no deals"}},
+        "raw_text": "not a layer dict",
+    }
+    assert _collect_agent_errors(results) == {
+        "research.market_intel": "timeout",
+        "price.price_hunter": "no deals",
+    }

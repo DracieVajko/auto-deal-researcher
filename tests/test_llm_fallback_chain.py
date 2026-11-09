@@ -61,7 +61,14 @@ async def test_empty_reply_advances_to_next_provider(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_all_empty_falls_back_to_prompt(monkeypatch):
+async def test_all_empty_returns_empty(monkeypatch):
+    """When every provider returns empty, _chat must not echo the prompt.
+
+    Echoing the user prompt here used to masquerade as a model reply and
+    poisoned downstream parsers (judge_results, rank_results, chat_json, ...).
+    Callers that want a prompt-derived fallback (generate_search_query_async)
+    already apply their own deterministic fallback on an empty string.
+    """
     async def fake_call(provider, key, model, system, user, max_tokens, temperature=0.3):
         return ""
 
@@ -70,4 +77,4 @@ async def test_all_empty_falls_back_to_prompt(monkeypatch):
     llm = make(["openrouter", "gemini"])
     monkeypatch.setattr(llm, "_call_cloud_llm_async", fake_call)
     out = await llm._chat("sys", "the user prompt", max_tokens=10)
-    assert out == "the user prompt"
+    assert out == ""

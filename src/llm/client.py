@@ -244,6 +244,11 @@ class LLMClient:
         """Human-readable state of both local backends (read-only)."""
         return self._coordinator.describe() if self._coordinator else "not configured"
 
+    async def chat(self, system: str, user: str, max_tokens: int = 400,
+                   temperature: float = 0.3) -> str:
+        """Public chat entry point used by agents and external callers."""
+        return await self._chat(system, user, max_tokens, temperature)
+
     async def chat_json(self, system: str, user: str, max_tokens: int = 400):
         """Chat and parse a JSON object/list from the reply."""
         raw = await self._chat(system, user, max_tokens)
@@ -432,8 +437,10 @@ class LLMClient:
                 logger.warning(f"Cloud API ({api.provider}) skipped: no API key in env {api.api_key_env}")
 
         logger.error("All LLM providers failed, falling back to prompt as search query")
-        # Fallback: return the user prompt as search query
-        return user
+        # Return an empty string rather than the user prompt. Downstream callers
+        # (chat_json, judge_results, rank_results, ...) must not mistake the
+        # echoed prompt for a model reply, or they will parse garbage verdicts.
+        return ""
 
     @staticmethod
     def _clean_query(raw: str, fallback: str = "", max_words: int = 6) -> str:

@@ -11,7 +11,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # Columns added after the initial migration, applied idempotently to any
 # database created by an older build.
@@ -256,6 +256,10 @@ def _run_migrations(db: Database) -> None:
         _migration_006_alert_rules(db)
         current_version = 6
 
+    if current_version < 7:
+        _migration_007_scheduled_jobs(db)
+        current_version = 7
+
     # Update version
     db["migrations"].insert({"version": current_version}, pk="version", replace=True)
 
@@ -415,6 +419,33 @@ def _migration_006_alert_rules(db: Database) -> None:
             )
         """)
         db.execute("CREATE INDEX IF NOT EXISTS idx_alert_rules_active ON alert_rules(is_active)")
+
+
+def _migration_007_scheduled_jobs(db: Database) -> None:
+    """Create the scheduled_jobs table for the system monitor/scheduler."""
+    if "scheduled_jobs" not in db.table_names():
+        db.execute("""
+            CREATE TABLE scheduled_jobs (
+                id TEXT PRIMARY KEY,
+                prompt TEXT NOT NULL,
+                condition TEXT DEFAULT 'any',
+                category TEXT DEFAULT 'any',
+                mode TEXT DEFAULT 'once',           -- once | watchdog
+                trigger TEXT DEFAULT 'asap',        -- asap | at | every
+                trigger_value TEXT,                 -- HH:MM for at; N for every
+                every_unit TEXT DEFAULT 'minutes',  -- minutes | hours
+                repeats INTEGER,                    -- NULL = infinite
+                runs_done INTEGER DEFAULT 0,
+                max_runs INTEGER DEFAULT 1,         -- 1 for once; 0 or N for watchdog
+                enabled INTEGER DEFAULT 1,
+                next_run_at TEXT,
+                created_at TEXT,
+                last_run_at TEXT,
+                last_status TEXT
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_next_run ON scheduled_jobs(next_run_at)")
 
 
 def _ensure_table_columns(

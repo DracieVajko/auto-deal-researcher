@@ -94,3 +94,43 @@ def _uninstall_unix_cron():
     lines = [line for line in current.splitlines() if "src.cli run" not in line]
     subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n", text=True, check=True)
     print("Removed cron jobs")
+
+
+def install_startup():
+    """Register ``python -m src.cli schedule service`` to run at Windows logon.
+
+    Uses a Task Scheduler task with an ``AtLogon`` trigger so the monitor
+    starts automatically together with the user session.
+    """
+    if sys.platform != "win32":
+        return
+    python_exe = sys.executable
+    repo_root = str(Path.cwd())
+    safe_name = "AutoDealSearcher-Monitor"
+
+    def _ps_quote(value: str) -> str:
+        return "'" + str(value).replace("'", "''") + "'"
+
+    quoted_exe = _ps_quote(python_exe)
+    quoted_args = _ps_quote("-m src.cli schedule service")
+    quoted_dir = _ps_quote(repo_root)
+    quoted_name = _ps_quote(safe_name)
+    ps_cmd = f"""
+$action = New-ScheduledTaskAction -Execute {quoted_exe} -Argument {quoted_args} -WorkingDirectory {quoted_dir}
+$trigger = New-ScheduledTaskTrigger -AtLogon
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries
+Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
+"""
+    subprocess.run(["powershell", "-Command", ps_cmd], check=True)
+    print(f"Installed Windows startup task: {safe_name}")
+
+
+def uninstall_startup():
+    """Remove the Windows logon startup task for the monitor."""
+    if sys.platform != "win32":
+        return
+    subprocess.run([
+        "powershell", "-Command",
+        "Get-ScheduledTask -TaskName 'AutoDealSearcher-Monitor' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false"
+    ], check=False)
+    print("Removed Windows startup task")

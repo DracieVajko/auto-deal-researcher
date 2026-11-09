@@ -12,6 +12,7 @@ import typer
 from src.browser.manager import BrowserManager
 from src.cli.commands.history import history_app
 from src.cli.commands.monitor import monitor as monitor_fn
+from src.cli.commands.schedule import schedule_app
 from src.cli.commands.watch import watch as watch_fn
 from src.config import load_config
 from src.config.models import Category, Condition
@@ -46,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 app = typer.Typer(help="Auto Deal Searcher — find deals across marketplaces")
 app.add_typer(history_app, name="history")
+app.add_typer(schedule_app, name="schedule")
 
 
 async def _resolve_runtime_filters(

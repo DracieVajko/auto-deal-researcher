@@ -749,3 +749,170 @@ class StorageManager:
         if row is None:
             return None
         return row["effective_price_eur"] or row["price_eur"]
+
+    # ------------------------------------------------------------------
+    # Scheduled jobs (system monitor / watchdog)
+    # ------------------------------------------------------------------
+
+    def save_scheduled_job(
+        self,
+        job_id: str,
+        prompt: str,
+        condition: str = "any",
+        category: str = "any",
+        mode: str = "once",
+        trigger: str = "asap",
+        trigger_value: str | None = None,
+        every_unit: str = "minutes",
+        repeats: int | None = None,
+        max_runs: int = 1,
+        enabled: bool = True,
+        next_run_at: str | None = None,
+    ) -> None:
+        """Upsert a scheduled job."""
+        from src.utils.time import utcnow_iso
+
+        self.db.table("scheduled_jobs").insert(
+            {
+                "id": job_id,
+                "prompt": prompt,
+                "condition": condition,
+                "category": category,
+                "mode": mode,
+                "trigger": trigger,
+                "trigger_value": trigger_value,
+                "every_unit": every_unit,
+                "repeats": repeats,
+                "runs_done": 0,
+                "max_runs": max_runs,
+                "enabled": 1 if enabled else 0,
+                "next_run_at": next_run_at,
+                "created_at": utcnow_iso(),
+                "last_run_at": None,
+                "last_status": None,
+            },
+            pk="id",
+            replace=True,
+        )
+
+    def get_scheduled_job(self, job_id: str) -> dict | None:
+        """Return a single scheduled job by id, or None."""
+        rows = list(
+            self.db["scheduled_jobs"].rows_where("id = ?", [job_id])
+        )
+        if not rows:
+            return None
+        return _row_to_scheduled_job(rows[0])
+
+    def list_scheduled_jobs(self, enabled_only: bool = False) -> list[dict]:
+        """List all scheduled jobs, optionally only enabled ones."""
+        if enabled_only:
+            rows = list(
+                self.db["scheduled_jobs"].rows_where("enabled = 1")
+            )
+        else:
+            rows = list(
+                self.db["scheduled_jobs"].rows_where("1")
+            )
+        return [_row_to_scheduled_job(row) for row in rows]
+
+    def due_scheduled_jobs(self, now: str | None = None) -> list[dict]:
+        """Return enabled jobs whose next_run_at is due (<= *now*).
+
+        When *now* is None the current UTC time is used.
+        """
+        from src.utils.time import utcnow_iso
+
+        if now is None:
+            now = utcnow_iso()
+        rows = list(
+            self.db["scheduled_jobs"].rows_where(
+                "enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?",
+                [now],
+                order_by="next_run_at",
+            )
+        )
+        return [_row_to_scheduled_job(row) for row in rows]
+
+    def mark_job_scheduled(
+        self,
+        job_id: str,
+        next_run_at: str | None,
+        runs_done: int,
+        last_status: str | None,
+        last_run_at: str | None,
+    ) -> bool:
+        """Update scheduling fields after a job was picked up / completed.
+
+        Passing ``None`` for ``next_run_at`` stores SQL ``NULL`` (e.g. to
+        disable a ``once`` job by clearing ``next_run_at``). Returns True if
+        a row existed.
+        """
+        rows = list(
+            self.db["scheduled_jobs"].rows_where("id = ?", [job_id])
+        )
+        if not rows:
+            return False
+        self.db.table("scheduled_jobs").update(
+            job_id,
+            {
+                "next_run_at": next_run_at,
+                "runs_done": runs_done,
+                "last_status": last_status,
+                "last_run_at": last_run_at,
+            },
+        )
+        return True
+
+    def remove_scheduled_job(self, job_id: str) -> bool:
+        """Remove a scheduled job by id. Returns True if a row was deleted."""
+        rows = list(
+            self.db["scheduled_jobs"].rows_where("id = ?", [job_id])
+        )
+        if not rows:
+            return False
+        self.db.table("scheduled_jobs").delete(job_id)
+        return True
+
+    def enable_scheduled_job(self, job_id: str) -> bool:
+        """Enable a scheduled job. Returns True if a row existed."""
+        return self._set_scheduled_job_enabled(job_id, True)
+
+    def disable_scheduled_job(self, job_id: str) -> bool:
+        """Disable a scheduled job. Returns True if a row existed."""
+        return self._set_scheduled_job_enabled(job_id, False)
+
+    def _set_scheduled_job_enabled(self, job_id: str, enabled: bool) -> bool:
+        rows = list(
+            self.db["scheduled_jobs"].rows_where("id = ?", [job_id])
+        )
+        if not rows:
+            return False
+        self.db.table("scheduled_jobs").update(
+            job_id, {"enabled": 1 if enabled else 0}
+        )
+        return True
+
+
+def _row_to_scheduled_job(row) -> dict:
+    """Map a scheduled_jobs row to a dict."""
+    data = dict(row)
+    return {
+        "id": data["id"],
+        "prompt": data["prompt"],
+        "condition": data.get("condition") or "any",
+        "category": data.get("category") or "any",
+        "mode": data.get("mode") or "once",
+        "trigger": data.get("trigger") or "asap",
+        "trigger_value": data.get("trigger_value"),
+        "every_unit": data.get("every_unit") or "minutes",
+        "repeats": data.get("repeats"),
+        "runs_done": data.get("runs_done") if data.get("runs_done") is not None else 0,
+        "max_runs": data.get("max_runs") if data.get("max_runs") is not None else 1,
+        "enabled": bool(data.get("enabled")),
+        "next_run_at": data.get("next_run_at"),
+        "created_at": data.get("created_at"),
+        "last_run_at": data.get("last_run_at"),
+        "last_status": data.get("last_status"),
+    }
+

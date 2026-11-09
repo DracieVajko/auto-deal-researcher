@@ -46,7 +46,7 @@ $trigger = New-ScheduledTaskTrigger -Daily -At {quoted_time}
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd
 Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
 '''
-            subprocess.run(["powershell", "-Command", ps_cmd], check=True)
+            subprocess.run(["powershell", "-Command", ps_cmd], check=True, timeout=30)
             print(f"Installed Windows task: {safe_name}")
 
 
@@ -54,7 +54,7 @@ def _uninstall_windows_tasks():
     subprocess.run([
         "powershell", "-Command",
         "Get-ScheduledTask -TaskName 'AutoDealSearcher-*' | Unregister-ScheduledTask -Confirm:$false"
-    ], check=False)
+    ], check=False, timeout=30)
     print("Removed Windows tasks")
 
 
@@ -77,23 +77,27 @@ def _install_unix_cron(config: AppConfig):
 
     # Add to crontab
     try:
-        current = subprocess.run(["crontab", "-l"], capture_output=True, text=True, check=True).stdout
+        current = subprocess.run(
+            ["crontab", "-l"], capture_output=True, text=True, check=True, timeout=10
+        ).stdout
     except subprocess.CalledProcessError:
         current = ""
 
     new_cron = current.rstrip() + "\n" + "\n".join(cron_lines) + "\n"
-    subprocess.run(["crontab", "-"], input=new_cron, text=True, check=True)
+    subprocess.run(["crontab", "-"], input=new_cron, text=True, check=True, timeout=10)
     print("Installed cron jobs")
 
 
 def _uninstall_unix_cron():
     try:
-        current = subprocess.run(["crontab", "-l"], capture_output=True, text=True, check=True).stdout
+        current = subprocess.run(
+            ["crontab", "-l"], capture_output=True, text=True, check=True, timeout=10
+        ).stdout
     except subprocess.CalledProcessError:
         current = ""
 
     lines = [line for line in current.splitlines() if "src.cli run" not in line]
-    subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n", text=True, check=True)
+    subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n", text=True, check=True, timeout=10)
     print("Removed cron jobs")
 
 
@@ -139,7 +143,7 @@ Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger
 """
     # Register via PowerShell. `powershell.exe` is a trusted system binary and
     # the command string is fully internal (no user input), so this is safe.
-    subprocess.run(["powershell.exe", "-Command", ps_cmd], check=True)  # noqa: S603, S607 - intentional system Task Scheduler install
+    subprocess.run(["powershell.exe", "-Command", ps_cmd], check=True, timeout=30)  # noqa: S603, S607 - intentional system Task Scheduler install
     print(f"Installed Windows startup task: {safe_name}")
 
 
@@ -151,5 +155,5 @@ def uninstall_startup():
     subprocess.run([  # noqa: S607 - intentional system Task Scheduler uninstall
         "powershell.exe", "-Command",
         "Get-ScheduledTask -TaskName 'AutoDealSearcher-Monitor' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false"
-    ], check=False)
+    ], check=False, timeout=30)
     print("Removed Windows startup task")

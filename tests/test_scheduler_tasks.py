@@ -27,7 +27,7 @@ def _fake_config():
 def test_install_schedule_windows(monkeypatch):
     calls: list[str] = []
 
-    def fake_run(cmd, check=True):
+    def fake_run(cmd, check=True, **kwargs):
         cmd_str = " ".join(cmd) if isinstance(cmd, (list, tuple)) else cmd
         calls.append(cmd_str)
 
@@ -45,7 +45,7 @@ def test_install_schedule_windows(monkeypatch):
 def test_install_startup_uses_hidden_window(monkeypatch):
     calls: list[str] = []
 
-    def fake_run(cmd, check=True):
+    def fake_run(cmd, check=True, **kwargs):
         cmd_str = " ".join(cmd) if isinstance(cmd, (list, tuple)) else cmd
         calls.append(cmd_str)
 
@@ -66,7 +66,7 @@ def test_install_startup_uses_hidden_window(monkeypatch):
 def test_install_startup_prefers_pythonw(monkeypatch):
     calls: list[str] = []
 
-    def fake_run(cmd, check=True):
+    def fake_run(cmd, check=True, **kwargs):
         cmd_str = " ".join(cmd) if isinstance(cmd, (list, tuple)) else cmd
         calls.append(cmd_str)
 
@@ -84,7 +84,7 @@ def test_install_startup_prefers_pythonw(monkeypatch):
 def test_uninstall_startup_removes_task(monkeypatch):
     calls: list[str] = []
 
-    def fake_run(cmd, check=True):
+    def fake_run(cmd, check=True, **kwargs):
         cmd_str = " ".join(cmd) if isinstance(cmd, (list, tuple)) else cmd
         calls.append(cmd_str)
 
@@ -101,7 +101,7 @@ def test_uninstall_startup_removes_task(monkeypatch):
 def test_install_startup_non_windows_noop(monkeypatch):
     calls: list[str] = []
 
-    def fake_run(cmd, check=True):
+    def fake_run(cmd, check=True, **kwargs):
         cmd_str = " ".join(cmd) if isinstance(cmd, (list, tuple)) else cmd
         calls.append(cmd_str)
 

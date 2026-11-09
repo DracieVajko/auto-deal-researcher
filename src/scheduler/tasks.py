@@ -1,5 +1,6 @@
 """Cross-platform task scheduler for automated runs."""
 
+import os
 import shlex
 import subprocess
 import sys
@@ -100,7 +101,9 @@ def install_startup():
     """Register ``python -m src.cli schedule service`` to run at Windows logon.
 
     Uses a Task Scheduler task with an ``AtLogon`` trigger so the monitor
-    starts automatically together with the user session.
+    starts automatically together with the user session. The action is
+    launched through ``pythonw.exe`` when available (no console window /
+    no popup), falling back to PowerShell with ``-WindowStyle Hidden``.
     """
     if sys.platform != "win32":
         return
@@ -111,17 +114,32 @@ def install_startup():
     def _ps_quote(value: str) -> str:
         return "'" + str(value).replace("'", "''") + "'"
 
-    quoted_exe = _ps_quote(python_exe)
-    quoted_args = _ps_quote("-m src.cli schedule service")
-    quoted_dir = _ps_quote(repo_root)
     quoted_name = _ps_quote(safe_name)
-    ps_cmd = f"""
+    quoted_dir = _ps_quote(repo_root)
+    quoted_args = _ps_quote("-m src.cli schedule service")
+
+    # Prefer pythonw.exe (Windows GUI build of Python, no console window).
+    pythonw_exe = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
+    if os.path.exists(pythonw_exe):
+        quoted_exe = _ps_quote(pythonw_exe)
+        ps_cmd = f"""
 $action = New-ScheduledTaskAction -Execute {quoted_exe} -Argument {quoted_args} -WorkingDirectory {quoted_dir}
 $trigger = New-ScheduledTaskTrigger -AtLogon
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden
 Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
 """
-    subprocess.run(["powershell", "-Command", ps_cmd], check=True)
+    else:
+        # Fallback: hide the console window via PowerShell.
+        quoted_exe = _ps_quote(python_exe)
+        ps_cmd = f"""
+$action = New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -WindowStyle Hidden -Command & {{ & {quoted_exe} {quoted_args} }}' -WorkingDirectory {quoted_dir}
+$trigger = New-ScheduledTaskTrigger -AtLogon
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden
+Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
+"""
+    # Register via PowerShell. `powershell.exe` is a trusted system binary and
+    # the command string is fully internal (no user input), so this is safe.
+    subprocess.run(["powershell.exe", "-Command", ps_cmd], check=True)  # noqa: S603, S607 - intentional system Task Scheduler install
     print(f"Installed Windows startup task: {safe_name}")
 
 
@@ -129,8 +147,9 @@ def uninstall_startup():
     """Remove the Windows logon startup task for the monitor."""
     if sys.platform != "win32":
         return
-    subprocess.run([
-        "powershell", "-Command",
+    # Unregister the startup task. Trusted system binary, internal command.
+    subprocess.run([  # noqa: S607 - intentional system Task Scheduler uninstall
+        "powershell.exe", "-Command",
         "Get-ScheduledTask -TaskName 'AutoDealSearcher-Monitor' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false"
     ], check=False)
     print("Removed Windows startup task")

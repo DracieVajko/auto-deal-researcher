@@ -16,7 +16,7 @@ pytest-cov>=5.0.0
 pytest-asyncio
 
 # Development tools
-black>=24.0.0
+black>=26.10.1
 flake8>=7.0.0
 ruff
 mypy

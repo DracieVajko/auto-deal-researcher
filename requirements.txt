@@ -17,6 +17,6 @@ pytest-asyncio
 
 # Development tools
 black>=24.0.0
-flake8>=7.0.0
+flake8>=7.5.0
 ruff
 mypy

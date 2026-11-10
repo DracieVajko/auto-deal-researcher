@@ -670,6 +670,23 @@ class LLMClient:
                                     max_tokens: int, temperature: float = 0.3,
                                     request_timeout: float | None = None) -> str:
         """Call local LLM (LM Studio / Ollama / llama.cpp) via OpenAI-compatible API."""
+        # Thinking models (Qwen 3, Nemotron, ...) spend output tokens on
+        # internal reasoning before emitting the answer. With the app's small
+        # max_tokens (20-300) the answer is cut off entirely, so the reply
+        # looks empty even though the model answered 200 OK. Give the model
+        # room to think *and* answer by adding the configured reasoning budget.
+        llm_config = getattr(self, "llm_config", None)
+        reasoning_enabled = True
+        reasoning_budget = 0
+        if llm_config is not None:
+            reasoning_enabled = getattr(llm_config, "reasoning_enabled", True)
+            raw_budget = getattr(llm_config, "reasoning_token_budget", 0) or 0
+            reasoning_budget = min(raw_budget, 2000)
+        if reasoning_enabled and reasoning_budget > 0:
+            effective_max_tokens = max(max_tokens, max_tokens + reasoning_budget)
+        else:
+            effective_max_tokens = max_tokens
+
         endpoint = local_cfg.endpoint.rstrip("/")
         api_url = f"{endpoint}/v1/chat/completions"
         headers = {"Content-Type": "application/json"}
@@ -680,8 +697,19 @@ class LLMClient:
                 {"role": "user", "content": user}
             ],
             "temperature": temperature,
-            "max_tokens": max_tokens
+            "max_tokens": effective_max_tokens
         }
+        if not reasoning_enabled:
+            # Best-effort: some templates honour this even though LM Studio
+            # may ignore it for certain models.
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+        # Pass reasoning_effort when configured; ignored by backends that
+        # do not support it.
+        if llm_config is not None:
+            effort = getattr(llm_config, "reasoning_effort", None)
+            if effort:
+                payload["reasoning_effort"] = effort
+
         # Local inference may need a long prefill/load window (see LOCAL_TIMEOUT).
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, lambda: _post_with_retry(api_url, headers=headers, json_body=payload, timeout=request_timeout or _timeout_from_env()))

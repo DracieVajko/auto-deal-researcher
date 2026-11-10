@@ -77,7 +77,7 @@ def test_due_scheduled_jobs(storage, monkeypatch):
          next_run_at="2026-11-10T08:00:00+00:00")
     _job(storage, job_id="disabled", prompt="disabled job",
          enabled=False, next_run_at=now)
-    due = storage.due_scheduled_jobs()
+    due = storage.due_scheduled_jobs(now)
     ids = {r["id"] for r in due}
     assert ids == {"due"}
 

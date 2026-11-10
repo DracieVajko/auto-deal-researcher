@@ -183,6 +183,8 @@ class LLMClient:
             threshold=int(os.environ.get("ADS_LOCAL_BREAKER_THRESHOLD", "2")),
         )
         self._coordinator = self._build_coordinator()
+        # Model monitor: handles slot accounting, waiting, preloading, unloading.
+        self._monitor = self._build_monitor()
         # Ambiguous card text -> validated price classification. Repeated
         # rounds and repeated sites often send the same card; do not pay for it
         # twice in one run.
@@ -209,6 +211,48 @@ class LLMClient:
                 logger.info("Local LLM endpoint overridden from %s: %s", var, override)
                 local.endpoint = override
 
+    def _build_monitor(self):
+        """Create a LocalModelMonitor from config (or None if disabled)."""
+        coord = getattr(self.llm_config, "local_coordination", None)
+        if coord is None or not getattr(coord, "enabled", True):
+            return None
+        try:
+            from src.llm.model_monitor import LocalModelMonitor, MonitorConfig
+            config = MonitorConfig(
+                enabled=True,
+                policy=getattr(coord, "policy", "wait") or "wait",
+                max_concurrent_models=getattr(coord, "max_concurrent_models", 1),
+                wait_timeout_seconds=getattr(coord, "wait_timeout_seconds", 3600),
+                poll_interval_seconds=getattr(coord, "wait_poll_seconds", 120),
+                preload=getattr(coord, "preload", False),
+                unload_after_job=getattr(coord, "unload_after_job", True),
+                quiet_seconds=getattr(coord, "quiet_seconds", 300),
+                probe_busy=getattr(coord, "probe_busy", False),
+            )
+            return LocalModelMonitor(config)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not build model monitor: %s", exc)
+            return None
+
+    async def release_models(self) -> None:
+        """Unload all models we loaded (call after job completion)."""
+        if self._monitor is None:
+            return
+        for model in list(self.llm_config.local):
+            try:
+                await self._monitor.release(model.model, "lmstudio")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Release failed for %s: %s", model.model, exc)
+
+    async def preload_models(self) -> None:
+        """Preload all configured local models (call at startup)."""
+        if self._monitor is None:
+            return
+        for model in self.llm_config.local:
+            try:
+                await self._monitor.preload(model.model, "lmstudio")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Preload failed for %s: %s", model.model, exc)
     def _build_coordinator(self):
         """Create the local-backend coordinator from config (or env overrides)."""
         policy = os.environ.get("ADS_LOCAL_POLICY")
@@ -376,6 +420,13 @@ class LLMClient:
             if not safe:
                 logger.info("Skipping local LLMs: %s", reason)
                 self.llm_config.local = []
+        # Monitor: wait for a slot if the backend is busy.
+        if getattr(self, "_monitor", None) is not None and self.llm_config.local:
+            for local in self.llm_config.local:
+                ok, reason = await self._monitor.acquire(local.model, local.type if local.type != "lmstudio" else "lmstudio")
+                if not ok:
+                    logger.info("Monitor could not acquire %s: %s", local.model, reason)
+                    self.llm_config.local = [l for l in self.llm_config.local if l is not local]
 
         for local in self.llm_config.local:
             key = f"{local.type}:{local.endpoint}:{local.model}"

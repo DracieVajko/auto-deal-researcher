@@ -118,8 +118,10 @@ class SchedulerService:
         total_deals = 0
         error = ""
 
+        llm_client = None
         try:
             async with self.make_searcher() as searcher:
+                llm_client = getattr(searcher, "llm", None)
                 deals = await searcher.search(job.prompt, job.condition, job.category)
             deals = list(deals or [])
             total_deals = len(deals)
@@ -131,6 +133,11 @@ class SchedulerService:
             error = str(exc)
             logger.exception("Scheduled job %s failed", job.id)
         finally:
+            if llm_client is not None:
+                try:
+                    await llm_client.release_models()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Model release failed: %s", exc)
             self.storage.complete_run(run_id, total_deals, total_deals, status, error)
             job.advance(now, status)
             self.storage.mark_job_scheduled(

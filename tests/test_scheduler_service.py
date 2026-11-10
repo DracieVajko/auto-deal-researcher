@@ -157,7 +157,7 @@ async def test_service_skips_disabled_and_not_due(storage):
     _add_job(storage, "j1", prompt="disabled", enabled=False,
              next_run_at="2026-11-09T08:00:00+00:00")
     _add_job(storage, "j2", prompt="future",
-             next_run_at="2026-11-10T08:00:00+00:00")  # not due
+             next_run_at="2026-12-01T08:00:00+00:00")  # not due
 
     def make_searcher():
         return FakeSearcher([], {"current": 0, "peak": 0})

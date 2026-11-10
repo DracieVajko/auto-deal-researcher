@@ -60,6 +60,18 @@ class LocalCoordinationConfig(BaseModel):
     poll_seconds: int = 15
     max_wait_seconds: int = 0
     probe_busy: bool = False
+    # Maximum number of models that may be loaded simultaneously (including
+    # ours). Default 1: if another model is already resident we wait.
+    max_concurrent_models: int = 1
+    # How long (seconds) to wait for a slot before falling back to cloud.
+    # Default 3600 (1 hour).
+    wait_timeout_seconds: int = 3600
+    # Poll interval (seconds) while waiting for a slot.
+    wait_poll_seconds: int = 120
+    # Preload the model at startup so the first request is fast.
+    preload: bool = False
+    # Unload the model after the job finishes to free resources.
+    unload_after_job: bool = True
 
 
 class LLMConfig(BaseModel):

@@ -161,6 +161,13 @@ def schedule_service(
         return PlaywrightSearcher(config, llm, storage, browser_mgr)
 
     storage = _storage(db)
+    # Preload local models if configured.
+    try:
+        from src.llm.client import LLMClient
+        _llm = LLMClient(load_config())
+        asyncio.run(_llm.preload_models())
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Preload skipped: {exc}")
     svc = SchedulerService(storage, make_searcher, queue=RunQueue(), poll_interval=poll)
     typer.echo("Monitor spustený (Ctrl+C na ukončenie)...")
     asyncio.run(svc.run())

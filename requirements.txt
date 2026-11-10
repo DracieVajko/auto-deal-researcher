@@ -8,7 +8,7 @@ typer>=0.27.3
 requests>=2.32.0
 pyyaml
 aiohttp
-python-dotenv>=1.0.0
+python-dotenv>=1.2.4
 
 # Testing dependencies
 pytest>=8.0.0

@@ -51,25 +51,72 @@ class LLMBackedAgent:
 
 
 def extract_json(raw: str):
-    """Best-effort JSON extraction from an LLM reply."""
+    """Best-effort JSON extraction from an LLM reply.
+
+    Thinking models (Qwen 3, Nemotron, ...) emit a long reasoning trace
+    before the answer.  The answer is almost always the *last* JSON value in
+    the reply, but it may contain nested objects/arrays (a quote list inside a
+    wrapper object).  Collect balanced values, drop the ones nested inside
+    another, and try the outermost values from last to first.
+    """
     if not raw:
         return None
     text = raw.strip()
-    fence = re.search(r"```(?:json)?\s*(.+?)```", text, re.DOTALL)
-    if fence:
-        text = fence.group(1).strip()
+
+    # Fenced blocks: the last fence is the most likely answer.
+    fences = re.findall(r"```(?:json)?\s*(.+?)```", text, re.DOTALL)
+    for block in reversed(fences):
+        try:
+            return json.loads(block.strip())
+        except (ValueError, TypeError):
+            continue
+
+    # Many models answer with bare JSON, possibly with surrounding whitespace.
     try:
         return json.loads(text)
     except (ValueError, TypeError):
         pass
-    # Fall back to the outermost [...] or {...} block.
-    for opener, closer in (("[", "]"), ("{", "}")):
-        start, end = text.find(opener), text.rfind(closer)
-        if start != -1 and end > start:
-            try:
-                return json.loads(text[start : end + 1])
-            except (ValueError, TypeError):
+
+    # Balanced scan that ignores braces/brackets inside JSON strings.
+    candidates: list[tuple[int, int]] = []
+    for start, opener in enumerate(text):
+        if opener not in "{[":
+            continue
+        closer = "}" if opener == "{" else "]"
+        depth = 0
+        in_string = False
+        escaped = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
                 continue
+            if ch == '"':
+                in_string = True
+            elif ch == opener:
+                depth += 1
+            elif ch == closer:
+                depth -= 1
+                if depth == 0:
+                    candidates.append((start, i))
+                    break
+
+    # Keep only outermost candidates; nested blocks are part of their parent.
+    outermost = [
+        (start, end)
+        for start, end in candidates
+        if not any(s <= start and end <= e and (s, e) != (start, end) for s, e in candidates)
+    ]
+    for start, end in reversed(outermost):
+        try:
+            return json.loads(text[start : end + 1])
+        except (ValueError, TypeError):
+            continue
     return None
 
 

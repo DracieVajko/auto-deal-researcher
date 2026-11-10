@@ -13,6 +13,11 @@ import requests
 
 from src.llm import protocols
 from src.llm.local_coordinator import LocalModelCoordinator, ensure_lmstudio_model
+from src.searcher.listing_filter import (
+    MINI_PC_HINTS,
+    excluded_by_form_factor,
+    wants_mini_pc_form_factor,
+)
 
 DealLike = protocols.DealLike
 
@@ -301,7 +306,16 @@ class LLMClient:
         return extract_json(raw)
 
     async def extract_search_filters(self, prompt: str) -> dict:
-        """Ask the LLM for canonical search filters from a natural-language prompt."""
+        """Extract canonical search filters from a natural-language prompt.
+
+        Python-first: try deterministic regex extraction for common patterns
+        (prices, conditions, categories).  Only fall back to the LLM when the
+        regex cannot parse the prompt, so simple queries are instant.
+        """
+        result = self._extract_filters_regex(prompt)
+        if result is not None:
+            return result
+
         system = (
             "Extract marketplace search filters from the user request. "
             "Return ONLY a JSON object with optional keys: "
@@ -325,17 +339,150 @@ class LLMClient:
         data = await self.chat_json(system, prompt, max_tokens=300)
         return data if isinstance(data, dict) else {}
 
-    async def classify_price_quotes(self, items: list[dict]) -> dict[str, dict]:
-        """Classify ambiguous price cards (shipping, bundles, gated promos).
+    @staticmethod
+    def _extract_filters_regex(prompt: str) -> dict | None:
+        """Deterministic filter extraction for common patterns."""
+        import re
 
-        ``items`` is a batch of at most ten dicts with ``id``, ``text``,
-        ``listed_price_eur`` and ``currency``. Every returned entry is
-        validated against its card text; a response with invented evidence or
-        an impossible number is dropped rather than trusted.
+        text = prompt.lower()
+        result: dict = {}
+
+        max_match = re.search(
+            r"\b(?:pod|do|under|below|max|bis|up to|su)\s+(\d[\d\s.,]*)\s*(?:eur|€|euro)?",
+            text,
+        )
+        if max_match:
+            raw = max_match.group(1).replace(" ", "").replace(",", ".")
+            try:
+                result["max_price"] = float(raw)
+            except ValueError:
+                pass
+
+        # Postfix form used by Hungarian and some German/Czech requests:
+        # "300 euró alatt", "500 Euro maximal".
+        if "max_price" not in result:
+            max_postfix = re.search(
+                r"(\d[\d\s.,]*)\s*(?:eur|€|euro|euró)\s*(?:alatt|maximal|max)\b",
+                text,
+            )
+            if max_postfix:
+                raw = max_postfix.group(1).replace(" ", "").replace(",", ".")
+                try:
+                    result["max_price"] = float(raw)
+                except ValueError:
+                    pass
+
+        min_match = re.search(
+            r"\b(?:od|min|above|over|from|ab)\s+(\d[\d\s.,]*)\s*(?:eur|€|euro)?",
+            text,
+        )
+        if min_match:
+            raw = min_match.group(1).replace(" ", "").replace(",", ".")
+            try:
+                result["min_price"] = float(raw)
+            except ValueError:
+                pass
+
+        range_match = re.search(
+            r"(?:od|from)\s+(\d[\d\s.,]*)\s*(?:eur|€|euro)?\s*(?:do|to|-)\s*(\d[\d\s.,]*)\s*(?:eur|€|euro)?",
+            text,
+        )
+        if range_match:
+            try:
+                result["min_price"] = float(range_match.group(1).replace(" ", "").replace(",", "."))
+                result["max_price"] = float(range_match.group(2).replace(" ", "").replace(",", "."))
+            except ValueError:
+                pass
+
+        if re.search(r"\b(?:nov[ýéá]|novy|new|neu\w*|nowy)\b", text):
+            result["condition"] = "new"
+        elif re.search(
+            r"\b(?:použit\w*|pouzit\w*|used|gebraucht\w*|używan\w*|használt\w*)\b",
+            text,
+        ):
+            result["condition"] = "used"
+        elif re.search(r"\b(?:repasovan\w*|refurbished)\b", text):
+            result["condition"] = "refurbished"
+        elif "open box" in text:
+            result["condition"] = "open_box"
+
+        electronics_kw = ("telefón", "telefon", "phone", "smartphone", "laptop", "notebook",
+                          "tablet", "tv", "kamera", "camera", "computer", "drone", "dron",
+                          "pocketbook", "iphone", "samsung", "xiaomi")
+        hobby_kw = ("bicykel", "bike", "kolo", "rower", "skúter", "skuter", "scooter",
+                    "kolobežka", "kolobezka", "outdoor", "sport")
+        auto_kw = ("auto", "car", "motor", "motocykel", "motorcycle")
+        if any(w in text for w in electronics_kw):
+            result["category"] = "electronics"
+        elif any(w in text for w in hobby_kw):
+            result["category"] = "hobby"
+        elif any(w in text for w in auto_kw):
+            result["category"] = "auto"
+
+        location_kw = ("bratislava", "praha", "prague", "münchen", "munchen", "munich",
+                       "kraków", "krakow", "budapest", "wien", "vienna", "berlin",
+                       "brno", "košice", "kosice")
+        for loc in location_kw:
+            if loc in text:
+                result["location"] = loc.title()
+                break
+
+        # Known brands only: guessing from capitalisation picks up cities and
+        # sentence starts.  Product-line names such as "iPhone" count too.
+        brand_kw = (
+            "pocketbook", "dji", "iphone", "samsung", "xiaomi", "apple", "lenovo",
+            "dell", "asus", "acer", "msi", "sony", "canon", "nikon", "gopro",
+            "beelink", "intel", "amd", "nvidia", "google", "huawei", "oneplus",
+            "realme", "oppo", "motorola", "nokia", "bosch", "makita", "dewalt",
+        )
+        for brand in brand_kw:
+            if re.search(rf"\b{re.escape(brand)}\b", text):
+                result["brand"] = brand
+                break
+
+        # Numeric specs are not prices; keep them as extras.
+        extras: dict[str, str] = {}
+        storage = re.search(r"\b(\d{1,4})\s*(?:GB|TB)\b", prompt, re.IGNORECASE)
+        if storage:
+            extras["storage_gb"] = storage.group(1)
+        voltage = re.search(r"\b(\d{1,4})\s*V\b", prompt)
+        if voltage:
+            extras["voltage_volt"] = voltage.group(1)
+        power = re.search(r"\b(\d{1,5})\s*W\b", prompt)
+        if power:
+            extras["power_w"] = power.group(1)
+        wheel = re.search(
+            r"\b(\d{1,2}(?:[.,]\d+)?)\s*(?:inch|palcov|palce|zoll)\b", text
+        )
+        if wheel:
+            extras["wheel_size_inch"] = wheel.group(1).replace(",", ".")
+        if extras:
+            result["extras"] = extras
+
+        # Category alone is ambiguous (a "notebook" may be paper), so let the
+        # LLM confirm it.  A price, condition or location is a strong enough
+        # signal to skip the round-trip.
+        if not {"min_price", "max_price", "condition", "location", "brand"} & result.keys():
+            return None
+        for key in ("min_price", "max_price", "condition", "category", "brand",
+                    "location", "shipping", "seller_type"):
+            result.setdefault(key, None)
+        result.setdefault("extras", {})
+        return result
+
+    async def classify_price_quotes(self, items: list[dict]) -> dict[str, dict]:
+        """Classify price cards (shipping, bundles, gated promos).
+
+        Python-first: ``extract_price_signals`` already recognises free/paid
+        shipping, coupon codes, account gates, ranges and bundles.  Cards it
+        reads confidently are classified without a model call; only cards it
+        cannot read are sent to the LLM.  Every returned entry is validated
+        against its card text, so invented evidence or impossible numbers are
+        dropped rather than trusted.
         """
         if not items:
             return {}
-        from src.searcher.pricing import validate_price_classification
+        from src.searcher.pricing import extract_price_signals, validate_price_classification
 
         system = (
             "You classify marketplace listing cards by how their price works. "
@@ -376,8 +523,38 @@ class LLMClient:
             cached = self._price_quote_cache.get(key)
             if cached is not None:
                 result[card["id"]] = dict(cached)
-            else:
-                pending.append((card, key))
+                continue
+
+            try:
+                listed_price = float(card["listed_price_eur"] or 0.0)
+            except (TypeError, ValueError):
+                listed_price = 0.0
+            signals = extract_price_signals(
+                card["text"],
+                listed_price,
+                str(card["currency"] or "EUR"),
+            )
+            if signals.confidence >= 0.7:
+                payload = {
+                    "kind": signals.kind.value,
+                    "shipping_cost_eur": signals.shipping.cost_eur,
+                    "shipping_is_free": signals.shipping.is_free,
+                    "shipping_min_eur": signals.shipping.min_eur,
+                    "shipping_max_eur": signals.shipping.max_eur,
+                    "bundle_min_quantity": signals.bundle.min_quantity,
+                    "price_from": signals.price_from,
+                    "price_max_eur": signals.price_max_eur,
+                    "regular_price_eur": signals.regular_price_eur,
+                    "warnings": list(signals.warnings),
+                    "confidence": signals.confidence,
+                    "evidence": list(signals.evidence),
+                }
+                validated = validate_price_classification(payload, card["text"])
+                if validated is not None:
+                    result[card["id"]] = validated
+                    self._price_quote_cache[key] = validated
+                    continue
+            pending.append((card, key))
         if not pending:
             return result
 
@@ -426,7 +603,11 @@ class LLMClient:
                 ok, reason = await self._monitor.acquire(local.model, local.type if local.type != "lmstudio" else "lmstudio")
                 if not ok:
                     logger.info("Monitor could not acquire %s: %s", local.model, reason)
-                    self.llm_config.local = [l for l in self.llm_config.local if l is not local]
+                    self.llm_config.local = [
+                        candidate
+                        for candidate in self.llm_config.local
+                        if candidate is not local
+                    ]
 
         for local in self.llm_config.local:
             key = f"{local.type}:{local.endpoint}:{local.model}"
@@ -606,6 +787,10 @@ class LLMClient:
         return _run()
 
     async def generate_search_query_async(self, prompt: str, broader: bool = False) -> str:
+        # Query generation is the multilingual step: the model may translate
+        # the request into the target site's language.  The deterministic
+        # keyword query is only the fallback when the model is unavailable.
+        kw = self.keyword_query(prompt)
         system = (
             "You convert a product request into a SHORT marketplace search query. "
             "Reply with 2-5 plain words only, for example 'mini pc ryzen' or "
@@ -615,10 +800,11 @@ class LLMClient:
         if broader:
             user += " Use only 1-3 generic words."
         raw = await self._chat(system, user, max_tokens=40)
-        return self._clean_query(raw, fallback=self.keyword_query(prompt))
+        return self._clean_query(raw, fallback=kw)
 
     async def refine_query(self, prompt: str, current_deals: Sequence[DealLike], round_num: int) -> str:
         """Generate query to find DIFFERENT items than already found."""
+        kw = self.keyword_query(prompt)
         titles = [d.title for d in current_deals[:10]]
         system = (
             "Write a SHORT marketplace search query (2-5 plain words) for items "
@@ -626,25 +812,36 @@ class LLMClient:
         )
         user = f"Original request: {prompt}\nAlready found: {titles}\nNew query:"
         raw = await self._chat(system, user, max_tokens=40)
-        return self._clean_query(raw, fallback=self.keyword_query(prompt))
+        return self._clean_query(raw, fallback=kw)
 
     async def judge_results(self, prompt: str, deals: Sequence[DealLike]) -> dict:
         """Classify each deal as keep/discard. Return {'keep': [urls]}.
 
+        Python-first: listings that satisfy every explicit constraint are
+        kept without a model call, and deterministic rejects (over budget,
+        implausibly cheap, accessory or component listings) are dropped.
+        Only listings with missing or unverifiable data go to the judge,
+        which is where the model actually adds information.
+
         Small models often answer with prose or fewer lines than the batch,
-        so zero KEEP verdicts usually means the reply was unreadable rather
-        than that every item was bad. In that case the original deals are
-        kept instead of returning nothing, which is what made whole runs
-        come back empty.
+        so an unreadable reply must keep its batch instead of dropping it,
+        which is what made whole runs come back empty.
         """
         if not deals:
             return {"keep": []}
 
-        keep_urls: list[str] = []
+        confident, ambiguous = self._prefilter_deals(prompt, deals)
+        if not confident and not ambiguous:
+            return {"keep": []}
+
+        # Deals that satisfy every explicit constraint are kept without a
+        # model call.  Only listings with missing or unverifiable data go to
+        # the judge, which is where the model actually adds information.
+        keep_urls: list[str] = [d.url for d in confident]
         parsed_lines = 0
 
-        for i in range(0, len(deals), 10):
-            batch = deals[i : i + 10]
+        for i in range(0, len(ambiguous), 10):
+            batch = ambiguous[i : i + 10]
             items = "\n".join(
                 [f"- {d.title} | {d.price_eur} EUR | {d.condition} | {d.site_name}" for d in batch]
             )
@@ -677,14 +874,141 @@ class LLMClient:
                 for verdict, deal in zip(verdicts, batch, strict=False):
                     if verdict.upper() == "KEEP":
                         keep_urls.append(deal.url)
+            else:
+                # Unreadable batch: keep it rather than silently dropping it.
+                keep_urls.extend(deal.url for deal in batch)
 
         if not keep_urls and parsed_lines == 0:
+            candidates = confident + ambiguous
             logger.warning(
-                "Deal judge returned no parseable verdicts; keeping all %d deals", len(deals)
+                "Deal judge returned no parseable verdicts; keeping all %d deals",
+                len(candidates),
             )
-            return {"keep": [d.url for d in deals]}
+            return {"keep": [d.url for d in candidates]}
 
         return {"keep": keep_urls}
+
+    @staticmethod
+    def _prefilter_deals(
+        prompt: str, deals: Sequence[DealLike]
+    ) -> tuple[list[DealLike], list[DealLike]]:
+        """Split listings into provably-good and model-needed groups.
+
+        Returns ``(confident, ambiguous)``.  A deal is confident when every
+        explicit constraint in the prompt (budget, condition, RAM, model
+        token, mini-PC form factor) is present in the listing and satisfied.
+        Missing data makes a deal ambiguous instead of silently passing it to
+        the report.  Deterministic rejects are dropped from both lists.
+        """
+        prompt_lower = prompt.lower()
+
+        max_price: float | None = None
+        match = re.search(
+            r"\b(?:pod|do|under|below|max|bis|up to|su)\s+(\d[\d\s.,]*)",
+            prompt_lower,
+        )
+        if match:
+            raw = match.group(1).replace(" ", "").replace(",", ".")
+            try:
+                max_price = float(raw)
+            except ValueError:
+                max_price = None
+
+        wants_new = bool(
+            re.search(r"\b(?:nov[ýéá]|novy|new|neu\w*|nowy)\b", prompt_lower)
+        ) and "new york" not in prompt_lower
+        wants_mini_pc = wants_mini_pc_form_factor(prompt)
+
+        accessory_pattern = re.compile(
+            r"\b(?:obal|kryt|cover|cable|kabel|charger|nabíjačka|nabijacka|"
+            r"stojan|stand|spare part|replacement part|náhradný diel|nahradny diel)\b",
+            re.IGNORECASE,
+        )
+        accessory_requested = bool(accessory_pattern.search(prompt_lower))
+
+        component_pattern = re.compile(
+            r"^(?:ram|ssd|hdd|cpu|gpu|motherboard|psu|zdroj|napájanie|napajanie)\b",
+            re.IGNORECASE,
+        )
+
+        required_ram: int | None = None
+        ram_match = re.search(r"\b(\d{1,4})\s*gb\s*ram\b", prompt_lower)
+        if ram_match:
+            required_ram = int(ram_match.group(1))
+
+        # Model tokens such as "634verse", "wh1000xm5" or "pn50".  Unit-like
+        # tokens (32gb, 500w, 24v) are handled by their own rules.
+        unit_suffix = re.compile(
+            r"(?:gb|tb|w|v|mah|hz|mm|cm|kg|km|kw|hp|inch|eur)$", re.IGNORECASE
+        )
+        model_tokens = [
+            token
+            for token in re.findall(r"[a-z0-9]+", prompt_lower)
+            if len(token) >= 4
+            and any(ch.isdigit() for ch in token)
+            and any(ch.isalpha() for ch in token)
+            and not unit_suffix.search(token)
+            and not re.fullmatch(r"(?:19|20)\d{2}", token)
+        ]
+
+        has_constraint = bool(
+            max_price is not None
+            or required_ram is not None
+            or model_tokens
+            or wants_new
+            or wants_mini_pc
+        )
+
+        confident: list[DealLike] = []
+        ambiguous: list[DealLike] = []
+        for deal in deals:
+            title = deal.title or ""
+            title_lower = title.lower()
+            title_norm = re.sub(r"[\s\-]+", "", title_lower)
+            price = getattr(deal, "price_eur", 0) or 0
+            condition = (getattr(deal, "condition", "") or "").lower()
+
+            # --- deterministic rejects ---
+            if max_price and price > 0:
+                if price > max_price:
+                    continue
+                if price < max_price * 0.1:
+                    continue
+            if not accessory_requested and accessory_pattern.search(title):
+                continue
+            if component_pattern.search(title):
+                continue
+            if excluded_by_form_factor(prompt, title):
+                continue
+            if wants_new and condition in {"used", "refurbished", "open_box"}:
+                continue
+            if required_ram is not None:
+                title_ram = re.search(r"\b(\d{1,4})\s*gb\s*ram\b", title_lower)
+                if title_ram and int(title_ram.group(1)) < required_ram:
+                    continue
+            if any(token not in title_norm for token in model_tokens):
+                continue
+
+            # --- confidence ---
+            verifiable = True
+            if max_price is not None and price <= 0:
+                verifiable = False
+            if required_ram is not None:
+                title_ram = re.search(r"\b(\d{1,4})\s*gb\s*ram\b", title_lower)
+                if title_ram is None:
+                    verifiable = False
+            if wants_mini_pc and not any(
+                hint in title_lower for hint in MINI_PC_HINTS
+            ):
+                verifiable = False
+            if wants_new and condition != "new":
+                verifiable = False
+
+            if has_constraint and verifiable:
+                confident.append(deal)
+            else:
+                ambiguous.append(deal)
+        return confident, ambiguous
 
     async def rank_results(self, prompt: str, deals: Sequence[DealLike], top_n: int) -> list[DealLike]:
         """Rank deals by relevance to prompt, return top N.

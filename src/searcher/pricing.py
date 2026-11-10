@@ -262,6 +262,8 @@ _FREE_SHIPPING_PATTERNS = (
 
 _SHIPPING_PATTERNS = (
     r"(?:shipping|doprava|po[šs]tovn[ée]|versand|lieferung)\s*(?:od|from|ab)?\s*[:=]?\s*(\d[\d\s.,]*)\s*(?:€|eur|k[čc]|czk)?",
+    # Postfix form used by many cards: "+ 9,90 € doprava".
+    r"\+\s*(\d[\d\s.,]*)\s*(?:€|eur|k[čc]|czk)\s*(?:shipping|doprava|po[šs]tovn[ée]|versand|lieferung)\b",
 )
 
 _SHIPPING_RANGE_PATTERNS = (

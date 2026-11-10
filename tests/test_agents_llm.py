@@ -41,6 +41,19 @@ def test_extract_json_garbage_returns_none():
     assert extract_json("no json at all") is None
 
 
+def test_extract_json_keeps_outer_object_over_nested_array():
+    """A nested evidence list must not be mistaken for the whole answer."""
+    raw = '{"quotes": [{"id": "L0", "evidence": ["New user price"]}]}'
+    assert extract_json(raw) == {
+        "quotes": [{"id": "L0", "evidence": ["New user price"]}]
+    }
+
+
+def test_extract_json_uses_last_value_after_thinking():
+    raw = 'Thinking... maybe {"wrong": true}\nAnswer:\n{"ok": true}'
+    assert extract_json(raw) == {"ok": True}
+
+
 def test_as_list_cleans_and_dedupes():
     assert as_list(['- "dji mini"', 'dji mini', 'dji air', {"query": "mavic"}], 10) == [
         "dji mini", "dji air", "mavic",

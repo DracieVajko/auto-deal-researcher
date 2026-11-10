@@ -81,6 +81,60 @@ async def test_empty_deals_short_circuits(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_python_prefilter_drops_clear_rejects_without_a_model_call(monkeypatch):
+    """Accessories and over-budget listings are deterministic rejects."""
+    llm = client()
+    calls = []
+
+    async def keep(system, user, max_tokens=100, **kwargs):
+        calls.append(user)
+        return "KEEP"
+
+    monkeypatch.setattr(llm, "_chat", keep)
+    deals = [
+        Deal(url="pc", title="Mini PC 32GB", price_eur=300.0,
+             condition="new", site_name="alza"),
+        Deal(url="case", title="Obal na mini PC", price_eur=15.0,
+             condition="new", site_name="alza"),
+        Deal(url="over", title="Mini PC 64GB", price_eur=900.0,
+             condition="new", site_name="alza"),
+    ]
+
+    out = await llm.judge_results("mini PC do 500 eur", deals)
+
+    assert out["keep"] == ["pc"]
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_explicit_constraints_are_decided_without_the_model(monkeypatch):
+    """Budget, RAM and form factor are provable in Python."""
+    llm = client()
+    calls = []
+
+    async def discard(system, user, max_tokens=100, **kwargs):
+        calls.append(user)
+        return "DISCARD"
+
+    monkeypatch.setattr(llm, "_chat", discard)
+    deals = [
+        Deal(url="ok", title="Mini PC 32GB RAM", price_eur=450.0,
+             condition="new", site_name="alza"),
+        Deal(url="over", title="Mini PC 32GB RAM", price_eur=520.0,
+             condition="new", site_name="alza"),
+        Deal(url="low", title="Mini PC 8GB RAM", price_eur=180.0,
+             condition="new", site_name="alza"),
+        Deal(url="laptop", title="Laptop Lenovo 32GB RAM", price_eur=480.0,
+             condition="used", site_name="bazos"),
+    ]
+
+    out = await llm.judge_results("mini PC s 32GB RAM do 500 eur", deals)
+
+    assert out["keep"] == ["ok"]
+    assert calls == []
+
+
+@pytest.mark.asyncio
 async def test_ranking_keeps_every_deal_the_model_forgot(monkeypatch):
     """A short ranking reply must not silently drop listings."""
     llm = client()

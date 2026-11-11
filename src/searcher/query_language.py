@@ -86,9 +86,19 @@ def protected_tokens(query: str) -> list[str]:
     return tokens
 
 
+_LANGUAGE_NAMES = {
+    "sk": "Slovak",
+    "cs": "Czech",
+    "de": "German",
+    "en": "English",
+    "pl": "Polish",
+    "hu": "Hungarian",
+}
+
 _SYSTEM = (
-    "You translate marketplace search queries. Reply with the translated "
-    "query only - no quotes, no explanations."
+    "You are a professional translator. Translate the user's text into the "
+    "requested language. Reply with the translation only - no quotes, no "
+    "explanations."
 )
 
 
@@ -104,11 +114,8 @@ async def localise_query(
     if key in cache:
         return cache[key]
 
-    user = (
-        f"Translate this marketplace search query to {target}. "
-        "Keep brand and model strings exactly as they are.\n\n"
-        f"Query: {query}"
-    )
+    target_name = _LANGUAGE_NAMES.get(target, target)
+    user = f"Translate to {target_name}: {query}"
     try:
         response = await llm._chat(_SYSTEM, user, max_tokens=80, temperature=0.0)
     except Exception as exc:  # noqa: BLE001 - the original query is a fine fallback

@@ -135,6 +135,35 @@ async def test_explicit_constraints_are_decided_without_the_model(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_cheapest_rank_uses_model_storage_and_price(monkeypatch):
+    """A specific cheapest request needs no model: match, then sort by price."""
+    llm = client()
+    calls = []
+
+    async def boom(system, user, max_tokens=100, **kwargs):
+        calls.append(1)
+        return "1,2,3,4"
+
+    monkeypatch.setattr(llm, "_chat", boom)
+    deals = [
+        Deal(url="r1", title="iPhone 15 Pro 256GB", price_eur=600.0,
+             condition="used", site_name="bazos"),
+        Deal(url="r2", title="iPhone 15 128GB", price_eur=450.0,
+             condition="used", site_name="bazos"),
+        Deal(url="r3", title="iPhone 15 256GB", price_eur=520.0,
+             condition="used", site_name="alza"),
+        Deal(url="r4", title="iPhone 14 128GB", price_eur=380.0,
+             condition="used", site_name="bazos"),
+    ]
+
+    ranked = await llm.rank_results("najlacnejší iPhone 15 128GB", deals, top_n=4)
+
+    assert ranked[0].url == "r2"
+    assert {d.url for d in ranked} == {"r1", "r2", "r3", "r4"}
+    assert calls == []
+
+
+@pytest.mark.asyncio
 async def test_ranking_keeps_every_deal_the_model_forgot(monkeypatch):
     """A short ranking reply must not silently drop listings."""
     llm = client()

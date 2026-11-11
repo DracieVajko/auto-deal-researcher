@@ -18,10 +18,26 @@ from src.searcher.listing_filter import (
     excluded_by_form_factor,
     wants_mini_pc_form_factor,
 )
+from src.text.normalize import fold
 
 DealLike = protocols.DealLike
 
 logger = logging.getLogger(__name__)
+
+# Known brands only: guessing from capitalisation picks up cities and sentence
+# starts.  Product-line names such as "iPhone" count too.
+_KNOWN_BRANDS = (
+    "pocketbook", "dji", "iphone", "samsung", "xiaomi", "apple", "lenovo",
+    "dell", "asus", "acer", "msi", "sony", "canon", "nikon", "gopro",
+    "beelink", "intel", "amd", "nvidia", "google", "huawei", "oneplus",
+    "realme", "oppo", "motorola", "nokia", "bosch", "makita", "dewalt",
+)
+
+# Folded superlatives that mean "cheapest first".
+_CHEAPEST_WORDS = (
+    "najlacne", "nejlevne", "cheapest", "gunstigst", "billigst",
+    "najtaniej", "legolcso",
+)
 
 # Adaptive HTTP timeouts (seconds) per provider class.
 #
@@ -427,15 +443,7 @@ class LLMClient:
                 result["location"] = loc.title()
                 break
 
-        # Known brands only: guessing from capitalisation picks up cities and
-        # sentence starts.  Product-line names such as "iPhone" count too.
-        brand_kw = (
-            "pocketbook", "dji", "iphone", "samsung", "xiaomi", "apple", "lenovo",
-            "dell", "asus", "acer", "msi", "sony", "canon", "nikon", "gopro",
-            "beelink", "intel", "amd", "nvidia", "google", "huawei", "oneplus",
-            "realme", "oppo", "motorola", "nokia", "bosch", "makita", "dewalt",
-        )
-        for brand in brand_kw:
+        for brand in _KNOWN_BRANDS:
             if re.search(rf"\b{re.escape(brand)}\b", text):
                 result["brand"] = brand
                 break
@@ -1010,6 +1018,69 @@ class LLMClient:
                 ambiguous.append(deal)
         return confident, ambiguous
 
+    @staticmethod
+    def _cheapest_rank(
+        prompt: str, deals: Sequence[DealLike]
+    ) -> list[DealLike] | None:
+        """Cheapest-first order when the request names a specific product.
+
+        "Cheapest iPhone 15 128GB" is fully deterministic: match the brand,
+        model number and storage, then sort by price.  Returns ``None`` when
+        the prompt is not a cheapest request or has nothing verifiable, so the
+        LLM still handles semantic relevance.
+        """
+        prompt_lower = prompt.lower()
+        if not any(word in fold(prompt_lower) for word in _CHEAPEST_WORDS):
+            return None
+
+        brands = [
+            brand for brand in _KNOWN_BRANDS
+            if re.search(rf"\b{re.escape(brand)}\b", prompt_lower)
+        ]
+
+        storage: str | None = None
+        storage_match = re.search(
+            r"\b(\d{1,4})\s*(gb|tb)\b(?!\s*ram\b)", prompt_lower
+        )
+        if storage_match:
+            storage = f"{storage_match.group(1)}{storage_match.group(2)}"
+
+        model_numbers: list[str] = []
+        for match in re.finditer(r"\b(\d{1,3})\b", prompt_lower):
+            number = match.group(1)
+            after = prompt_lower[match.end():match.end() + 5]
+            before = prompt_lower[max(0, match.start() - 14):match.start()]
+            if re.match(r"\s*(?:gb|tb|eur|€|w|v|mah)\b", after):
+                continue
+            if re.search(r"(?:do|pod|under|max|bis|od|from|above)\s*$", before):
+                continue
+            model_numbers.append(number)
+
+        if not (brands or storage or model_numbers):
+            return None
+
+        def matches(deal: DealLike) -> bool:
+            title_norm = re.sub(r"[\s\-]+", "", fold(deal.title or ""))
+            if brands and not any(brand in title_norm for brand in brands):
+                return False
+            if storage and storage not in title_norm:
+                return False
+            if any(number not in title_norm for number in model_numbers):
+                return False
+            return True
+
+        if not any(matches(deal) for deal in deals):
+            return None
+
+        # Matches first, then the rest; price ascending inside each group.
+        return sorted(
+            deals,
+            key=lambda deal: (
+                0 if matches(deal) else 1,
+                getattr(deal, "price_eur", 0) or 0,
+            ),
+        )
+
     async def rank_results(self, prompt: str, deals: Sequence[DealLike], top_n: int) -> list[DealLike]:
         """Rank deals by relevance to prompt, return top N.
 
@@ -1018,6 +1089,10 @@ class LLMClient:
         """
         if len(deals) <= 1:
             return list(deals)
+
+        deterministic = self._cheapest_rank(prompt, deals)
+        if deterministic is not None:
+            return deterministic[:top_n]
 
         items = "\n".join([f"{i}. {d.title} | {d.price_eur}€ | {d.condition} | {d.site_name}" for i, d in enumerate(deals)])
         system = f"Rank these deals 1-{len(deals)} by relevance to user request. Output ONLY the ranked indices (e.g., '3,1,5,2,4')."

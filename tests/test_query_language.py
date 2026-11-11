@@ -92,6 +92,22 @@ async def test_same_query_other_target_is_translated_again():
 
 
 @pytest.mark.asyncio
+async def test_translation_prompt_uses_the_language_name():
+    """Small models translate better when asked for "German", not "de"."""
+    captured = {}
+
+    class CapturingLLM:
+        async def _chat(self, system, user, **kwargs):
+            captured["user"] = user
+            return "Fahrrad"
+
+    await localise_query(CapturingLLM(), "bicykel", "de", {})
+
+    assert "German" in captured["user"]
+    assert "to de" not in captured["user"]
+
+
+@pytest.mark.asyncio
 async def test_no_llm_keeps_the_original_query():
     result = await localise_query(None, "horský bicykel", "de", {})
     assert result == "horský bicykel"

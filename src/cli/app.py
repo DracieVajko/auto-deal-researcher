@@ -33,6 +33,13 @@ from src.searcher.filters import (
 )
 from src.searcher.playwright_searcher import PlaywrightSearcher
 from src.storage.manager import StorageManager
+from src.cli.search_service import (
+    SearchContext,
+    SearchResult,
+    build_context,
+    build_notification_manager,
+    run_pipeline,
+)
 
 
 def _load_config(*args, **kwargs):
@@ -377,83 +384,30 @@ async def run_search(
         if plan:
             plan(list(names))
 
-    storage = StorageManager(config.storage.db_path)
-    browser_mgr = BrowserManager(config)
-    processor = ResultProcessor(config, llm, brand_filter=filters.brand)
-    # --domain beats output.domain; the config value is already loaded in __init__.
-    if domain:
-        processor.domain_override = domain
-    # pass brand filter for hard filtering in the report
-    if filters.brand:
-        processor.brand_filter = filters.brand
-
-    async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
-        try:
-            deals = await searcher.search(
-                prompt,
-                condition,
-                effective_category,
-                filters,
-                on_sites=_capture_plan,
-                sites=sites,
-            )
-            site_plan = searcher.site_plan
-        finally:
-            await browser_mgr.close()
-
-    # Prune missing (deals not found this run)
-    storage.prune_missing(max_age_days=config.search.prune_after_days or 30)
-
-    # Save new deals
-    for deal in deals:
-        storage.save_deal(deal)
-
-    # Price tracking alerts (price drops, new lows, fake promos)
-    price_alerts = []
-    try:
-        from src.intelligence.price_tracker import PriceTracker
-
-        tracker = PriceTracker(storage)
-        price_alert_objects = []
-        price_alert_objects.extend(tracker.check_price_drops(threshold_pct=5.0, days=7))
-        price_alert_objects.extend(tracker.check_new_lows(days=30))
-        price_alert_objects.extend(tracker.check_fake_promos(threshold_pct=30.0, days=30))
-        price_alerts = [
-            {
-                "title": a.title,
-                "message": a.message,
-                "severity": a.severity,
-                "metadata": a.metadata,
-            }
-            for a in price_alert_objects
-        ]
-        for alert in price_alerts:
-            logger.info("Price alert: %s — %s", alert["title"], alert["message"])
-    except (AttributeError, ImportError):
-        # Storage doesn't support price tracking or module unavailable
-        pass
-
-    # Price alert rules (user-configurable thresholds) — evaluate after deals saved
-    try:
-        from src.intelligence.price_tracker import AlertRuleEngine
-
-        engine = AlertRuleEngine(storage, _build_notification_manager(config))
-        engine.evaluate_rules()
-    except (AttributeError, ImportError):
-        # Alert rules not available or module unavailable
-        pass
-
-    # Output (AI-named, timestamped)
-    json_path, md_path = await processor.save_results(
-        deals, config.output.directory, prompt=prompt, site_plan=site_plan,
-        price_alerts=price_alerts,
+    ctx = await build_context(
+        config,
+        brand_filter=filters.brand,
+        llm_class=LLMClient,
+        storage_class=StorageManager,
+        browser_manager_class=BrowserManager,
+        processor_class=ResultProcessor,
+    )
+    result = await run_pipeline(
+        prompt,
+        condition,
+        effective_category,
+        filters,
+        sites,
+        ctx,
+        on_sites=_capture_plan,
+        searcher_class=PlaywrightSearcher,
     )
     return SearchOutcome(
-        deal_count=len(deals),
+        deal_count=len(result.deals),
         sites=selected_sites,
-        json_path=json_path,
-        md_path=md_path,
-        results_dir=config.output.directory,
+        json_path=result.json_path,
+        md_path=result.md_path,
+        results_dir=result.results_dir,
     )
 
 
@@ -616,66 +570,36 @@ async def _diamond_search_async(
     if condition == Condition.ANY and filters.condition:
         condition = filters.condition
 
-    storage = StorageManager(config.storage.db_path)
-    browser_mgr = BrowserManager(config)
-    processor = ResultProcessor(config, llm, brand_filter=filters.brand)
-    config.search.winners_count = winners
-
-    site_plan = None
-    async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
-        if not searcher.diamond_search_enabled:
-            typer.echo("Error: Diamond Search agents unavailable", err=True)
-            raise typer.Exit(1)
-        try:
-            deals = await searcher.search_with_diamond(prompt, condition, category, filters)
-            site_plan = searcher.site_plan
-        finally:
-            await browser_mgr.close()
-
-    for deal in deals:
-        storage.save_deal(deal)
-
-    # Price tracking alerts (price drops, new lows, fake promos)
-    price_alerts = []
-    try:
-        from src.intelligence.price_tracker import PriceTracker
-
-        tracker = PriceTracker(storage)
-        price_alert_objects = []
-        price_alert_objects.extend(tracker.check_price_drops(threshold_pct=5.0, days=7))
-        price_alert_objects.extend(tracker.check_new_lows(days=30))
-        price_alert_objects.extend(tracker.check_fake_promos(threshold_pct=30.0, days=30))
-        price_alerts = [
-            {
-                "title": a.title,
-                "message": a.message,
-                "severity": a.severity,
-                "metadata": a.metadata,
-            }
-            for a in price_alert_objects
-        ]
-    except (AttributeError, ImportError):
-        pass
-
-    await processor.save_results(
-        deals, output_dir, prompt=prompt, site_plan=site_plan, price_alerts=price_alerts,
+    ctx = await build_context(
+        config,
+        brand_filter=filters.brand,
+        llm_class=LLMClient,
+        storage_class=StorageManager,
+        browser_manager_class=BrowserManager,
+        processor_class=ResultProcessor,
     )
-
-    # Price alert rules (user-configurable thresholds)
     try:
-        from src.intelligence.price_tracker import AlertRuleEngine
+        result = await run_pipeline(
+            prompt,
+            condition,
+            category,
+            filters,
+            None,
+            ctx,
+            diamond=True,
+            output_dir=output_dir,
+            searcher_class=PlaywrightSearcher,
+        )
+    except RuntimeError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None
 
-        engine = AlertRuleEngine(storage, _build_notification_manager(config))
-        engine.evaluate_rules()
-    except (AttributeError, ImportError):
-        pass
-
-    typer.echo(f"Diamond Search finished: {len(deals)} deals")
-    for d in deals:
+    typer.echo(f"Diamond Search finished: {len(result.deals)} deals")
+    for d in result.deals:
         score = getattr(d, "expert_score", None)
         suffix = f" [expert {score}]" if score else ""
         typer.echo(f"  {d.site_name:<10} {d.price_eur:>9.2f} EUR {d.condition:<10} {d.title[:48]}{suffix}")
-    typer.echo(f"Results in {output_dir}/")
+    typer.echo(f"Results in {result.results_dir}/")
 
 
 @app.command()
@@ -1016,43 +940,33 @@ async def _search_async(
     if condition == Condition.ANY and filters.condition:
         condition = filters.condition
 
-    storage = StorageManager(config.storage.db_path)
-    browser_mgr = BrowserManager(config)
-
     typer.echo(f"Searching for: {prompt}")
     typer.echo(f"Condition: {condition}, Category: {category}, Winners: {winners}")
 
-    async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
-        try:
-            deals = await searcher.search(
-                prompt, condition, category, filters, sites=sites
-            )
-            site_plan = searcher.site_plan
-        finally:
-            await browser_mgr.close()
-
-    # Save results
-    for deal in deals:
-        storage.save_deal(deal)
-    processor = ResultProcessor(config, llm, brand_filter=filters.brand)
-    await processor.save_results(
-        deals, output_dir, prompt=prompt, site_plan=site_plan
+    ctx = await build_context(
+        config,
+        brand_filter=filters.brand,
+        llm_class=LLMClient,
+        storage_class=StorageManager,
+        browser_manager_class=BrowserManager,
+        processor_class=ResultProcessor,
+    )
+    result = await run_pipeline(
+        prompt,
+        condition,
+        category,
+        filters,
+        sites,
+        ctx,
+        output_dir=output_dir,
+        searcher_class=PlaywrightSearcher,
     )
 
-    # Price alert rules (user-configurable thresholds)
-    try:
-        from src.intelligence.price_tracker import AlertRuleEngine
-
-        engine = AlertRuleEngine(storage, _build_notification_manager(config))
-        engine.evaluate_rules()
-    except (AttributeError, ImportError):
-        pass
-
-    typer.echo(f"Found {len(deals)} deals")
-    for d in deals[:winners]:
+    typer.echo(f"Found {len(result.deals)} deals")
+    for d in result.deals[:winners]:
         typer.echo(f"  {d.site_name:<10} {d.price_eur:>9.2f} EUR {d.condition:<10} {d.title[:50]}")
 
-    typer.echo(f"Results in {output_dir}/")
+    typer.echo(f"Results in {result.results_dir}/")
 
 
 @app.command("discover-web")
@@ -1157,7 +1071,7 @@ def research_specs(
 
 
 @app.command()
-def find_replacement(
+async def find_replacement(
     item: str = typer.Option("", "--item", "-i", help="Reference item (e.g. 'Citroen eC3')"),
     interactive: bool = typer.Option(False, "--interactive", "-I", help="Interactive wizard mode"),
     category: str | None = typer.Option(None, "--category", "-cat", help="Category override"),
@@ -1172,16 +1086,14 @@ def find_replacement(
     Researches the reference item's specs, searches for similar items,
     scores them by spec match, and ranks the best alternatives.
     """
-    import asyncio
     import json
     from pathlib import Path
 
-    from src.browser.manager import BrowserManager
+    from src.cli.search_service import build_context, run_pipeline
     from src.intelligence.comparison_engine import ComparisonEngine
     from src.intelligence.specs_researcher import ItemSpecsResearcher
     from src.llm.client import LLMClient
     from src.searcher.filter_extractor import extract_filters_from_specs, to_search_filters
-    from src.searcher.playwright_searcher import PlaywrightSearcher
     from src.storage.manager import StorageManager
 
     config = _load_config()
@@ -1229,20 +1141,25 @@ def find_replacement(
 
     # Step 3: Search for candidates
     typer.echo("\nSearching for alternatives...")
-    browser_mgr = BrowserManager(config)
 
-    async def _run():
-        async with PlaywrightSearcher(config, llm, storage, browser_mgr) as searcher:
-            deals = await searcher.search(
-                f"{specs.brand or ''} {specs.model or item}".strip(),
-                condition,
-                specs.category or "auto",
-                search_filters,
-            )
-        await browser_mgr.close()
-        return deals
-
-    deals = asyncio.run(_run())
+    ctx = await build_context(
+        config,
+        brand_filter=search_filters.brand,
+        llm_class=LLMClient,
+        storage_class=StorageManager,
+        browser_manager_class=BrowserManager,
+        processor_class=ResultProcessor,
+    )
+    result = await run_pipeline(
+        f"{specs.brand or ''} {specs.model or item}".strip(),
+        condition,
+        specs.category or "any",
+        search_filters,
+        None,
+        ctx,
+        searcher_class=PlaywrightSearcher,
+    )
+    deals = result.deals
 
     typer.echo(f"Found {len(deals)} candidate(s)")
 
@@ -1311,48 +1228,6 @@ def cache(
         return
 
     typer.echo("Use --stats or --clear")
-
-
-def _build_notification_manager(config):
-    """Build a NotificationManager with console channel plus any configured channels."""
-    import os
-
-    from src.notifications.channels.console import ConsoleChannel
-    from src.notifications.channels.discord import DiscordChannel
-    from src.notifications.channels.email import EmailChannel
-    from src.notifications.channels.system import SystemChannel
-    from src.notifications.channels.webhook import WebhookChannel
-    from src.notifications.manager import NotificationManager
-
-    nm = NotificationManager()
-    nm.add_channel(ConsoleChannel())  # always available
-    for ch in getattr(config.notifications, "channels", []) or []:
-        ctype = (ch.type or "console").lower()
-        try:
-            if ctype == "console":
-                nm.add_channel(ConsoleChannel(name=ch.name or "console"))
-            elif ctype == "system":
-                nm.add_channel(SystemChannel(name=ch.name or "system"))
-            elif ctype == "webhook":
-                url = (
-                    ch.settings.get("url")
-                    or ch.settings.get("webhook_url")
-                    or os.environ.get("ADS_WEBHOOK_URL", "")
-                )
-                if url:
-                    nm.add_channel(WebhookChannel(name=ch.name or "webhook", url=url))
-            elif ctype == "email":
-                nm.add_channel(EmailChannel(name=ch.name or "email"))
-            elif ctype == "discord":
-                url = (
-                    ch.settings.get("webhook_url")
-                    or os.environ.get("ADS_DISCORD_WEBHOOK_URL", "")
-                )
-                if url:
-                    nm.add_channel(DiscordChannel(name=ch.name or "discord", webhook_url=url))
-        except Exception:  # noqa: BLE001 - a misconfigured channel must not break the run
-            logger.debug("Failed to add notification channel %s", ctype)
-    return nm
 
 
 alert_rule_app = typer.Typer()

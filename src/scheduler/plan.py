@@ -60,6 +60,10 @@ class ScheduledJob:
     # Timezone used to interpret "at HH:MM" values. None keeps UTC (the
     # long-standing behaviour and the format stored in the database).
     tz: tzinfo | None = None
+    # Set for jobs loaded from prompts/single or prompts/watchdog. Such jobs
+    # are not persisted in scheduled_jobs; their completion is tracked by a
+    # sidecar file next to the prompt.
+    source_path: str | None = None
 
     @property
     def max_runs(self) -> int:

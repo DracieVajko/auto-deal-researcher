@@ -29,8 +29,14 @@
 ## 7. Spustenie so systémom (startup)
 - [x] src/scheduler/tasks.py (install_startup/uninstall_startup, Windows Task Scheduler -Daily -At 05:00)
 
-## 8. Overenie
-- [ ] python -m pytest -q (celá sada zelená)
-- [ ] python -m mypy src --no-incremental --python-version 3.12
+## 8. File-based prompt folders (single / watchdog)
+- [x] src/scheduler/file_jobs.py
+- [x] tests/test_scheduler_file_jobs.py
+- [x] schedule new / schedule files / schedule rm-file
+- [x] README + config.example.yaml návod
+
+## 9. Overenie
+- [x] python -m pytest -q (839 passed, 11 skipped)
+- [x] python -m mypy src/scheduler/file_jobs.py src/scheduler/service.py src/scheduler/plan.py
 - [ ] ruff check na nových/menených súboroch
 - [ ] commit

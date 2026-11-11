@@ -363,7 +363,9 @@ output:
   domain: ""
 
 schedule:
-  # The daily monitor runs jobs stored in data/deals.db:
+  # The daily monitor scans prompts/single/ and prompts/watchdog/ for .txt
+  # prompts, and also runs jobs stored in data/deals.db:
+  #   python -m src.cli schedule new --name ev --mode watchdog ...
   #   python -m src.cli schedule add --prompt "..." --mode once|watchdog ...
   #   python -m src.cli schedule install-startup --at 05:00
   # This list is only for the legacy `schedule-install` direct `run` tasks.

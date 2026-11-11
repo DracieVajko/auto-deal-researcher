@@ -30,6 +30,16 @@
 - Zapojené do `src/cli/app.py` ako `schedule` podgrupa (`app.add_typer(schedule_app, name="schedule")`).
 - Spustenie so systémom: na Windows registrovaná úloha Task Scheduler s denným triggerom `-Daily -At 05:00`, ktorá spustí `python -m src.cli schedule service --exit-when-idle`; služba vyrieši všetky due úlohy, uvoľní model a ukončí sa. `schedule service` bez flagu zostáva daemon.
 
+## File-based prompt folders (single / watchdog)
+
+Okrem DB úloh služba skenuje aj `prompts/single/*.txt` a
+`prompts/watchdog/*.txt`. Súbor má voliteľné nastavenia `key: value` pred
+`---`, za ktorým nasleduje prompt. `single` po úspešnom behu zapíše
+`<name>.txt.done` a nabudúce sa preskočí; `watchdog` zapíše
+`<name>.txt.state.json` s dátumom a beží najviac raz za deň. Zmazanie `.txt`
+odstráni job bez úpravy DB. Vytvorenie/zoznam/mazanie rieši `schedule new`,
+`schedule files` a `schedule rm-file`.
+
 ## Mutuálna exkluzívna (waitlist)
 
 `RunQueue` drží jednu aktívnu výhradu (`asyncio.Lock` + flag `is_running`). Ak beží jeden beh, ďalší pripravený úloha sa vloží do `deque` waitlistu. Po skončení behu worker automaticky berie ďalšiu z fronty. Není možné, aby bežili dva naraz.

@@ -39,6 +39,15 @@ class FakeSearcher:
 
 
 @pytest.fixture
+def file_dirs(tmp_path):
+    single = tmp_path / "single"
+    watchdog = tmp_path / "watchdog"
+    single.mkdir()
+    watchdog.mkdir()
+    return {"single_dir": single, "watchdog_dir": watchdog}
+
+
+@pytest.fixture
 def storage():
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -67,14 +76,14 @@ def _add_job(storage, job_id, prompt="x", mode="once", trigger="asap",
 
 
 @pytest.mark.asyncio
-async def test_service_runs_due_job_and_records(storage):
+async def test_service_runs_due_job_and_records(storage, file_dirs):
     counter = {"current": 0, "peak": 0}
     _add_job(storage, "j1", prompt="dji drone", next_run_at="2026-11-09T08:00:00+00:00")
 
     def make_searcher():
         return FakeSearcher([{"url": "u1", "title": "DJI", "price_eur": 100.0}], counter)
 
-    svc = SchedulerService(storage, make_searcher, poll_interval=0.05)
+    svc = SchedulerService(storage, make_searcher, **file_dirs, poll_interval=0.05)
     async def _stop_later():
         await asyncio.sleep(0.4)
         svc._stop = True
@@ -96,7 +105,7 @@ async def test_service_runs_due_job_and_records(storage):
 
 
 @pytest.mark.asyncio
-async def test_service_exits_when_idle_after_draining(storage):
+async def test_service_exits_when_idle_after_draining(storage, file_dirs):
     """Daily mode: run all due jobs, then return without a manual stop."""
     counter = {"current": 0, "peak": 0}
     _add_job(storage, "j1", prompt="dji drone", next_run_at="2026-11-09T08:00:00+00:00")
@@ -104,7 +113,7 @@ async def test_service_exits_when_idle_after_draining(storage):
     def make_searcher():
         return FakeSearcher([], counter)
 
-    svc = SchedulerService(storage, make_searcher, poll_interval=0.02)
+    svc = SchedulerService(storage, make_searcher, **file_dirs, poll_interval=0.02)
     await asyncio.wait_for(svc.run(exit_when_idle=True), timeout=2.0)
 
     job = storage.get_scheduled_job("j1")
@@ -113,7 +122,7 @@ async def test_service_exits_when_idle_after_draining(storage):
 
 
 @pytest.mark.asyncio
-async def test_service_serial_execution_no_overlap(storage):
+async def test_service_serial_execution_no_overlap(storage, file_dirs):
     counter = {"current": 0, "peak": 0}
     # Both due at the same time; second must queue and run after first.
     now = "2026-11-09T08:00:00+00:00"
@@ -123,7 +132,7 @@ async def test_service_serial_execution_no_overlap(storage):
     def make_searcher():
         return FakeSearcher([], counter)
 
-    svc = SchedulerService(storage, make_searcher, poll_interval=0.05)
+    svc = SchedulerService(storage, make_searcher, **file_dirs, poll_interval=0.05)
 
     async def _stop_later():
         await asyncio.sleep(0.8)
@@ -140,7 +149,7 @@ async def test_service_serial_execution_no_overlap(storage):
 
 
 @pytest.mark.asyncio
-async def test_service_watchdog_reschedules(storage):
+async def test_service_watchdog_reschedules(storage, file_dirs):
     _add_job(storage, "j1", prompt="watchdog", mode="watchdog",
              trigger="every", trigger_value="10", unit="minutes",
              next_run_at="2026-11-09T08:00:00+00:00")
@@ -148,7 +157,7 @@ async def test_service_watchdog_reschedules(storage):
     def make_searcher():
         return FakeSearcher([], {"current": 0, "peak": 0})
 
-    svc = SchedulerService(storage, make_searcher, poll_interval=0.05)
+    svc = SchedulerService(storage, make_searcher, **file_dirs, poll_interval=0.05)
 
     async def _stop_later():
         await asyncio.sleep(0.4)
@@ -170,7 +179,7 @@ async def test_service_watchdog_reschedules(storage):
 
 
 @pytest.mark.asyncio
-async def test_service_skips_disabled_and_not_due(storage):
+async def test_service_skips_disabled_and_not_due(storage, file_dirs):
     _add_job(storage, "j1", prompt="disabled", enabled=False,
              next_run_at="2026-11-09T08:00:00+00:00")
     _add_job(storage, "j2", prompt="future",
@@ -179,7 +188,7 @@ async def test_service_skips_disabled_and_not_due(storage):
     def make_searcher():
         return FakeSearcher([], {"current": 0, "peak": 0})
 
-    svc = SchedulerService(storage, make_searcher, poll_interval=0.05)
+    svc = SchedulerService(storage, make_searcher, **file_dirs, poll_interval=0.05)
 
     async def _stop_later():
         await asyncio.sleep(0.3)

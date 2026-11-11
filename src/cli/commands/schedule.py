@@ -13,6 +13,11 @@ Examples:
     python -m src.cli schedule add --prompt "levne letenky" --mode watchdog \
         --trigger every --trigger-value 6 --every-unit hours --repeats 24
 
+    # File folders (recommended): prompts/single and prompts/watchdog
+    python -m src.cli schedule new --name ev --mode watchdog \
+        --prompt "Elektrické auto do 10 000 eur" --category auto --max-price 10000
+    python -m src.cli schedule files
+
     # Manual drain (run due jobs, unload the model, exit)
     python -m src.cli schedule service --exit-when-idle
 
@@ -26,11 +31,14 @@ Examples:
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
 import yaml
+
+from src.scheduler import file_jobs
 
 from src.config import load_config
 from src.scheduler.plan import compute_next_run
@@ -112,20 +120,40 @@ def schedule_add(
 def schedule_list(
     db: str | None = typer.Option(None, "--db", help="Cesta k databáze"),
 ):
-    """Vypíska geplantých úloh a ich ďalšie spustenie."""
+    """Vypíska DB úlohy aj .txt prompty a ich ďalšie spustenie."""
     storage = _storage(db)
     jobs = storage.list_scheduled_jobs()
-    if not jobs:
-        typer.echo("Ziadne geplánované úlohy.")
-        return
-    typer.echo(f"{'ID':<24} {'Režim':<10} {'Trigger':<8} {'Ďalšie spustenie':<28} {'Prompt'}")
-    typer.echo("-" * 90)
-    for j in jobs:
-        mark = "OK " if j["enabled"] else "OFF"
-        typer.echo(
-            f"{j['id']:<24} {mark}   {j['mode']:<9} {j['trigger']:<7} "
-            f"{j['next_run_at']!s:<28} {j['prompt']}"
-        )
+    if jobs:
+        typer.echo(f"{'ID':<24} {'Režim':<10} {'Trigger':<8} {'Ďalšie spustenie':<28} {'Prompt'}")
+        typer.echo("-" * 90)
+        for j in jobs:
+            mark = "OK " if j["enabled"] else "OFF"
+            typer.echo(
+                f"{j['id']:<24} {mark}   {j['mode']:<9} {j['trigger']:<7} "
+                f"{j['next_run_at']!s:<28} {j['prompt']}"
+            )
+    else:
+        typer.echo("Žiadne DB úlohy.")
+
+    file_rows = []
+    for directory, mode in (
+        (file_jobs.SINGLE_DIR, "single"),
+        (file_jobs.WATCHDOG_DIR, "watchdog"),
+    ):
+        for job in file_jobs.scan(directory, "once" if mode == "single" else "watchdog"):
+            if mode == "single":
+                status = "done" if file_jobs.is_done(job.path) else "pending"
+            else:
+                status = "ran-today" if file_jobs.ran_today(job.path) else "pending"
+            file_rows.append((mode, status, str(job.path), job.prompt.splitlines()[0]))
+    if file_rows:
+        typer.echo("\nSúbory v prompts/ (odporúčané):")
+        typer.echo(f"{'Mód':<9} {'Stav':<11} {'Cesta':<48} Prompt")
+        typer.echo("-" * 100)
+        for mode, status, path, first_line in file_rows:
+            typer.echo(f"{mode:<9} {status:<11} {path:<48} {first_line[:50]}")
+    else:
+        typer.echo("\nŽiadne .txt prompty v prompts/single ani prompts/watchdog.")
 
 
 @schedule_app.command("enable")
@@ -168,6 +196,87 @@ def schedule_remove(
     else:
         typer.echo(f"Úloha {job_id} neexistuje.", err=True)
         raise typer.Exit(1)
+
+
+@schedule_app.command("new")
+def schedule_new(
+    name: str = typer.Option(..., "--name", "-n", help="Názov promptu (bez .txt)"),
+    mode: str = typer.Option("single", "--mode", help="single | watchdog"),
+    prompt: str | None = typer.Option(None, "--prompt", "-p", help="Text promptu"),
+    category: str = typer.Option("any", "--category", "-cat", help="Kategória"),
+    condition: str = typer.Option("any", "--condition", "-c", help="Podmienka"),
+    max_price: str | None = typer.Option(None, "--max-price", help="Max. cena v EUR"),
+):
+    """Vytvoriť .txt prompt v prompts/single alebo prompts/watchdog."""
+    if mode not in ("single", "watchdog"):
+        typer.echo(f"Error: neznamy mode {mode!r}; pouzi single alebo watchdog", err=True)
+        raise typer.Exit(1)
+    folder = file_jobs.SINGLE_DIR if mode == "single" else file_jobs.WATCHDOG_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", name.strip()).strip("_") or "prompt"
+    path = folder / (safe if safe.endswith(".txt") else f"{safe}.txt")
+    if path.exists():
+        typer.echo(f"Error: {path} uz existuje.", err=True)
+        raise typer.Exit(1)
+    body = (
+        f"# {mode} prompt — uprav nastavenia a text pod ---\n"
+        f"category: {category}\n"
+        f"condition: {condition}\n"
+        f"max_price: {max_price or ''}\n"
+        f"schedule: 05:00\n"
+        "---\n"
+        f"{prompt or 'Popis produktu, rozpocet, stav a preferovane obchody.'}\n"
+    )
+    path.write_text(body, encoding="utf-8")
+    typer.echo(f"Vytvorené: {path}")
+
+
+@schedule_app.command("files")
+def schedule_files():
+    """Vypísať .txt prompty v prompts/single a prompts/watchdog."""
+    rows = []
+    for directory, mode in (
+        (file_jobs.SINGLE_DIR, "single"),
+        (file_jobs.WATCHDOG_DIR, "watchdog"),
+    ):
+        for job in file_jobs.scan(directory, "once" if mode == "single" else "watchdog"):
+            if mode == "single":
+                status = "done" if file_jobs.is_done(job.path) else "pending"
+            else:
+                status = "ran-today" if file_jobs.ran_today(job.path) else "pending"
+            rows.append((mode, status, str(job.path)))
+    if not rows:
+        typer.echo("Ziadne .txt prompty.")
+        return
+    typer.echo(f"{'Mód':<9} {'Stav':<11} Cesta")
+    typer.echo("-" * 70)
+    for mode, status, path in rows:
+        typer.echo(f"{mode:<9} {status:<11} {path}")
+
+
+@schedule_app.command("rm-file")
+def schedule_rm_file(
+    name: str = typer.Argument(..., help="Názov alebo cesta .txt promptu"),
+):
+    """Zmazať .txt prompt aj s .done/.state.json."""
+    given = Path(name)
+    candidates = [given]
+    if not given.is_absolute():
+        candidates.extend(
+            [
+                file_jobs.SINGLE_DIR / name,
+                file_jobs.WATCHDOG_DIR / name,
+                file_jobs.SINGLE_DIR / f"{name}.txt",
+                file_jobs.WATCHDOG_DIR / f"{name}.txt",
+            ]
+        )
+    for path in candidates:
+        if path.is_file() and path.suffix == ".txt":
+            file_jobs.remove_prompt(path)
+            typer.echo(f"Zmazané: {path}")
+            return
+    typer.echo(f"Error: prompt {name!r} sa nenašiel.", err=True)
+    raise typer.Exit(1)
 
 
 @schedule_app.command("service")

@@ -4,9 +4,17 @@ Guarantees mutual exclusion: at most one job runs at a time. Jobs that become
 due while another is running are parked in the :class:`RunQueue` waitlist and
 started in order as soon as the running job finishes.
 
-The service is a long-running asyncio loop intended to be launched by the
-`schedule service` CLI command, which in turn is registered to start with the
-system (Windows Task Scheduler logon trigger).
+The service is launched by the `schedule service` CLI command.  With
+``--exit-when-idle`` it drains every due job and exits (the daily 05:00
+batch); without it, it stays a daemon.
+
+Besides jobs stored in ``scheduled_jobs``, the service scans two plain-text
+folders:
+
+* ``prompts/single/`` — run once, then a ``.done`` sidecar stops repeats;
+* ``prompts/watchdog/`` — run once per day (the sidecar stores the date).
+
+Deleting a ``.txt`` file removes that job; no database change is needed.
 """
 
 from __future__ import annotations
@@ -15,8 +23,10 @@ import asyncio
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+from src.scheduler import file_jobs
 from src.scheduler.plan import ScheduledJob, ScheduleSpec
 from src.scheduler.queue import RunQueue
 from src.storage.manager import StorageManager
@@ -39,6 +49,8 @@ class SchedulerService:
         queue: RunQueue | None = None,
         poll_interval: float = 30.0,
         release_after_job: bool = True,
+        single_dir: Path = file_jobs.SINGLE_DIR,
+        watchdog_dir: Path = file_jobs.WATCHDOG_DIR,
     ) -> None:
         self.storage = storage
         self.make_searcher = make_searcher
@@ -47,9 +59,14 @@ class SchedulerService:
         # Daily batch mode keeps the model resident across jobs and releases
         # it once at the end; daemon mode releases after every job.
         self.release_after_job = release_after_job
+        self.single_dir = single_dir
+        self.watchdog_dir = watchdog_dir
         self._stop = False
         self._worker_task: asyncio.Task | None = None
         self._in_flight: set[str] = set()
+        # File jobs are enqueued once per service invocation; the sidecar
+        # markers decide whether a single/watchdog job may run.
+        self._file_seen: set[str] = set()
 
     async def run(self, exit_when_idle: bool = False) -> None:
         """Main loop: enqueue due jobs, worker executes them serially.
@@ -64,6 +81,7 @@ class SchedulerService:
         try:
             while not self._stop:
                 await self._enqueue_due()
+                await self._enqueue_file_jobs()
                 if exit_when_idle and self.queue.waitlist_size == 0 and not self.queue.is_running:
                     logger.info("No due jobs left; exiting because exit_when_idle is set")
                     break
@@ -107,6 +125,44 @@ class SchedulerService:
             await self.queue.submit(job)
             self._in_flight.add(job_id)
             logger.info("Enqueued scheduled job %s (%s)", job_id, job.prompt)
+
+    async def _enqueue_file_jobs(self) -> None:
+        """Enqueue prompt files from prompts/single and prompts/watchdog.
+
+        Single jobs are skipped once their ``.done`` marker exists; watchdog
+        jobs are skipped when their sidecar says they already ran today.
+        """
+        for directory, mode in (
+            (self.single_dir, "once"),
+            (self.watchdog_dir, "watchdog"),
+        ):
+            for file_job in file_jobs.scan(directory, mode):
+                path = file_job.path
+                key = str(path.resolve())
+                if key in self._file_seen:
+                    continue
+                if mode == "once" and file_jobs.is_done(path):
+                    logger.info("Skipping completed single prompt %s", path.name)
+                    self._file_seen.add(key)
+                    continue
+                if mode == "watchdog" and file_jobs.ran_today(path):
+                    logger.info("Skipping watchdog %s (already ran today)", path.name)
+                    self._file_seen.add(key)
+                    continue
+                job = ScheduledJob(
+                    id=f"file:{key}",
+                    prompt=file_job.prompt,
+                    condition=file_job.condition,
+                    category=file_job.category,
+                    mode="once" if mode == "once" else "watchdog",
+                    spec=ScheduleSpec(trigger="asap"),
+                    enabled=True,
+                    source_path=str(path),
+                )
+                await self.queue.submit(job)
+                self._in_flight.add(job.id)
+                self._file_seen.add(key)
+                logger.info("Enqueued %s prompt %s", mode, path.name)
 
     async def _worker(self) -> None:
         """Pull jobs from the queue and run them one at a time."""
@@ -154,13 +210,23 @@ class SchedulerService:
                     logger.warning("Model release failed: %s", exc)
             self.storage.complete_run(run_id, total_deals, total_deals, status, error)
             job.advance(now, status)
-            self.storage.mark_job_scheduled(
-                job_id=job.id,
-                next_run_at=job.next_run_at,
-                runs_done=job.runs_done,
-                last_status=job.last_status,
-                last_run_at=job.last_run_at,
-            )
+            if job.source_path:
+                # File jobs are not stored in scheduled_jobs; their sidecar
+                # marker is the source of truth.
+                if status == "completed":
+                    path = Path(job.source_path)
+                    if job.mode == "once":
+                        file_jobs.mark_done(path, run_id)
+                    else:
+                        file_jobs.mark_watchdog_run(path, run_id)
+            else:
+                self.storage.mark_job_scheduled(
+                    job_id=job.id,
+                    next_run_at=job.next_run_at,
+                    runs_done=job.runs_done,
+                    last_status=job.last_status,
+                    last_run_at=job.last_run_at,
+                )
             logger.info(
                 "Scheduled job %s finished: %s deals, status=%s, next_run_at=%s",
                 job.id, total_deals, status, job.next_run_at,

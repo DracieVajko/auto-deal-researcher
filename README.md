@@ -17,7 +17,7 @@ An intelligent deal searching application that automates finding the best deals 
 - **Smart Deduplication**: SQLite-based tracking across runs with automatic pruning of stale entries
 - **Two Prompt Modes**: Single-run (`--prompt`) or scheduled auto-mode (`--prompt-file`)
 - **Cross-Platform Output**: Timestamped JSON + Markdown reports
-- **Scheduled Execution**: daily 05:00 monitor via Windows Task Scheduler, `once` and `watchdog` jobs, plus a manual drain mode
+- **Scheduled Execution**: daily 05:00 monitor via Windows Task Scheduler, plain-text `prompts/single/` + `prompts/watchdog/` jobs, DB jobs, and a manual drain mode
 
 ## Installation
 
@@ -165,10 +165,15 @@ search:
   prune_after_days: 30
 
 llm:
+  local_coordination:
+    enabled: true
+    policy: "wait"
+    preload: true              # load before the daily batch
+    unload_after_job: true     # free the model when the batch ends
   local:
     - type: "lmstudio"
-      endpoint: "http://localhost:1234"
-      model: "google/gemma-4-26b-a4b-qat"   # gemma 26B; small bonsai/qwen 9B preferred for tagging
+      endpoint: "http://localhost:1234"   # or your Tailscale/LAN IP
+      model: "nvidia-nemotron-3.5-bolt-e4b"  # 34/34 benchmark; needs 16k context
   api_fallback:
     - provider: "mistral"
       api_key_env: "MISTRAL_API_KEY"
@@ -183,7 +188,9 @@ output:
   domain: ""          # force a product domain; empty = auto-detect
 
 schedule:
-  # The daily monitor runs jobs stored in data/deals.db:
+  # The daily monitor scans prompts/single/ + prompts/watchdog/ for .txt
+  # prompts, and also runs jobs stored in data/deals.db:
+  #   python -m src.cli schedule new --name ev --mode watchdog ...
   #   python -m src.cli schedule add --prompt "..." --mode once|watchdog
   #   python -m src.cli schedule install-startup --at 05:00
   # This list is only for the legacy `schedule-install` direct `run` tasks.
@@ -326,13 +333,46 @@ it picks it silently. `run` accepts the same choice via `--llm {local,cloud,auto
 
 ### Scheduled searches (single run vs watchdog)
 
-The `schedule` subsystem stores jobs in `data/deals.db` and runs them through
-one serial monitor. There are two job modes:
+The `schedule` subsystem runs jobs from two plain-text folders (recommended)
+or from `data/deals.db` (advanced), through one serial monitor. There are two
+job modes:
 
 | Mode | What it does | CLI |
 |---|---|---|
 | `once` | one search, then the job disables itself | `--mode once` |
 | `watchdog` | repeats on its trigger (daily by default) | `--mode watchdog` |
+
+#### Prompt folders (recommended)
+
+Put plain-text prompts in one of two folders:
+
+- `prompts/single/` — run once, then a `.done` sidecar stops repeats.
+- `prompts/watchdog/` — run once per day (the `.state.json` sidecar stores the date).
+
+Create a file with the CLI (or copy `_template.txt`):
+
+```bash
+python -m src.cli schedule new --name ev --mode watchdog \
+  --prompt "Elektrické auto do 10 000 eur" --category auto --max-price 10000
+```
+
+File format (settings before `---`, prompt after it):
+
+```text
+category: auto
+condition: any
+max_price: 10000
+schedule: 05:00
+---
+Elektrické auto do 10 000 eur, bateria v dobrom stave.
+```
+
+The service scans both folders on every run. Delete the `.txt` file to remove
+the job; `schedule rm-file <name>` also removes the sidecars. `schedule files`
+lists file prompts and their status, and `schedule list` shows both DB jobs and
+file prompts.
+
+#### Database jobs (advanced)
 
 Add a job with an inline prompt:
 
@@ -675,9 +715,15 @@ Configured under `llm.local_coordination` in `config.yaml`:
 | `poll_seconds` | `15` | How often the resident set is re-checked while waiting |
 | `max_wait_seconds` | `0` | `0` waits as long as it takes; set a value to fall back to cloud instead of blocking |
 | `probe_busy` | `false` | Send a 1-token completion to time queue latency (never loads anything, but occupies a request slot) |
+| `max_concurrent_models` | `1` | How many local models may be resident at once |
+| `wait_timeout_seconds` | `3600` | How long the monitor waits for a free slot before falling back |
+| `wait_poll_seconds` | `120` | Re-check interval while waiting for a slot |
+| `preload` | `false` | Load the model before the first job (recommended for the daily batch) |
+| `unload_after_job` | `true` | Unload the model after the job or daily batch |
 
 Environment overrides: `ADS_LOCAL_POLICY`, `ADS_LOCAL_QUIET_SECONDS`,
-`ADS_LOCAL_POLL_SECONDS`, `ADS_LOCAL_MAX_WAIT`.
+`ADS_LOCAL_POLL_SECONDS`, `ADS_LOCAL_MAX_WAIT`, `ADS_LOCAL_LLM_TIMEOUT`,
+`ADS_LMSTUDIO_CONTEXT` (default `16384`; `auto` lets LM Studio choose).
 
 > **Known limitation.** Neither backend exposes a read-only "a generation is
 > in progress" endpoint — LM Studio replies HTTP 200 with an error body for
@@ -697,9 +743,11 @@ python -m src.cli schedule service --exit-when-idle      # manual drain
 python -m src.cli schedule list                          # jobs + next run
 ```
 
-`schedule-install` / `schedule-uninstall` are the legacy config-task commands;
-they only install the `schedule.tasks` list from `config.yaml` (empty by
-default). Use `schedule install-startup` for the daily monitor.
+The daily monitor runs both the `prompts/single/` + `prompts/watchdog/` files
+and the DB jobs. `schedule-install` / `schedule-uninstall` are the legacy
+config-task commands; they only install the `schedule.tasks` list from
+`config.yaml` (empty by default). Use `schedule install-startup` for the daily
+monitor.
 
 ### Validation & Helpers
 ```bash

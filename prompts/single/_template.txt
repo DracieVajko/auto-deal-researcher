@@ -1,0 +1,11 @@
+# SINGLE prompt — runs once, then <name>.txt.done stops it from repeating.
+# Copy this file, rename it without the leading underscore, edit the values.
+#
+# Optional settings (before ---). Delete a line to use the default.
+category: any
+condition: any
+max_price:
+schedule: 05:00
+---
+Describe the product, budget, condition and preferred sites here.
+Example: Mini PC 32GB RAM do 500 eur, idealne novy, Alza alebo Bazos.

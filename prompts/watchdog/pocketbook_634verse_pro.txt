@@ -1,0 +1,7 @@
+# WATCHDOG prompt — runs once per day (the .state.json sidecar stores the date).
+category: electronics
+condition: any
+max_price: 300
+schedule: 05:00
+---
+PocketBook 634Verse Pro pod 300 eur, nový alebo použitý, ideálne Alza alebo Bazos.

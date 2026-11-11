@@ -18,6 +18,19 @@ def _run(args, db_path):
 
 
 @pytest.fixture
+def empty_prompt_dirs(monkeypatch, tmp_path):
+    single = tmp_path / "single"
+    watchdog = tmp_path / "watchdog"
+    single.mkdir()
+    watchdog.mkdir()
+    from src.scheduler import file_jobs
+
+    monkeypatch.setattr(file_jobs, "SINGLE_DIR", single)
+    monkeypatch.setattr(file_jobs, "WATCHDOG_DIR", watchdog)
+    return single, watchdog
+
+
+@pytest.fixture
 def db_path():
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -66,7 +79,7 @@ def test_schedule_add_invalid_mode_errors(db_path):
     assert "neznamy mode" in result.output
 
 
-def test_schedule_list_shows_jobs(db_path):
+def test_schedule_list_shows_jobs(db_path, empty_prompt_dirs):
     _run(["add", "--prompt", "prva", "--mode", "once", "--trigger", "asap"], db_path)
     _run(["add", "--prompt", "druha", "--mode", "once", "--trigger", "asap"], db_path)
     result = _run(["list"], db_path)
@@ -97,7 +110,7 @@ def test_schedule_disable_enable_remove(db_path):
     assert "neexistuje" in res.output
 
 
-def test_schedule_list_empty(db_path):
+def test_schedule_list_empty(db_path, empty_prompt_dirs):
     result = _run(["list"], db_path)
     assert result.exit_code == 0
-    assert "Ziadne geplánované" in result.output
+    assert "Žiadne" in result.output

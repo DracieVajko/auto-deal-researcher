@@ -1,0 +1,7 @@
+# WATCHDOG prompt — runs once per day (the .state.json sidecar stores the date).
+category: auto
+condition: any
+max_price: 10000
+schedule: 05:00
+---
+Elektrické auto do 10 000 eur, použité alebo nové, bateria v dobrom stave, reálny dojazd aspoň 250 km.

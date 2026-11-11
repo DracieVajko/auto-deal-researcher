@@ -17,7 +17,7 @@ An intelligent deal searching application that automates finding the best deals 
 - **Smart Deduplication**: SQLite-based tracking across runs with automatic pruning of stale entries
 - **Two Prompt Modes**: Single-run (`--prompt`) or scheduled auto-mode (`--prompt-file`)
 - **Cross-Platform Output**: Timestamped JSON + Markdown reports
-- **Scheduled Execution**: Windows Task Scheduler + Linux/macOS cron via helper scripts
+- **Scheduled Execution**: daily 05:00 monitor via Windows Task Scheduler, `once` and `watchdog` jobs, plus a manual drain mode
 
 ## Installation
 
@@ -183,11 +183,11 @@ output:
   domain: ""          # force a product domain; empty = auto-detect
 
 schedule:
-  tasks:
-    - name: "daily-drone-search"
-      prompt_file: "prompts/auto.yaml"
-      times: ["08:00", "20:00"]
-      enabled: true
+  # The daily monitor runs jobs stored in data/deals.db:
+  #   python -m src.cli schedule add --prompt "..." --mode once|watchdog
+  #   python -m src.cli schedule install-startup --at 05:00
+  # This list is only for the legacy `schedule-install` direct `run` tasks.
+  tasks: []
 ```
 
 ## Usage
@@ -324,27 +324,66 @@ When both a local (lmstudio/ollama) and a cloud (mistral/gemini/openrouter)
 backend are configured it also asks which LLM to use; with only one available
 it picks it silently. `run` accepts the same choice via `--llm {local,cloud,auto}`.
 
-### Long-term monitoring (wait for a deal)
+### Scheduled searches (single run vs watchdog)
 
-For hunting a specific item at a target price over weeks/months:
+The `schedule` subsystem stores jobs in `data/deals.db` and runs them through
+one serial monitor. There are two job modes:
+
+| Mode | What it does | CLI |
+|---|---|---|
+| `once` | one search, then the job disables itself | `--mode once` |
+| `watchdog` | repeats on its trigger (daily by default) | `--mode watchdog` |
+
+Add a job with an inline prompt:
 
 ```bash
-# 1. Create a prompt file
-cat > prompts/hunt.yaml <<'EOF'
-prompt: "Audi A4 2.0 TDI under 8000 EUR, manual, under 200k km, SK/CZ"
-EOF
+# Single search as soon as the monitor starts
+python -m src.cli schedule add --prompt "Mini PC 32GB RAM do 500 eur" \
+  --mode once --trigger asap
 
-# 2. Install a daily 08:00 run (Windows Task Scheduler / cron)
-python -m src.cli monitor --prompt-file prompts/hunt.yaml --interval 24 --max-runs 0
+# Daily watchdog at 05:00 local time
+python -m src.cli schedule add --prompt "PocketBook 634Verse Pro" \
+  --mode watchdog --trigger at --trigger-value 05:00
 
-# Or one-shot scheduled via OS:
-#   Windows: scripts\install_task.ps1
-#   Linux/macOS: scripts/install_cron.sh
+# Every 6 hours, stop after 8 runs
+python -m src.cli schedule add --prompt "DJI Mini 3 Pro" \
+  --mode watchdog --trigger every --trigger-value 6 --every-unit hours --repeats 8
 ```
 
-Results accumulate in `results/monitoring/` and price changes are tracked in
-`data/deals.db`. Alerts fire through configured notification channels
-(console, webhook, discord, email, system).
+Or keep the prompt in a YAML file (`prompt: |` in `prompts/*.yaml`):
+
+```bash
+python -m src.cli schedule add --prompt-file prompts/auto.yaml \
+  --mode once --trigger at --trigger-value 05:00
+```
+
+Optional filters: `--category auto`, `--condition used`. Manage jobs with
+`schedule list`, `schedule enable <id>`, `schedule disable <id>` and
+`schedule remove <id>`.
+
+**Manual run.** Drain every job that is due now, then exit:
+
+```bash
+python -m src.cli schedule service --exit-when-idle
+```
+
+Omit `--exit-when-idle` for a permanent daemon (`Ctrl+C` to stop).
+
+**Automatic run.** Register a daily Windows task at 05:00 local time:
+
+```bash
+python -m src.cli schedule install-startup --at 05:00
+```
+
+The task runs `python -m src.cli schedule service --exit-when-idle`, so it
+drains all due jobs, unloads the local model and exits. `at HH:MM` values are
+interpreted in the host's local timezone and stored as UTC. Remove the task
+with `python -m src.cli schedule uninstall-startup`.
+
+The daily batch keeps the local model loaded between jobs and releases it at
+the end; `config.yaml` sets `llm.local_coordination.preload: true` and
+`unload_after_job: true`. Results and price history accumulate in
+`data/deals.db`; alerts fire through the configured notification channels.
 
 ### Launcher scripts
 
@@ -486,6 +525,8 @@ python -m src.cli monitor --prompt-file prompts/auto.yaml --interval 12
 ```
 Each cycle writes `results/monitoring/<run_id>.md` with new deals, price
 drops/increases, removals and condition changes versus the previous run.
+`monitor` is the older interval loop; for the daily 05:00 queue use the
+`schedule` subsystem above.
 
 ### Logging in to sites that need a real browser (Facebook)
 
@@ -647,13 +688,18 @@ Environment overrides: `ADS_LOCAL_POLICY`, `ADS_LOCAL_QUIET_SECONDS`,
 > for tighter detection if you accept the extra request.
 
 ### Scheduled (Auto Mode)
-```bash
-# Install scheduled tasks (Windows Task Scheduler / cron)
-python -m src.cli schedule-install
 
-# Remove scheduled tasks
-python -m src.cli schedule-uninstall
+The supported daily automation is the `schedule` subsystem:
+
+```bash
+python -m src.cli schedule install-startup --at 05:00   # daily Windows task
+python -m src.cli schedule service --exit-when-idle      # manual drain
+python -m src.cli schedule list                          # jobs + next run
 ```
+
+`schedule-install` / `schedule-uninstall` are the legacy config-task commands;
+they only install the `schedule.tasks` list from `config.yaml` (empty by
+default). Use `schedule install-startup` for the daily monitor.
 
 ### Validation & Helpers
 ```bash
@@ -666,12 +712,16 @@ python -m src.cli llm-check
 # Run via wrapper scripts
 # Windows:
 .\scripts\run_once.ps1 --Prompt "laptop under 1000€" --Condition new
-.\scripts\install_task.ps1
+python -m src.cli schedule install-startup --at 05:00
 
 # Linux/macOS:
 ./scripts/run_once.sh --prompt "laptop under 1000€" --condition new
-./scripts/install_cron.sh
+# crontab: 0 5 * * * cd /path/to/repo && python -m src.cli schedule service --exit-when-idle
 ```
+
+`scripts/install_task.ps1` and `scripts/install_cron.sh` are legacy wrappers
+around `schedule-install`; the daily monitor now uses
+`schedule install-startup` (Windows) or the cron line above (Linux/macOS).
 
 ## Architecture
 
@@ -680,7 +730,8 @@ src/
 ├── cli/
 │   ├── app.py                    # Typer CLI (run, ask, watch, monitor, doctor, diamond-search,
 │   │                             #   config-check, llm-check, schedule-*, selector-health)
-│   └── commands/                 # monitor, doctor, config_check, history, watch
+│   └── commands/                 # schedule, monitor, doctor, config_check, history, watch
+├── scheduler/                    # plan, queue, service, Windows task install
 ├── config/                       # Pydantic models + YAML loader with ${VAR} support
 ├── browser/                      # BrowserManager (CDP + persistent context) + fingerprint
 │   └── pom/                      # Page objects and reusable components

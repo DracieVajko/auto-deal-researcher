@@ -96,6 +96,23 @@ async def test_service_runs_due_job_and_records(storage):
 
 
 @pytest.mark.asyncio
+async def test_service_exits_when_idle_after_draining(storage):
+    """Daily mode: run all due jobs, then return without a manual stop."""
+    counter = {"current": 0, "peak": 0}
+    _add_job(storage, "j1", prompt="dji drone", next_run_at="2026-11-09T08:00:00+00:00")
+
+    def make_searcher():
+        return FakeSearcher([], counter)
+
+    svc = SchedulerService(storage, make_searcher, poll_interval=0.02)
+    await asyncio.wait_for(svc.run(exit_when_idle=True), timeout=2.0)
+
+    job = storage.get_scheduled_job("j1")
+    assert job["runs_done"] == 1
+    assert job["last_status"] == "completed"
+
+
+@pytest.mark.asyncio
 async def test_service_serial_execution_no_overlap(storage):
     counter = {"current": 0, "peak": 0}
     # Both due at the same time; second must queue and run after first.

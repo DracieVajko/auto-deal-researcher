@@ -261,7 +261,7 @@ class LLMClient:
             return
         for model in list(self.llm_config.local):
             try:
-                await self._monitor.release(model.model, "lmstudio")
+                await self._monitor.release(model.model, model.type)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Release failed for %s: %s", model.model, exc)
 
@@ -271,7 +271,7 @@ class LLMClient:
             return
         for model in self.llm_config.local:
             try:
-                await self._monitor.preload(model.model, "lmstudio")
+                await self._monitor.preload(model.model, model.type)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Preload failed for %s: %s", model.model, exc)
     def _build_coordinator(self):

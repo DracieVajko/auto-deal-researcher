@@ -25,6 +25,20 @@ def test_compute_next_run_at_exact():
     assert compute_next_run("at", "08:00", now) == "2026-11-09T08:00:00+00:00"
 
 
+def test_compute_next_run_at_uses_local_timezone():
+    from datetime import timedelta, timezone
+
+    tz = timezone(timedelta(hours=1))
+    # 03:00 UTC = 04:00 local, before 05:00 local -> 04:00 UTC same day.
+    assert compute_next_run(
+        "at", "05:00", "2026-11-09T03:00:00+00:00", tz=tz
+    ) == "2026-11-09T04:00:00+00:00"
+    # 04:30 UTC = 05:30 local, after 05:00 local -> 04:00 UTC next day.
+    assert compute_next_run(
+        "at", "05:00", "2026-11-09T04:30:00+00:00", tz=tz
+    ) == "2026-11-10T04:00:00+00:00"
+
+
 def test_compute_next_run_every_minutes():
     now = "2026-11-09T08:00:00+00:00"
     assert compute_next_run("every", "60", now, unit="minutes") == \

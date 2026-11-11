@@ -101,11 +101,11 @@ def _uninstall_unix_cron():
     print("Removed cron jobs")
 
 
-def install_startup():
-    """Register ``python -m src.cli schedule service`` to run at Windows logon.
+def install_startup(daily_at: str = "05:00"):
+    """Register the daily monitor run at *daily_at* (default 05:00).
 
-    Uses a Task Scheduler task with an ``AtLogon`` trigger so the monitor
-    starts automatically together with the user session. The action is
+    The service drains every due job and exits when the queue is empty, so
+    this is a daily batch run rather than a permanent daemon.  The action is
     launched through ``pythonw.exe`` when available (no console window /
     no popup), falling back to PowerShell with ``-WindowStyle Hidden``.
     """
@@ -120,7 +120,8 @@ def install_startup():
 
     quoted_name = _ps_quote(safe_name)
     quoted_dir = _ps_quote(repo_root)
-    quoted_args = _ps_quote("-m src.cli schedule service")
+    quoted_args = _ps_quote("-m src.cli schedule service --exit-when-idle")
+    quoted_time = _ps_quote(daily_at)
 
     # Prefer pythonw.exe (Windows GUI build of Python, no console window).
     pythonw_exe = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
@@ -128,7 +129,7 @@ def install_startup():
         quoted_exe = _ps_quote(pythonw_exe)
         ps_cmd = f"""
 $action = New-ScheduledTaskAction -Execute {quoted_exe} -Argument {quoted_args} -WorkingDirectory {quoted_dir}
-$trigger = New-ScheduledTaskTrigger -AtLogon
+$trigger = New-ScheduledTaskTrigger -Daily -At {quoted_time}
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden
 Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
 """
@@ -137,7 +138,7 @@ Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger
         quoted_exe = _ps_quote(python_exe)
         ps_cmd = f"""
 $action = New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -WindowStyle Hidden -Command & {{ & {quoted_exe} {quoted_args} }}' -WorkingDirectory {quoted_dir}
-$trigger = New-ScheduledTaskTrigger -AtLogon
+$trigger = New-ScheduledTaskTrigger -Daily -At {quoted_time}
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden
 Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
 """

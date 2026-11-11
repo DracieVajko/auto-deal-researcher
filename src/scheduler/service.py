@@ -20,7 +20,7 @@ from typing import Any
 from src.scheduler.plan import ScheduledJob, ScheduleSpec
 from src.scheduler.queue import RunQueue
 from src.storage.manager import StorageManager
-from src.utils.time import utcnow_iso
+from src.utils.time import local_timezone, utcnow_iso
 
 logger = logging.getLogger(__name__)
 
@@ -38,22 +38,35 @@ class SchedulerService:
         make_searcher: SearcherFactory,
         queue: RunQueue | None = None,
         poll_interval: float = 30.0,
+        release_after_job: bool = True,
     ) -> None:
         self.storage = storage
         self.make_searcher = make_searcher
         self.queue = queue or RunQueue()
         self.poll_interval = float(poll_interval)
+        # Daily batch mode keeps the model resident across jobs and releases
+        # it once at the end; daemon mode releases after every job.
+        self.release_after_job = release_after_job
         self._stop = False
         self._worker_task: asyncio.Task | None = None
         self._in_flight: set[str] = set()
 
-    async def run(self) -> None:
-        """Main loop: enqueue due jobs, worker executes them serially."""
+    async def run(self, exit_when_idle: bool = False) -> None:
+        """Main loop: enqueue due jobs, worker executes them serially.
+
+        With ``exit_when_idle`` the service drains every job that is due at
+        startup and exits once the queue and worker are empty.  That is the
+        daily-run mode: one scheduled start in the morning, no permanent
+        daemon.
+        """
         self._stop = False
         self._worker_task = asyncio.create_task(self._worker())
         try:
             while not self._stop:
                 await self._enqueue_due()
+                if exit_when_idle and self.queue.waitlist_size == 0 and not self.queue.is_running:
+                    logger.info("No due jobs left; exiting because exit_when_idle is set")
+                    break
                 await asyncio.sleep(self.poll_interval)
         finally:
             self._stop = True
@@ -89,6 +102,7 @@ class SchedulerService:
                 last_run_at=row["last_run_at"],
                 runs_done=row["runs_done"],
                 last_status=row["last_status"],
+                tz=local_timezone(),
             )
             await self.queue.submit(job)
             self._in_flight.add(job_id)
@@ -133,7 +147,7 @@ class SchedulerService:
             error = str(exc)
             logger.exception("Scheduled job %s failed", job.id)
         finally:
-            if llm_client is not None:
+            if llm_client is not None and self.release_after_job:
                 try:
                     await llm_client.release_models()
                 except Exception as exc:  # noqa: BLE001

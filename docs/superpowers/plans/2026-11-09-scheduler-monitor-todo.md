@@ -27,7 +27,7 @@
 - [x] zapojiť do src/cli/app.py
 
 ## 7. Spustenie so systémom (startup)
-- [x] src/scheduler/tasks.py (install_startup/uninstall_startup, Windows Task Scheduler -AtLogon)
+- [x] src/scheduler/tasks.py (install_startup/uninstall_startup, Windows Task Scheduler -Daily -At 05:00)
 
 ## 8. Overenie
 - [ ] python -m pytest -q (celá sada zelená)

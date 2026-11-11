@@ -5,7 +5,12 @@ lexicographic ordering matches chronological ordering and comparisons
 across runs are consistent regardless of host timezone.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
+
+
+def local_timezone() -> tzinfo:
+    """Return the host's current timezone (falls back to UTC)."""
+    return datetime.now().astimezone().tzinfo or UTC
 
 
 def utcnow() -> datetime:

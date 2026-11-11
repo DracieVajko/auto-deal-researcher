@@ -323,11 +323,21 @@ search:
     llm_token_budget: 100000
 
 llm:
+  # Optional lifecycle management for local models. preload loads the model
+  # before the first job; unload_after_job frees it when the job/batch ends.
+  # local_coordination:
+  #   enabled: true
+  #   policy: "wait"
+  #   preload: true
+  #   unload_after_job: true
   local:
-    # Gemma 26B for general tasks; small bonsai/qwen 9B is preferred for tagging.
+    # Nemotron e4b is the tested default: 34/34 benchmark cases with the
+    # reasoning budget and a 16k context. Set ADS_LMSTUDIO_CONTEXT=auto to
+    # let LM Studio pick the context instead (the default is 16384).
     - type: "lmstudio"
       endpoint: "http://localhost:1234"
-      model: "google/gemma-4-26b-a4b-qat"
+      model: "nvidia-nemotron-3.5-bolt-e4b"
+    # Ollama is optional; remove this block if you only use LM Studio.
     - type: "ollama"
       endpoint: "http://localhost:11434"
       model: "llama3.1:8b"
@@ -353,11 +363,11 @@ output:
   domain: ""
 
 schedule:
-  tasks:
-    - name: "daily-drone-search"
-      prompt_file: "prompts/auto.yaml"
-      times: ["08:00", "20:00"]
-      enabled: true
+  # The daily monitor runs jobs stored in data/deals.db:
+  #   python -m src.cli schedule add --prompt "..." --mode once|watchdog ...
+  #   python -m src.cli schedule install-startup --at 05:00
+  # This list is only for the legacy `schedule-install` direct `run` tasks.
+  tasks: []
 
 browser:
   cdp_endpoint: "http://127.0.0.1:9222"

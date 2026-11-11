@@ -60,6 +60,8 @@ def test_install_startup_uses_hidden_window(monkeypatch):
     ps_cmd = calls[0]
     assert "-WindowStyle Hidden" in ps_cmd
     assert "schedule service" in ps_cmd
+    assert "--exit-when-idle" in ps_cmd
+    assert "New-ScheduledTaskTrigger -Daily -At '05:00'" in ps_cmd
     assert "Register-ScheduledTask" in ps_cmd
 
 
@@ -79,6 +81,22 @@ def test_install_startup_prefers_pythonw(monkeypatch):
     ps_cmd = calls[0]
     assert "pythonw.exe" in ps_cmd
     assert "-WindowStyle Hidden" not in ps_cmd  # pythonw needs no console flag
+
+
+def test_install_startup_accepts_custom_time(monkeypatch):
+    calls: list[str] = []
+
+    def fake_run(cmd, check=True, **kwargs):
+        cmd_str = " ".join(cmd) if isinstance(cmd, (list, tuple)) else cmd
+        calls.append(cmd_str)
+
+    monkeypatch.setattr(tasks.subprocess, "run", fake_run)
+    monkeypatch.setattr(tasks.sys, "platform", "win32")
+    monkeypatch.setattr(tasks.os.path, "exists", lambda p: str(p).endswith("pythonw.exe"))
+
+    tasks.install_startup(daily_at="05:30")
+
+    assert "-Daily -At '05:30'" in calls[0]
 
 
 def test_uninstall_startup_removes_task(monkeypatch):

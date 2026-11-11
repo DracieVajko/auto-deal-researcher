@@ -24,11 +24,11 @@
 - Nový balíček `src/scheduler/`:
   - `plan.py` — datatriedy `ScheduleSpec` (režim, trigger, hodnota triggera, max_behov) a `ScheduledJob`.
   - `queue.py` — `RunQueue`: seriózna fronta s `asyncio.Lock` (mutuálna exkluzívna »), waitlist pre druhý beh.
-  - `service.py` — `SchedulerService`: dlhotrajúca slučka, ktorá načítava pripravené úlohy z DB, frontuje ich a spúšťa jeden po druhom cez `PlaywrightSearcher.search`.
+  - `service.py` — `SchedulerService`: slučka, ktorá načítava pripravené úlohy z DB, frontuje ich a spúšťa jeden po druhom cez `PlaywrightSearcher.search`. V dennom režime (`--exit-when-idle`) sa po vyprázdnení fronty ukončí.
 - CRUD pre úlohy v `src/storage/manager.py` (`save_scheduled_job`, `list_scheduled_jobs`, `due_jobs`, `mark_job_run`, `remove_scheduled_job`, `enable/disable`).
 - CLI pod `src/cli/commands/schedule.py`: `schedule add`, `schedule list`, `schedule enable|disable|remove`, `schedule service` (daemon), `schedule install-startup|uninstall-startup`.
 - Zapojené do `src/cli/app.py` ako `schedule` podgrupa (`app.add_typer(schedule_app, name="schedule")`).
-- Spustenie so systémom: na Windows registrovaná úloha Task Scheduler s `-AtLogon` (spustí `python -m src.cli schedule service` pri prihlásení používateľa).
+- Spustenie so systémom: na Windows registrovaná úloha Task Scheduler s denným triggerom `-Daily -At 05:00`, ktorá spustí `python -m src.cli schedule service --exit-when-idle`; služba vyrieši všetky due úlohy, uvoľní model a ukončí sa. `schedule service` bez flagu zostáva daemon.
 
 ## Mutuálna exkluzívna (waitlist)
 

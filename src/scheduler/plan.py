@@ -10,7 +10,7 @@ chronology.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 
 Trigger = str       # "asap" | "at" | "every"
 Mode = str          # "once" | "watchdog"
@@ -57,6 +57,9 @@ class ScheduledJob:
     last_run_at: str | None = None
     runs_done: int = 0
     last_status: str | None = None
+    # Timezone used to interpret "at HH:MM" values. None keeps UTC (the
+    # long-standing behaviour and the format stored in the database).
+    tz: tzinfo | None = None
 
     @property
     def max_runs(self) -> int:
@@ -84,6 +87,7 @@ class ScheduledJob:
             self.spec.trigger_value,
             now,
             unit=self.spec.every_unit,
+            tz=self.tz,
         )
 
     def advance(self, now: str, status: str) -> None:
@@ -111,6 +115,7 @@ class ScheduledJob:
             self.spec.trigger_value,
             now,
             unit=self.spec.every_unit,
+            tz=self.tz,
         )
 
 
@@ -120,8 +125,14 @@ def compute_next_run(
     now: str,
     *,
     unit: EveryUnit = "minutes",
+    tz: tzinfo | None = None,
 ) -> str:
-    """Return the next ISO-8601 UTC run time at-or-after *now* for the trigger."""
+    """Return the next ISO-8601 UTC run time at-or-after *now* for the trigger.
+
+    ``at`` times are interpreted in *tz* when given (local wall-clock time)
+    and converted back to UTC for storage.  ``tz=None`` keeps the original
+    UTC interpretation.
+    """
     base = _parse_iso(now)
 
     if trigger == "asap":
@@ -132,6 +143,14 @@ def compute_next_run(
             msg = "trigger 'at' requires trigger_value (HH:MM)"
             raise ValueError(msg)
         hour, minute = _parse_hhmm(trigger_value)
+        if tz is not None:
+            base_local = base.astimezone(tz)
+            target_local = base_local.replace(
+                hour=hour, minute=minute, second=0, microsecond=0
+            )
+            if target_local < base_local:
+                target_local += timedelta(days=1)
+            return target_local.astimezone(UTC).isoformat()
         target = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if target < base:  # already passed today -> tomorrow
             target += timedelta(days=1)

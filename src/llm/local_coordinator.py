@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import time
 import urllib.error
@@ -382,8 +383,20 @@ def ensure_lmstudio_model(model_key: str, timeout: float = 600.0) -> bool:
             logger.warning("LM Studio did not fully unload before loading %s", model_key)
 
         logger.info("Loading %s in LM Studio...", model_key)
+        # 4k context + the 2k reasoning budget overflows the window and LM
+        # Studio answers 400. 16k is enough for the app's prompts; set
+        # ADS_LMSTUDIO_CONTEXT=auto to let LM Studio decide instead.
+        context = (os.environ.get("ADS_LMSTUDIO_CONTEXT") or "16384").strip()
+        # -y prevents an interactive confirmation prompt when there is no
+        # TTY (the scheduled task runs under pythonw); without it the load
+        # hangs forever.
+        load_args = ["lms", "load", model_key, "-y"]
+        if context.lower() == "auto":
+            load_args.append("--auto")
+        else:
+            load_args.extend(["-c", context])
         done = subprocess.run(
-            ["lms", "load", model_key, "--auto"], capture_output=True, text=True, timeout=timeout,
+            load_args, capture_output=True, text=True, timeout=timeout,
         )
         if done.returncode != 0:
             logger.warning("lms load %s failed: %s", model_key, (done.stderr or done.stdout or "").strip()[:300])

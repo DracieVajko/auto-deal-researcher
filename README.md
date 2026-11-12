@@ -396,3 +396,12 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
 See [SECURITY.md](SECURITY.md). Never commit `.env`, `data/sessions/`, or
 flows recordings — they contain real cookies and secrets and are git-ignored.
+
+---
+
+## Support this work
+
+If you find this project useful, consider supporting its ongoing development,
+maintenance, and improvements.
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/DracieVajko)

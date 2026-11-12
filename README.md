@@ -902,3 +902,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE).
+
+---
+
+## Support this work
+
+If you find this project useful, consider supporting its ongoing development, maintenance, and improvements.
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/DracieVajko)

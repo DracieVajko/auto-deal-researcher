@@ -1,9 +1,2 @@
 # GitHub Sponsors funding configuration for auto-deal-researcher.
-#
-# GitHub Sponsors is NOT claimed active until the Sponsors profile for
-# DracieVajko has been approved. Uncomment the line below only after
-# confirming the profile is approved and active:
-#
-# github: DracieVajko
-#
-# Do not add external funding URLs here.
+github: DracieVajko

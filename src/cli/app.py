@@ -283,8 +283,8 @@ class SearchOutcome:
 
     deal_count: int
     sites: list[str]
-    json_path: str
-    md_path: str
+    json_path: str | None
+    md_path: str | None
     results_dir: str
 
 
@@ -1319,7 +1319,7 @@ def alert_rule_evaluate():
     """Evaluate all active alert rules and send triggered alerts now."""
     config = _load_config()
     storage = StorageManager(config.storage.db_path)
-    notification_manager = _build_notification_manager(config)
+    notification_manager = build_notification_manager(config)
     from src.intelligence.price_tracker import AlertRuleEngine
 
     engine = AlertRuleEngine(storage, notification_manager)

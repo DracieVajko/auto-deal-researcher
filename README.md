@@ -375,11 +375,12 @@ helps fund:
 - Documentation and example prompt files
 - Testing and CI coverage
 
-If you find the project useful, consider sponsoring the work on GitHub Sponsors.
-The Sponsor button will appear here once the GitHub Sponsors profile for the
-repository owner has been approved and activated. Until then, you can support
-the project by opening issues, submitting pull requests, or spreading the word.
+If you find the project useful, consider sponsoring the work on
+[GitHub Sponsors](https://github.com/sponsors/DracieVajko). Sponsorship helps
+keep the project actively maintained and accelerates new integrations.
 
+You can also support the project by opening issues, submitting pull requests,
+or spreading the word.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to contribute.
 
 ## Contributing

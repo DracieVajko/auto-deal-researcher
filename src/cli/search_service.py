@@ -15,6 +15,16 @@ import logging
 from dataclasses import dataclass
 from typing import Callable
 
+from src.browser.manager import BrowserManager
+from src.config.models import AppConfig
+from src.llm.client import LLMClient
+from src.notifications.manager import NotificationManager
+from src.output.processor import ResultProcessor
+from src.searcher.adapters.base import Deal
+from src.searcher.filters import SearchFilters
+from src.searcher.site_selection import SitePlan
+from src.storage.manager import StorageManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,26 +32,26 @@ logger = logging.getLogger(__name__)
 class SearchContext:
     """Shared resources for one search cycle."""
 
-    config: object
-    llm: object
-    storage: object
-    browser_mgr: object
-    processor: object
+    config: AppConfig
+    llm: LLMClient
+    storage: StorageManager
+    browser_mgr: BrowserManager
+    processor: ResultProcessor
 
 
 @dataclass
 class SearchResult:
     """Outcome of one search cycle."""
 
-    deals: list
+    deals: list[Deal]
     sites: list[str]
     json_path: str | None
     md_path: str | None
     results_dir: str
-    site_plan: object | None = None
+    site_plan: SitePlan | None = None
 
 
-def build_notification_manager(config) -> object:
+def build_notification_manager(config: AppConfig) -> NotificationManager:
     """Build a NotificationManager with console channel plus any configured channels."""
     import os
 
@@ -108,7 +118,7 @@ async def build_context(
     return SearchContext(config, llm, storage, browser_mgr, processor)
 
 
-async def _price_alerts(storage: object) -> list[dict]:
+async def _price_alerts(storage: StorageManager) -> list[dict]:
     """Run price-drop, new-low, and fake-promo checks."""
     alerts: list[dict] = []
     try:
@@ -133,7 +143,7 @@ async def _price_alerts(storage: object) -> list[dict]:
     return alerts
 
 
-async def _evaluate_alert_rules(config, storage: object) -> None:
+async def _evaluate_alert_rules(config: AppConfig, storage: StorageManager) -> None:
     """Evaluate user-configurable alert rules."""
     try:
         from src.intelligence.price_tracker import AlertRuleEngine
@@ -148,7 +158,7 @@ async def run_pipeline(
     prompt: str,
     condition: str,
     category: str,
-    filters: object,
+    filters: SearchFilters,
     sites: list[str] | None,
     ctx: SearchContext,
     *,

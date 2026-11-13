@@ -70,7 +70,7 @@ class ResultsStore:
         if not self.results_dir.exists():
             return runs
 
-        for path in sorted(self.results_dir.glob("results_*.json")):
+        for path in sorted(self.results_dir.rglob("results_*.json")):
             run = self._load_run(path)
             if run is not None:
                 runs.append(run)
@@ -83,10 +83,10 @@ class ResultsStore:
 
     def get_run(self, timestamp: str, slug: str) -> SearchRun | None:
         """Return one search run by timestamp + slug, or None."""
-        path = self.results_dir / f"results_{timestamp}_{slug}.json"
-        if not path.exists():
+        matches = list(self.results_dir.rglob(f"results_{timestamp}_{slug}.json"))
+        if not matches:
             return None
-        return self._load_run(path)
+        return self._load_run(matches[0])
 
     # ------------------------------------------------------------------
     # Internal

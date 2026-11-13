@@ -102,7 +102,12 @@ class NotificationConfig(BaseModel):
 
 class OutputConfig(BaseModel):
     format: Literal["json", "markdown", "both"] = "both"
-    directory: str = "./results"
+    # Reports are written under reports/<slug>/ so each search type has its
+    # own folder. Change to "./results" to keep the legacy flat layout.
+    directory: str = "./reports"
+    # How many historical runs to keep per search type. Older run files are
+    # pruned automatically; the deals themselves live in data/deals.db.
+    keep_runs: int = 5
     # Force a product domain (bike, computer, phone, car, furniture, generic).
     # Empty means auto-detect from the listing text.
     domain: str = ""

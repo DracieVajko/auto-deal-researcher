@@ -58,6 +58,7 @@ Thumbs.db
 *.sqlite3
 *.log
 results/
+reports/
 data/
 config.yaml
 config.local.yaml

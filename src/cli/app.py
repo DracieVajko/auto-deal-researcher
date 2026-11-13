@@ -487,7 +487,7 @@ def diamond_search(
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
     category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, home, hobby, any"),
     winners: int = typer.Option(3, "--winners", "-w", help="How many ranked deals to keep"),
-    output_dir: str = typer.Option("./results", "--output-dir", help="Where to write the ranking"),
+    output_dir: str = typer.Option("./reports", "--output-dir", help="Where to write the ranking"),
     min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
     max_price: str | None = typer.Option(None, "--max-price", help="Maximum price in EUR"),
     brand: str | None = typer.Option(None, "--brand", help="Brand filter"),
@@ -850,7 +850,7 @@ def search(
     condition: str = typer.Option("any", "--condition", "-c", help="Filter: new, used, refurbished, open_box, any"),
     category: str = typer.Option("any", "--category", "-cat", help="Filter: electronics, appliances, auto, home, hobby, any"),
     winners: int = typer.Option(3, "--winners", "-w", help="How many ranked deals to keep"),
-    output_dir: str = typer.Option("./results", "--output-dir", help="Output directory for results"),
+    output_dir: str = typer.Option("./reports", "--output-dir", help="Output directory for results"),
     max_pages: int = typer.Option(5, "--max-pages", help="Max pages per site"),
     headless: bool = typer.Option(True, "--headless/--no-headless", help="Run browser headless"),
     min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
@@ -1005,7 +1005,7 @@ def monitor(
     prompt_file: str | None = typer.Option(None, "--prompt-file", "-f", help="YAML file with prompt (auto mode)"),
     interval_hours: int = typer.Option(12, "--interval", "-i", help="Interval between runs in hours"),
     max_runs: int = typer.Option(0, "--max-runs", "-m", help="Maximum runs (0 = infinite)"),
-    output_dir: str = typer.Option("results/monitoring", "--output-dir", help="Output directory for reports"),
+    output_dir: str = typer.Option("reports/monitoring", "--output-dir", help="Output directory for reports"),
     price_drop_threshold: float = typer.Option(10.0, "--price-drop-threshold", help="Alert threshold for price drops (%)"),
 ):
     """Run continuous monitoring with intelligent change detection."""
@@ -1016,7 +1016,7 @@ def monitor(
 def watch(
     urls: list[str] | None = typer.Option(None, "--url", "-u", help="Product URL to watch (repeatable)"),
     watchlist: str | None = typer.Option(None, "--watchlist", "-w", help="File with one URL per line"),
-    output_dir: str = typer.Option("results/watch", "--output-dir", help="Output directory"),
+    output_dir: str = typer.Option("reports/watch", "--output-dir", help="Output directory"),
     alternatives: bool = typer.Option(True, "--alternatives/--no-alternatives", help="Search for 2-3 counter-products"),
 ):
     """Watch specific product URLs: track price/stock and find alternatives."""
@@ -1027,7 +1027,7 @@ def watch(
 def research_specs(
     item: str = typer.Option(..., "--item", "-i", help="Item name to research (e.g. 'Citroen eC3')"),
     category: str | None = typer.Option(None, "--category", "-cat", help="Category: auto, electronics, appliances, home, hobby, general"),
-    output_dir: str = typer.Option("results/specs", "--output-dir", help="Output directory for specs JSON"),
+    output_dir: str = typer.Option("reports/specs", "--output-dir", help="Output directory for specs JSON"),
 ):
     """Research specs and reviews for an item (foundation for replacement finder)."""
     import json
@@ -1079,7 +1079,7 @@ async def find_replacement(
     max_price: str | None = typer.Option(None, "--max-price", help="Maximum price in EUR"),
     min_price: str | None = typer.Option(None, "--min-price", help="Minimum price in EUR"),
     winners: int = typer.Option(3, "--winners", "-w", help="How many top candidates to show"),
-    output_dir: str = typer.Option("results/replacement", "--output-dir", help="Output directory"),
+    output_dir: str = typer.Option("reports/replacement", "--output-dir", help="Output directory"),
 ):
     """Find replacement alternatives for a reference item.
 
@@ -1333,7 +1333,7 @@ app.add_typer(alert_rule_app, name="alert-rule")
 @app.command()
 def dashboard(
     port: int = typer.Option(8765, "--port", "-p", help="Port to serve the dashboard on"),
-    results_dir: str = typer.Option("results", "--results-dir", "-d", help="Results directory to serve"),
+    results_dir: str = typer.Option("reports", "--results-dir", "-d", help="Results directory to serve"),
 ):
     """Start the web dashboard for viewing search results."""
     import webbrowser

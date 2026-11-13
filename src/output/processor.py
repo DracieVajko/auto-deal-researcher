@@ -89,6 +89,34 @@ class DealAnalysis:
     also_at: list[dict] = field(default_factory=list)
 
 
+def _report_folder_name(slug: str | None) -> str:
+    """Safe subfolder name for one search type."""
+    raw = (slug or "").strip().lower()
+    raw = re.sub(r"[^a-z0-9]+", "-", raw)
+    raw = re.sub(r"-{2,}", "-", raw).strip("-")
+    return raw or "default"
+
+
+def _prune_old_runs(report_dir, keep_runs: int) -> None:
+    """Keep only the newest keep_runs runs in report_dir."""
+    try:
+        stems: dict[str, list] = {}
+        for path in report_dir.glob("results_*"):
+            match = re.match(r"^(results_\d{8}_\d{6})", path.name)
+            if not match:
+                continue
+            stems.setdefault(match.group(1), []).append(path)
+        ordered = sorted(stems.keys(), reverse=True)
+        for old_stem in ordered[keep_runs:]:
+            for path in stems[old_stem]:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+    except Exception:
+        pass
+
+
 class ResultProcessor:
     # Scoring rows every domain has, and the one row only computer enables.
     # A breakdown that omits Connectivity is normalised over 0.95 so a domain
@@ -256,8 +284,14 @@ class ResultProcessor:
         slug = await self._describe_search_async(prompt)
         stem = f"results_{timestamp}_{slug}" if slug else f"results_{timestamp}"
 
-        out_dir = Path(output_dir or self.config.directory)
-        out_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240 - tiny CLI, not a server
+        base_dir = Path(output_dir or self.config.directory)
+        base_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240 - tiny CLI, not a server
+        # One folder per search type so reports stay grouped and old runs can
+        # be pruned independently.
+        slug_dir_name = _report_folder_name(slug) if slug else "default"
+        report_dir = base_dir / slug_dir_name
+        report_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240 - tiny CLI, not a server
+        out_dir = report_dir
 
         # The same item posted twice must not double-count in the median or
         # take two places in the report.
@@ -430,6 +464,7 @@ class ResultProcessor:
                 "Filtered %d laptop/notebook listing(s) from the report",
                 len(filtered),
             )
+        _prune_old_runs(report_dir, max(1, int(getattr(self.config, "keep_runs", 5) or 5)))
         return str(json_path), str(md_path)
 
     # ------------------------------------------------------------------

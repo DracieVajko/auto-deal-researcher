@@ -357,7 +357,7 @@ llm:
   # in your own keys. Never commit real keys.
 output:
   format: "both"
-  directory: "./results"
+  directory: "./reports"
   # Force a product domain (bike, computer, phone, car, furniture, generic).
   # Empty means auto-detect from the listing text; --domain overrides this.
   domain: ""

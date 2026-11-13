@@ -174,7 +174,7 @@ llm:
 
 output:
   format: "both"
-  directory: "./results"
+  directory: "./reports"
 
 schedule:
   tasks: []
@@ -200,6 +200,35 @@ list.
 python -m src.cli config-check
 python -m src.cli llm-check
 ```
+
+## Results and reports
+
+Every search writes timestamped files under `reports/` (configurable via
+`output.directory`):
+
+```
+reports/
+├── <slug>/                          # one folder per search type
+│   ├── results_20261112_050000_<slug>.json
+│   ├── results_20261112_050000_<slug>.md
+│   ├── results_20261112_050000_<slug>.csv
+│   └── results_20261112_050000_<slug>.xlsx   # optional
+└── ...
+```
+
+- **`<slug>/`** — one subfolder per search type/prompt, so reports stay
+  grouped and you can immediately see which report belongs to which search.
+- **`results_<timestamp>_<slug>`** — each run is a separate snapshot.
+- **Pruning** — only the newest `output.keep_runs` (default 5) runs per
+  folder are kept; older run files are removed automatically. Deals
+  themselves are tracked in `data/deals.db` (dedup + price history), so
+  stale/non-functional offers are dropped from the live set while the
+  newest run is always retained.
+- **Dashboard** — `python -m src.cli dashboard` serves `reports/`
+  recursively at http://127.0.0.1:8765.
+
+The legacy flat `results/` layout is still accepted if you set
+`output.directory: "./results"`.
 
 ## Scheduled searches (single run vs watchdog)
 

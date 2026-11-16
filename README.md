@@ -278,9 +278,14 @@ Drain every job that is due now, then exit:
 
 ```bash
 python -m src.cli schedule service --exit-when-idle
+
+# With a log file (useful under pythonw / Task Scheduler):
+python -m src.cli schedule service --exit-when-idle --log-file data/scheduled.log
 ```
 
-Omit `--exit-when-idle` for a permanent daemon (`Ctrl+C` to stop).
+Omit `--exit-when-idle` for a permanent daemon (`Ctrl+C` to stop). The
+Windows task sets a 2-hour execution time limit and writes to
+`data/scheduled.log`.
 
 ### Automatic run
 

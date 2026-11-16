@@ -243,7 +243,10 @@ class LLMClient:
                 enabled=True,
                 policy=getattr(coord, "policy", "wait") or "wait",
                 max_concurrent_models=getattr(coord, "max_concurrent_models", 1),
-                wait_timeout_seconds=getattr(coord, "wait_timeout_seconds", 3600),
+                wait_timeout_seconds=int(os.environ.get(
+                    "ADS_LOCAL_MONITOR_WAIT",
+                    getattr(coord, "wait_timeout_seconds", 3600),
+                )),
                 poll_interval_seconds=getattr(coord, "wait_poll_seconds", 120),
                 preload=getattr(coord, "preload", False),
                 unload_after_job=getattr(coord, "unload_after_job", True),

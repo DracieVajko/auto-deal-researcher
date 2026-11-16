@@ -347,15 +347,10 @@ class LocalModelCoordinator:
 def ensure_lmstudio_model(model_key: str, timeout: float = 600.0) -> bool:
     """Make sure *model_key* is the model loaded in LM Studio.
 
-    Unloads any other resident model first (and waits until LM Studio
-    confirms nothing is resident), then loads the requested one via the
-    `lms` CLI. Returns True on success. Best-effort: failures are logged
-    but never raise.
-
-    A previous version fired `lms load` immediately after `lms unload -a`,
-    which on slow unloads left two models resident at once (OOM). We now
-    poll `lms ps` until the backend reports no loaded models before issuing
-    the load.
+    Never unloads a foreign model: if another model is already resident, the
+    function returns False so the caller can fall back to cloud APIs instead
+    of disrupting the user's work. Returns True on success. Best-effort:
+    failures are logged but never raise.
     """
     if not model_key:
         return False
@@ -363,26 +358,23 @@ def ensure_lmstudio_model(model_key: str, timeout: float = 600.0) -> bool:
         ps = subprocess.run(
             ["lms", "ps"], capture_output=True, text=True, timeout=15,
         )
+        out = (ps.stdout or "") + (ps.stderr or "")
         if model_key in (ps.stdout or ""):
             logger.info("LM Studio already has %s loaded", model_key)
             return True
 
-        subprocess.run(
-            ["lms", "unload", "-a"], capture_output=True, text=True, timeout=60,
-        )
-        deadline = time.monotonic() + 60.0
-        while time.monotonic() < deadline:
-            ps = subprocess.run(
-                ["lms", "ps"], capture_output=True, text=True, timeout=15,
+        # A foreign model is resident: do NOT unload it (the user may be
+        # running their own work). Fall back to cloud APIs instead.
+        if _lmstudio_has_loaded(out):
+            logger.info(
+                "LM Studio is busy with a foreign model; leaving it loaded and "
+                "falling back to cloud APIs for %s",
+                model_key,
             )
-            out = (ps.stdout or "") + (ps.stderr or "")
-            if "No models are currently loaded" in out or not _lmstudio_has_loaded(out):
-                break
-            time.sleep(2.0)
-        else:
-            logger.warning("LM Studio did not fully unload before loading %s", model_key)
+            return False
 
         logger.info("Loading %s in LM Studio...", model_key)
+
         # 4k context + the 2k reasoning budget overflows the window and LM
         # Studio answers 400. 16k is enough for the app's prompts; set
         # ADS_LMSTUDIO_CONTEXT=auto to let LM Studio decide instead.

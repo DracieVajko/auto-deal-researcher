@@ -328,6 +328,10 @@ llm:
   # local_coordination:
   #   enabled: true
   #   policy: "wait"
+  #   # Fall back to cloud APIs instead of waiting an hour when LM Studio is
+  #   # busy with a foreign model.
+  #   max_wait_seconds: 30
+  #   wait_timeout_seconds: 30
   #   preload: true
   #   unload_after_job: true
   local:

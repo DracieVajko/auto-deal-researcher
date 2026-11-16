@@ -31,6 +31,7 @@ Examples:
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -288,8 +289,23 @@ def schedule_service(
         "--exit-when-idle",
         help="Po dokončení všetkých due úloh ukončiť (denný režim namiesto daemona).",
     ),
+    log_file: str | None = typer.Option(
+        None,
+        "--log-file",
+        help="Zapísať logy do súboru (pre pythonw / Task Scheduler).",
+    ),
 ):
     """Spustiť monitor (jeden beh naraz; zvyšok čaká vo fronte)."""
+    if log_file:
+        import logging
+
+        handler = logging.FileHandler(log_file, encoding="utf-8")
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+        )
+        root = logging.getLogger()
+        root.addHandler(handler)
+        root.setLevel(logging.INFO)
 
     def make_searcher():
         from src.browser.manager import BrowserManager
@@ -302,6 +318,13 @@ def schedule_service(
         return PlaywrightSearcher(config, llm, storage, browser_mgr)
 
     storage = _storage(db)
+    # Scheduled runs must fall back to cloud APIs quickly when LM Studio is
+    # busy or unavailable, instead of hanging for an hour.
+    # Fall back to cloud APIs immediately when LM Studio is busy with a
+    # foreign model - never unload the user's model.
+    os.environ.setdefault("ADS_LOCAL_MAX_WAIT", "30")
+    os.environ.setdefault("ADS_LOCAL_MONITOR_WAIT", "0")
+    os.environ.setdefault("ADS_LOCAL_LLM_TIMEOUT", "300")
     # Preload local models if configured.
     preload_llm = None
     try:

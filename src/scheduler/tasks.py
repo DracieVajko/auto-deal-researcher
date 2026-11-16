@@ -120,7 +120,9 @@ def install_startup(daily_at: str = "05:00"):
 
     quoted_name = _ps_quote(safe_name)
     quoted_dir = _ps_quote(repo_root)
-    quoted_args = _ps_quote("-m src.cli schedule service --exit-when-idle")
+    quoted_args = _ps_quote(
+        "-m src.cli schedule service --exit-when-idle --log-file data/scheduled.log"
+    )
     quoted_time = _ps_quote(daily_at)
 
     # Prefer pythonw.exe (Windows GUI build of Python, no console window).
@@ -130,7 +132,7 @@ def install_startup(daily_at: str = "05:00"):
         ps_cmd = f"""
 $action = New-ScheduledTaskAction -Execute {quoted_exe} -Argument {quoted_args} -WorkingDirectory {quoted_dir}
 $trigger = New-ScheduledTaskTrigger -Daily -At {quoted_time}
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
 """
     else:
@@ -139,7 +141,7 @@ Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger
         ps_cmd = f"""
 $action = New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -WindowStyle Hidden -Command & {{ & {quoted_exe} {quoted_args} }}' -WorkingDirectory {quoted_dir}
 $trigger = New-ScheduledTaskTrigger -Daily -At {quoted_time}
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
 """
     # Register via PowerShell. `powershell.exe` is a trusted system binary and

@@ -196,8 +196,11 @@ class LocalModelMonitor:
         """Load *model_key* on *backend*. Returns True on success."""
         if backend == "lmstudio":
             try:
+                import os
+
                 from src.llm.local_coordinator import ensure_lmstudio_model
-                return ensure_lmstudio_model(model_key)
+                timeout = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "120"))
+                return ensure_lmstudio_model(model_key, timeout=timeout)
             except Exception as exc:
                 logger.warning("Failed to load %s on lmstudio: %s", model_key, exc)
                 return False

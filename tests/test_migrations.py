@@ -5,7 +5,12 @@ import sqlite3
 from src.searcher.adapters.base import Deal
 from src.searcher.pricing import ShippingQuote, build_price_quote
 from src.storage.manager import StorageManager
-from src.storage.schema import DEALS_COLUMNS, PRICE_HISTORY_COLUMNS, get_db
+from src.storage.schema import (
+    DEALS_COLUMNS,
+    PRICE_HISTORY_COLUMNS,
+    SCHEMA_VERSION,
+    get_db,
+)
 
 
 def _make_legacy_db(path):
@@ -61,7 +66,7 @@ def test_legacy_db_gains_missing_columns(tmp_path):
     assert DEALS_COLUMNS.keys() <= cols, "every column the manager writes must exist"
     history_cols = {r[1] for r in db.execute("PRAGMA table_info(price_history)")}
     assert PRICE_HISTORY_COLUMNS.keys() <= history_cols
-    assert db.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == 7
+    assert db.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == SCHEMA_VERSION
 
 
 def test_save_deal_works_on_legacy_db(tmp_path):
@@ -132,3 +137,64 @@ def test_migration_is_idempotent(tmp_path):
     get_db(db_path)
     db2 = get_db(db_path)  # second open must not fail
     assert "currency" in {r[1] for r in db2.execute("PRAGMA table_info(deals)")}
+    assert db2.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == SCHEMA_VERSION
+
+
+def _make_v7_db(path):
+    """Create a database already migrated to version 7 (no priority column)."""
+    db = get_db(path)
+    # Downgrade: drop the priority column that migration 8 added, reset version.
+    try:
+        db.execute("ALTER TABLE scheduled_jobs DROP COLUMN priority")
+    except Exception:  # noqa: BLE001 - older schemas may not have the table
+        pass
+    db.execute("DELETE FROM migrations WHERE version = ?", (SCHEMA_VERSION,))
+    db.execute("INSERT INTO migrations (version) VALUES (7)")
+    db.close()
+
+
+def test_v7_db_upgrades_to_v8(tmp_path):
+    db_path = str(tmp_path / "v7.db")
+    _make_v7_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    assert conn.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == 7
+    conn.close()
+
+    db = get_db(db_path)
+    assert db.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == SCHEMA_VERSION
+    cols = {r[1] for r in db.execute("PRAGMA table_info(scheduled_jobs)")}
+    assert "priority" in cols
+    db.close()
+
+
+def test_v7_db_upgrades_preserving_job_data(tmp_path):
+    db_path = str(tmp_path / "v7data.db")
+    _make_v7_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO scheduled_jobs (id, prompt, mode, trigger, trigger_value, "
+        "every_unit, enabled, next_run_at) VALUES "
+        "('job-1', 'test prompt', 'watchdog', 'at', '05:00', 'minutes', 1, "
+        "'2026-01-01T05:00:00+00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    db = get_db(db_path)
+    row = db.execute("SELECT * FROM scheduled_jobs WHERE id = 'job-1'").fetchone()
+    assert row is not None
+    assert row["prompt"] == "test prompt"
+    assert row["priority"] == "normal"  # default applied by migration 8
+    db.close()
+
+
+def test_v8_db_is_idempotent(tmp_path):
+    db_path = str(tmp_path / "v8.db")
+    get_db(db_path)  # creates v8
+    db2 = get_db(db_path)  # second open must not fail
+    assert db2.execute("SELECT MAX(version) FROM migrations").fetchone()[0] == SCHEMA_VERSION
+    cols = {r[1] for r in db2.execute("PRAGMA table_info(scheduled_jobs)")}
+    assert "priority" in cols
+    db2.close()

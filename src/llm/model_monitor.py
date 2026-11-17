@@ -200,7 +200,8 @@ class LocalModelMonitor:
 
                 from src.llm.local_coordinator import ensure_lmstudio_model
                 timeout = float(os.environ.get("ADS_LOCAL_LLM_TIMEOUT", "120"))
-                return ensure_lmstudio_model(model_key, timeout=timeout)
+                force = self.config.policy == "force"
+                return ensure_lmstudio_model(model_key, timeout=timeout, force=force)
             except Exception as exc:
                 logger.warning("Failed to load %s on lmstudio: %s", model_key, exc)
                 return False

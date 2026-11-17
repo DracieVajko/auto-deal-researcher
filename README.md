@@ -272,6 +272,23 @@ the job; `schedule rm-file <name>` also removes the sidecars.
 `schedule files` lists file prompts and their status, and `schedule list`
 shows both database jobs and file prompts.
 
+**Priority mode.** Each job can be `normal` (default) or `priority`:
+
+```bash
+python -m src.cli schedule new --name ev --mode watchdog \
+  --prompt "Elektrické auto do 10 000 eur" --category auto --max-price 10000 \
+  --priority normal
+```
+
+- `normal` — if LM Studio is busy with a foreign model, the scheduler waits
+  up to one hour for it to become quiet, then loads ours; if it cannot, it
+  falls back to cloud APIs (Gemini/Mistral/OpenRouter).
+- `priority` — the scheduler unloads foreign models and loads ours; use only
+  when the automated search must take precedence over interactive work.
+
+The same `--priority normal|priority` flag exists for `schedule add`
+(database jobs).
+
 ### Manual run
 
 Drain every job that is due now, then exit:

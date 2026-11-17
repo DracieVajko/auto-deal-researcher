@@ -42,6 +42,7 @@ _META_KEYS = {
     "min_price",
     "sites",
     "schedule",
+    "priority",
 }
 _META_RE = re.compile(r"^\s*([A-Za-z_]+)\s*:\s*(.*)$")
 
@@ -56,6 +57,7 @@ class FileJob:
     condition: str = "any"
     category: str = "any"
     schedule_time: str = "05:00"
+    priority: str = "normal"  # "normal" | "priority"
 
 
 def done_marker(path: Path) -> Path:
@@ -150,6 +152,7 @@ def parse_prompt_file(path: Path, mode: str) -> FileJob:
         condition=meta.get("condition", "any").strip() or "any",
         category=meta.get("category", "any").strip() or "any",
         schedule_time=meta.get("schedule", "05:00").strip() or "05:00",
+        priority=meta.get("priority", "normal").strip() or "normal",
     )
 
 

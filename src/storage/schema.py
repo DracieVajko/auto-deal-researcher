@@ -11,7 +11,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # Columns added after the initial migration, applied idempotently to any
 # database created by an older build.
@@ -260,6 +260,10 @@ def _run_migrations(db: Database) -> None:
         _migration_007_scheduled_jobs(db)
         current_version = 7
 
+    if current_version < 8:
+        _migration_008_scheduled_jobs_priority(db)
+        current_version = 8
+
     # Update version
     db["migrations"].insert({"version": current_version}, pk="version", replace=True)
 
@@ -441,12 +445,19 @@ def _migration_007_scheduled_jobs(db: Database) -> None:
                 next_run_at TEXT,
                 created_at TEXT,
                 last_run_at TEXT,
-                last_status TEXT
+                last_status TEXT,
+                priority TEXT DEFAULT 'normal'
             )
         """)
         db.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)")
         db.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_next_run ON scheduled_jobs(next_run_at)")
 
+
+def _migration_008_scheduled_jobs_priority(db: Database) -> None:
+    """Add the priority column to scheduled_jobs."""
+    if "scheduled_jobs" not in db.table_names():
+        return
+    _ensure_table_columns(db, "scheduled_jobs", {"priority": "TEXT DEFAULT 'normal'"})
 
 def _ensure_table_columns(
     db: Database, table: str, columns: dict[str, str]

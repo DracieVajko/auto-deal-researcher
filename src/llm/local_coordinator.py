@@ -344,13 +344,15 @@ class LocalModelCoordinator:
         return "\n".join(lines)
 
 
-def ensure_lmstudio_model(model_key: str, timeout: float = 600.0) -> bool:
+def ensure_lmstudio_model(model_key: str, timeout: float = 600.0,
+                            force: bool = False) -> bool:
     """Make sure *model_key* is the model loaded in LM Studio.
 
-    Never unloads a foreign model: if another model is already resident, the
+    By default (``force=False``) a foreign model is never unloaded: the
     function returns False so the caller can fall back to cloud APIs instead
-    of disrupting the user's work. Returns True on success. Best-effort:
-    failures are logged but never raise.
+    of disrupting the user's work. With ``force=True`` (priority mode) the
+    foreign model is unloaded and *model_key* is loaded. Returns True on
+    success. Best-effort: failures are logged but never raise.
     """
     if not model_key:
         return False
@@ -363,15 +365,31 @@ def ensure_lmstudio_model(model_key: str, timeout: float = 600.0) -> bool:
             logger.info("LM Studio already has %s loaded", model_key)
             return True
 
-        # A foreign model is resident: do NOT unload it (the user may be
-        # running their own work). Fall back to cloud APIs instead.
+        # A foreign model is resident.
         if _lmstudio_has_loaded(out):
+            if not force:
+                logger.info(
+                    "LM Studio is busy with a foreign model; leaving it loaded "
+                    "and falling back to cloud APIs for %s",
+                    model_key,
+                )
+                return False
             logger.info(
-                "LM Studio is busy with a foreign model; leaving it loaded and "
-                "falling back to cloud APIs for %s",
-                model_key,
+                "Priority mode: unloading foreign models for %s", model_key
             )
-            return False
+            subprocess.run(
+                ["lms", "unload", "-a"], capture_output=True, text=True,
+                timeout=60,
+            )
+            deadline = time.monotonic() + 60.0
+            while time.monotonic() < deadline:
+                ps = subprocess.run(
+                    ["lms", "ps"], capture_output=True, text=True, timeout=15,
+                )
+                out = (ps.stdout or "") + (ps.stderr or "")
+                if "No models are currently loaded" in out or not _lmstudio_has_loaded(out):
+                    break
+                time.sleep(2.0)
 
         logger.info("Loading %s in LM Studio...", model_key)
 

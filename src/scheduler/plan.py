@@ -64,6 +64,10 @@ class ScheduledJob:
     # are not persisted in scheduled_jobs; their completion is tracked by a
     # sidecar file next to the prompt.
     source_path: str | None = None
+    # "normal" (default): respect a resident foreign model, wait up to
+    # max_wait_seconds, then fall back to cloud APIs.
+    # "priority": unload foreign models and use ours.
+    priority: str = "normal"
 
     @property
     def max_runs(self) -> int:

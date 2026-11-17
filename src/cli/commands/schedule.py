@@ -82,6 +82,9 @@ def schedule_add(
     ),
     condition: str = typer.Option("any", "--condition", "-c", help="Podmienka (new, used, ...)"),
     category: str = typer.Option("any", "--category", "-cat", help="Kategória"),
+    priority: str = typer.Option(
+        "normal", "--priority", help="normal = rešpektuje cudzí model a padá na API; priority = unloadne ostatné"
+    ),
     db: str | None = typer.Option(None, "--db", help="Cesta k databáze (predvolene z config.yaml)"),
 ):
     """Pridať geplánované vyhľadávanie."""
@@ -93,6 +96,9 @@ def schedule_add(
         raise typer.Exit(1)
     if mode not in ("once", "watchdog"):
         typer.echo(f"Error: neznamy mode {mode!r}; pouzte once alebo watchdog", err=True)
+        raise typer.Exit(1)
+    if priority not in ("normal", "priority"):
+        typer.echo(f"Error: neznamy priority {priority!r}; pouzi normal alebo priority", err=True)
         raise typer.Exit(1)
     storage = _storage(db)
     job_id = f"job_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S_%f')}"
@@ -113,6 +119,7 @@ def schedule_add(
         max_runs=0 if mode == "watchdog" else 1,
         enabled=True,
         next_run_at=next_run,
+        priority=priority,
     )
     typer.echo(f"Pridaná úloha {job_id}: {prompt!r}  (režim={mode}, spustenie {next_run})")
 
@@ -207,10 +214,16 @@ def schedule_new(
     category: str = typer.Option("any", "--category", "-cat", help="Kategória"),
     condition: str = typer.Option("any", "--condition", "-c", help="Podmienka"),
     max_price: str | None = typer.Option(None, "--max-price", help="Max. cena v EUR"),
+    priority: str = typer.Option(
+        "normal", "--priority", help="normal | priority (unload foreign models)"
+    ),
 ):
     """Vytvoriť .txt prompt v prompts/single alebo prompts/watchdog."""
     if mode not in ("single", "watchdog"):
         typer.echo(f"Error: neznamy mode {mode!r}; pouzi single alebo watchdog", err=True)
+        raise typer.Exit(1)
+    if priority not in ("normal", "priority"):
+        typer.echo(f"Error: neznamy priority {priority!r}; pouzi normal alebo priority", err=True)
         raise typer.Exit(1)
     folder = file_jobs.SINGLE_DIR if mode == "single" else file_jobs.WATCHDOG_DIR
     folder.mkdir(parents=True, exist_ok=True)
@@ -224,6 +237,7 @@ def schedule_new(
         f"category: {category}\n"
         f"condition: {condition}\n"
         f"max_price: {max_price or ''}\n"
+        f"priority: {priority}\n"
         f"schedule: 05:00\n"
         "---\n"
         f"{prompt or 'Popis produktu, rozpocet, stav a preferovane obchody.'}\n"

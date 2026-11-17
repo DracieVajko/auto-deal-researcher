@@ -626,7 +626,10 @@ class LLMClient:
                 logger.info(f"Skipping local LLM {local.type} (circuit open)")
                 continue
             if local.type == "lmstudio" and getattr(self._coordinator, "policy", "never") in ("wait", "force"):
-                ensure_lmstudio_model(local.model)
+                ensure_lmstudio_model(
+                    local.model,
+                    force=getattr(self._coordinator, "policy", "never") == "force",
+                )
             try:
                 logger.info(f"Trying local LLM: {local.type} at {local.endpoint}")
                 reply = await self._call_local_llm_async(

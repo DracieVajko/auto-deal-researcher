@@ -768,6 +768,7 @@ class StorageManager:
         max_runs: int = 1,
         enabled: bool = True,
         next_run_at: str | None = None,
+        priority: str = "normal",
     ) -> None:
         """Upsert a scheduled job."""
         from src.utils.time import utcnow_iso
@@ -790,6 +791,7 @@ class StorageManager:
                 "created_at": utcnow_iso(),
                 "last_run_at": None,
                 "last_status": None,
+                "priority": priority,
             },
             pk="id",
             replace=True,

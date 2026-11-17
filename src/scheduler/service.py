@@ -121,6 +121,7 @@ class SchedulerService:
                 runs_done=row["runs_done"],
                 last_status=row["last_status"],
                 tz=local_timezone(),
+                priority=row.get("priority") or "normal",
             )
             await self.queue.submit(job)
             self._in_flight.add(job_id)
@@ -189,6 +190,17 @@ class SchedulerService:
         error = ""
 
         llm_client = None
+        # Honour per-job priority: priority jobs unload foreign models and
+        # take the slot; normal jobs wait for a quiet window, then fall
+        # back to cloud APIs if LM Studio stays busy.
+        priority = getattr(job, "priority", "normal")
+        import os
+
+        old_policy = os.environ.get("ADS_LOCAL_POLICY")
+        if priority == "priority":
+            os.environ["ADS_LOCAL_POLICY"] = "force"
+        else:
+            os.environ.pop("ADS_LOCAL_POLICY", None)
         try:
             async with self.make_searcher() as searcher:
                 llm_client = getattr(searcher, "llm", None)
@@ -203,6 +215,12 @@ class SchedulerService:
             error = str(exc)
             logger.exception("Scheduled job %s failed", job.id)
         finally:
+            import os
+
+            if old_policy is None:
+                os.environ.pop("ADS_LOCAL_POLICY", None)
+            else:
+                os.environ["ADS_LOCAL_POLICY"] = old_policy
             if llm_client is not None and self.release_after_job:
                 try:
                     await llm_client.release_models()

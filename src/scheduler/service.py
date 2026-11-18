@@ -51,6 +51,7 @@ class SchedulerService:
         release_after_job: bool = True,
         single_dir: Path = file_jobs.SINGLE_DIR,
         watchdog_dir: Path = file_jobs.WATCHDOG_DIR,
+        job_timeout: float = 600.0,
     ) -> None:
         self.storage = storage
         self.make_searcher = make_searcher
@@ -61,6 +62,8 @@ class SchedulerService:
         self.release_after_job = release_after_job
         self.single_dir = single_dir
         self.watchdog_dir = watchdog_dir
+        # Hard cap per job so a hung browser/LLM call cannot stall the batch.
+        self.job_timeout = float(job_timeout)
         self._stop = False
         self._worker_task: asyncio.Task | None = None
         self._in_flight: set[str] = set()
@@ -204,12 +207,19 @@ class SchedulerService:
         try:
             async with self.make_searcher() as searcher:
                 llm_client = getattr(searcher, "llm", None)
-                deals = await searcher.search(job.prompt, job.condition, job.category)
+                deals = await asyncio.wait_for(
+                    searcher.search(job.prompt, job.condition, job.category),
+                    timeout=self.job_timeout,
+                )
             deals = list(deals or [])
             total_deals = len(deals)
             for deal in deals:
                 if isinstance(deal, Deal):
                     self.storage.save_deal(deal, run_id)
+        except asyncio.TimeoutError:
+            status = "failed"
+            error = f"job timed out after {self.job_timeout:.0f}s"
+            logger.exception("Scheduled job %s timed out", job.id)
         except Exception as exc:
             status = "failed"
             error = str(exc)

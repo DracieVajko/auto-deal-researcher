@@ -303,6 +303,9 @@ def schedule_service(
         "--exit-when-idle",
         help="Po dokončení všetkých due úloh ukončiť (denný režim namiesto daemona).",
     ),
+    job_timeout: float = typer.Option(
+        600.0, "--job-timeout", help="Max. čas na jeden job v sekundách."
+    ),
     log_file: str | None = typer.Option(
         None,
         "--log-file",
@@ -353,6 +356,7 @@ def schedule_service(
         queue=RunQueue(),
         poll_interval=poll,
         release_after_job=not exit_when_idle,
+        job_timeout=job_timeout,
     )
     if exit_when_idle:
         typer.echo("Monitor spustený v dennom režime (ukončí sa po dokončení práce)...")

@@ -122,6 +122,33 @@ async def test_service_exits_when_idle_after_draining(storage, file_dirs):
 
 
 @pytest.mark.asyncio
+async def test_service_job_timeout_marks_failed(storage, file_dirs):
+    counter = {"current": 0, "peak": 0}
+    _add_job(storage, "j1", prompt="slow", next_run_at="2026-11-09T08:00:00+00:00")
+
+    class SlowSearcher(FakeSearcher):
+        async def search(self, prompt, condition, category):
+            await asyncio.sleep(10)
+            return []
+
+    def make_searcher():
+        return SlowSearcher([], counter)
+
+    svc = SchedulerService(
+        storage, make_searcher, poll_interval=0.01,
+        single_dir=file_dirs["single_dir"],
+        watchdog_dir=file_dirs["watchdog_dir"],
+        job_timeout=0.1,
+    )
+    await asyncio.wait_for(svc.run(exit_when_idle=True), timeout=2.0)
+
+    runs = storage.get_all_runs(limit=5)
+    assert len(runs) == 1
+    assert runs[0].status == "failed"
+    assert "timed out" in runs[0].error_message
+
+
+@pytest.mark.asyncio
 async def test_service_serial_execution_no_overlap(storage, file_dirs):
     counter = {"current": 0, "peak": 0}
     # Both due at the same time; second must queue and run after first.

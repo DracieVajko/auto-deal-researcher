@@ -132,7 +132,7 @@ def install_startup(daily_at: str = "05:00"):
         ps_cmd = f"""
 $action = New-ScheduledTaskAction -Execute {quoted_exe} -Argument {quoted_args} -WorkingDirectory {quoted_dir}
 $trigger = New-ScheduledTaskTrigger -Daily -At {quoted_time}
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden -ExecutionTimeLimit (New-TimeSpan -Hours 4)
 Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
 """
     else:
@@ -141,7 +141,7 @@ Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger
         ps_cmd = f"""
 $action = New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -WindowStyle Hidden -Command & {{ & {quoted_exe} {quoted_args} }}' -WorkingDirectory {quoted_dir}
 $trigger = New-ScheduledTaskTrigger -Daily -At {quoted_time}
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -AllowStartIfOnBatteries -Hidden -ExecutionTimeLimit (New-TimeSpan -Hours 4)
 Register-ScheduledTask -TaskName {quoted_name} -Action $action -Trigger $trigger -Settings $settings -Force
 """
     # Register via PowerShell. `powershell.exe` is a trusted system binary and

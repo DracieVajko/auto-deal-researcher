@@ -95,7 +95,7 @@ async def retry_with_backoff(
     import asyncio
 
     for attempt in range(max_attempts):
-        block_reason = detect_block(page)
+        block_reason = await detect_block(page)
         if not block_reason:
             return True
         logger.warning(

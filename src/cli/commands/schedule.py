@@ -303,6 +303,9 @@ def schedule_service(
         "--exit-when-idle",
         help="Po dokončení všetkých due úloh ukončiť (denný režim namiesto daemona).",
     ),
+    job_timeout: float = typer.Option(
+        1800.0, "--job-timeout", help="Max. čas na jeden job v sekundách (predvolene 30 min)."
+    ),
     log_file: str | None = typer.Option(
         None,
         "--log-file",
@@ -338,7 +341,23 @@ def schedule_service(
     # foreign model - never unload the user's model.
     os.environ.setdefault("ADS_LOCAL_MAX_WAIT", "30")
     os.environ.setdefault("ADS_LOCAL_MONITOR_WAIT", "0")
-    os.environ.setdefault("ADS_LOCAL_LLM_TIMEOUT", "300")
+    os.environ.setdefault("ADS_LOCAL_LLM_TIMEOUT", "600")
+    # Dynamic context sizing: estimate the largest prompt we will send and
+    # load LM Studio with enough context (capped at 32768). Falls back to
+    # the 16k default when no prompts are known yet.
+    try:
+        from src.scheduler import file_jobs as _fj
+
+        all_prompts = []
+        for d in (_fj.SINGLE_DIR, _fj.WATCHDOG_DIR):
+            for j in _fj.scan(d, "once" if d == _fj.SINGLE_DIR else "watchdog"):
+                all_prompts.append(j.prompt)
+        if all_prompts:
+            max_chars = max(len(p) for p in all_prompts)
+            estimated = min(32768, max(16384, max_chars // 4 + 2500))
+            os.environ["ADS_LMSTUDIO_CONTEXT"] = str(estimated)
+    except Exception:  # noqa: BLE001
+        pass
     # Preload local models if configured.
     preload_llm = None
     try:
@@ -353,6 +372,7 @@ def schedule_service(
         queue=RunQueue(),
         poll_interval=poll,
         release_after_job=not exit_when_idle,
+        job_timeout=job_timeout,
     )
     if exit_when_idle:
         typer.echo("Monitor spustený v dennom režime (ukončí sa po dokončení práce)...")

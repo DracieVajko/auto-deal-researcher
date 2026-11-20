@@ -304,7 +304,7 @@ def schedule_service(
         help="Po dokončení všetkých due úloh ukončiť (denný režim namiesto daemona).",
     ),
     job_timeout: float = typer.Option(
-        1800.0, "--job-timeout", help="Max. čas na jeden job v sekundách (predvolene 30 min)."
+        3600.0, "--job-timeout", help="Max. čas na jeden job v sekundách (predvolene 30 min)."
     ),
     log_file: str | None = typer.Option(
         None,

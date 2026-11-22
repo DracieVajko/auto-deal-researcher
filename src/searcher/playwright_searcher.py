@@ -33,6 +33,7 @@ from src.searcher.search_cache import SearchCache
 from src.searcher.sessions import apply_session
 from src.searcher.site_profiles import SiteProfile, load_profiles
 from src.searcher.site_registry import SITES, by_id
+from src.browser.manager import BrowserManager
 from src.searcher.site_selection import SiteCandidate, SitePlan, SiteSelector
 from src.storage.manager import StorageManager
 from src.utils.time import utcnow_stamp
@@ -70,7 +71,7 @@ class PlaywrightSearcher:
         config: AppConfig,
         llm: LLMClient,
         storage: StorageManager,
-        browser_manager
+        browser_manager: BrowserManager
     ):
         self.config = config
         # Apply configured currency rates so search paths that bypass the CLI

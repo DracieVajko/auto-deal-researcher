@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
-from playwright.async_api import BrowserContext, Page
+from playwright.async_api import Browser, BrowserContext, Page
 
 from src.config.models import AppConfig, Category, Condition, WebsiteConfig
 from src.diagnostics.selector_health import SelectorHealthTracker
@@ -81,7 +81,7 @@ class PlaywrightSearcher:
         self.llm = llm
         self.storage = storage
         self.browser_manager = browser_manager
-        self.browser: BrowserContext | None = None
+        self.browser: Browser | BrowserContext | None = None
         self.page: Page | None = None
         self.profiles = load_profiles()
         
